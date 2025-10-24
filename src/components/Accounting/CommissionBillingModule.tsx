@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
 import { usePartnerNotificationQueue } from '../../hooks/usePartnerNotificationQueue';
+import { PaymentPeriodsManager } from './PaymentPeriodsManager';
+import { CommissionInvoicesView } from './CommissionInvoicesView';
 import {
   DollarSign,
   FileText,
@@ -12,7 +14,9 @@ import {
   Send,
   Plus,
   Edit,
-  Save
+  Save,
+  Calendar,
+  List
 } from 'lucide-react';
 
 interface Partner {
@@ -53,6 +57,7 @@ interface CommissionGroup {
 }
 
 export function CommissionBillingModule() {
+  const [activeTab, setActiveTab] = useState<'generate' | 'invoices' | 'periods'>('generate');
   const [partners, setPartners] = useState<Partner[]>([]);
   const [pendingInvoices, setPendingInvoices] = useState<PendingInvoice[]>([]);
   const [commissionGroups, setCommissionGroups] = useState<CommissionGroup[]>([]);
@@ -304,54 +309,98 @@ export function CommissionBillingModule() {
 
   return (
     <div className="p-6">
-      <div className="mb-6 flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900">Facturación de Comisiones</h2>
-          <p className="text-sm text-slate-600">Generar facturas de comisiones para partners</p>
-        </div>
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-slate-900 mb-1">Facturación de Comisiones</h2>
+        <p className="text-sm text-slate-600">Gestiona la facturación de comisiones para partners</p>
+      </div>
+
+      <div className="mb-6 flex gap-2 border-b border-gray-200">
         <button
-          onClick={() => {
-            setSelectedPartner(null);
-            setPartnerForm({
-              name: '',
-              company_name: '',
-              rut: '',
-              email: '',
-              phone: '',
-              address: '',
-              city: '',
-              postal_code: '',
-              country: 'Uruguay',
-              is_active: true
-            });
-            setShowPartnerModal(true);
-          }}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center space-x-2"
+          onClick={() => setActiveTab('generate')}
+          className={`px-6 py-3 font-medium flex items-center gap-2 border-b-2 transition ${
+            activeTab === 'generate'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
         >
-          <Plus size={18} />
-          <span>Nuevo Partner</span>
+          <DollarSign className="w-5 h-5" />
+          Generar Facturas
+        </button>
+        <button
+          onClick={() => setActiveTab('invoices')}
+          className={`px-6 py-3 font-medium flex items-center gap-2 border-b-2 transition ${
+            activeTab === 'invoices'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <List className="w-5 h-5" />
+          Facturas Generadas
+        </button>
+        <button
+          onClick={() => setActiveTab('periods')}
+          className={`px-6 py-3 font-medium flex items-center gap-2 border-b-2 transition ${
+            activeTab === 'periods'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Calendar className="w-5 h-5" />
+          Períodos de Pago
         </button>
       </div>
 
-      <div className="bg-white rounded-lg border border-slate-200 p-4 mb-6">
-        <label className="block text-sm font-medium text-slate-700 mb-2">
-          Tasa de IVA para Comisiones (%)
-        </label>
-        <input
-          type="number"
-          value={ivaRate}
-          onChange={(e) => setIvaRate(Number(e.target.value))}
-          className="w-32 border border-slate-300 rounded-lg px-3 py-2"
-          min="0"
-          max="100"
-          step="0.1"
-        />
-      </div>
+      {activeTab === 'invoices' && <CommissionInvoicesView />}
 
-      <div className="grid gap-6">
-        {commissionGroups.length === 0 ? (
-          <div className="bg-slate-50 rounded-lg p-12 text-center">
-            <FileText size={48} className="mx-auto text-slate-400 mb-4" />
+      {activeTab === 'periods' && <PaymentPeriodsManager />}
+
+      {activeTab === 'generate' && (
+        <>
+          <div className="mb-6 flex justify-between items-center">
+            <div className="flex-1" />
+            <button
+              onClick={() => {
+                setSelectedPartner(null);
+                setPartnerForm({
+                  name: '',
+                  company_name: '',
+                  rut: '',
+                  email: '',
+                  phone: '',
+                  address: '',
+                  city: '',
+                  postal_code: '',
+                  country: 'Uruguay',
+                  is_active: true
+                });
+                setShowPartnerModal(true);
+              }}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center space-x-2"
+            >
+              <Plus size={18} />
+              <span>Nuevo Partner</span>
+            </button>
+          </div>
+
+          <div className="bg-white rounded-lg border border-slate-200 p-4 mb-6">
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Tasa de IVA para Comisiones (%)
+            </label>
+            <input
+              type="number"
+              value={ivaRate}
+              onChange={(e) => setIvaRate(Number(e.target.value))}
+              className="w-32 border border-slate-300 rounded-lg px-3 py-2"
+              min="0"
+              max="100"
+              step="0.1"
+            />
+          </div>
+
+          <div className="grid gap-6">
+            {commissionGroups.length === 0 ? (
+              <div className="bg-slate-50 rounded-lg p-12 text-center">
+                <FileText size={48} className="mx-auto text-slate-400 mb-4" />
             <p className="text-slate-600">No hay facturas pendientes de facturación de comisiones</p>
           </div>
         ) : (
@@ -635,6 +684,8 @@ export function CommissionBillingModule() {
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );
