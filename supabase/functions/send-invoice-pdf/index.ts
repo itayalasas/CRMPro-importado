@@ -199,8 +199,15 @@ Deno.serve(async (req: Request) => {
     } else if (config.auth_type === "bearer" && authCreds.token) {
       headers["Authorization"] = `Bearer ${authCreds.token}`;
     } else if (config.auth_type === "api_key" && authCreds.key && authCreds.value) {
+      // Para api_key, agregar el header personalizado
       headers[authCreds.key] = authCreds.value;
+      // También agregar Authorization si la key no es Authorization
+      if (authCreds.key.toLowerCase() !== 'authorization') {
+        headers["Authorization"] = `Bearer ${authCreds.value}`;
+      }
     }
+
+    console.log("Request headers:", JSON.stringify(headers, null, 2));
 
     let responsePayload: any = null;
     let statusCode = 0;
