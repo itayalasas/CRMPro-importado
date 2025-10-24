@@ -85,11 +85,17 @@ export function PaymentPeriodsManager() {
         });
 
       if (!error) {
-        toast.success('Período creado exitosamente');
+        const isPrimera = formData.name?.toLowerCase().includes('primera');
+        if (isPrimera) {
+          toast.success('Primera quincena creada. La segunda quincena se generó automáticamente.');
+        } else {
+          toast.success('Período creado exitosamente');
+        }
         resetForm();
         fetchPeriods();
       } else {
-        toast.error('Error al crear período');
+        toast.error('Error al crear período: ' + error.message);
+        console.error('Error creating period:', error);
       }
     }
   };
@@ -199,6 +205,9 @@ export function PaymentPeriodsManager() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   required
                 />
+                <p className="mt-1 text-xs text-gray-500">
+                  Si creas una "Primera Quincena", se generará automáticamente la "Segunda Quincena"
+                </p>
               </div>
 
               <div>

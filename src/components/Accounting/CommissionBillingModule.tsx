@@ -56,6 +56,14 @@ interface CommissionGroup {
   total_with_iva: number;
 }
 
+interface PaymentPeriod {
+  id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+}
+
 export function CommissionBillingModule() {
   const [activeTab, setActiveTab] = useState<'generate' | 'invoices' | 'periods'>('generate');
   const [partners, setPartners] = useState<Partner[]>([]);
@@ -67,6 +75,8 @@ export function CommissionBillingModule() {
   const [selectedGroup, setSelectedGroup] = useState<CommissionGroup | null>(null);
   const [ivaRate, setIvaRate] = useState(22);
   const [processing, setProcessing] = useState(false);
+  const [paymentPeriods, setPaymentPeriods] = useState<PaymentPeriod[]>([]);
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('');
   const toast = useToast();
 
   // Activar procesamiento automático de notificaciones de partners
@@ -88,6 +98,7 @@ export function CommissionBillingModule() {
   useEffect(() => {
     fetchPartners();
     fetchPendingInvoices();
+    fetchPaymentPeriods();
   }, []);
 
   useEffect(() => {
@@ -127,6 +138,23 @@ export function CommissionBillingModule() {
     } else if (error) {
       console.error('Error fetching pending invoices:', error);
     }
+  };
+
+  const fetchPaymentPeriods = async () => {
+    const { data, error } = await supabase
+      .from('payment_periods')
+      .select('*')
+      .order('start_date', { ascending: false });
+
+    if (!error && data) {
+      setPaymentPeriods(data);
+    }
+  };
+
+  const closeBillingModal = () => {
+    setShowBillingModal(false);
+    setSelectedGroup(null);
+    setSelectedPeriod('');
   };
 
   const groupInvoicesByPartner = () => {
@@ -205,6 +233,11 @@ export function CommissionBillingModule() {
       return;
     }
 
+    if (!selectedPeriod) {
+      toast?.showToast('Debes seleccionar una quincena de pago', 'error');
+      return;
+    }
+
     setProcessing(true);
 
     try {
@@ -222,6 +255,7 @@ export function CommissionBillingModule() {
           client_id: null,
           order_id: null,
           partner_id: partner.id,
+          payment_period_id: selectedPeriod,
           issue_date: new Date().toISOString().split('T')[0],
           due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
           subtotal: subtotal,
@@ -297,8 +331,7 @@ export function CommissionBillingModule() {
         'success'
       );
 
-      setShowBillingModal(false);
-      setSelectedGroup(null);
+      closeBillingModal();
       fetchPendingInvoices();
     } catch (error: any) {
       toast?.showToast('Error generando factura: ' + error.message, 'error');
@@ -625,7 +658,7 @@ export function CommissionBillingModule() {
           <div className="bg-white rounded-lg max-w-2xl w-full">
             <div className="p-6 border-b border-slate-200 flex justify-between items-center">
               <h3 className="text-xl font-semibold">Confirmar Facturación de Comisiones</h3>
-              <button onClick={() => setShowBillingModal(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={closeBillingModal} className="text-slate-400 hover:text-slate-600">
                 <X size={24} />
               </button>
             </div>
@@ -637,6 +670,30 @@ export function CommissionBillingModule() {
                 </p>
                 <p className="font-semibold text-blue-900">{selectedGroup.partner_name}</p>
                 <p className="text-sm text-blue-800">RUT: {selectedGroup.partner?.rut}</p>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Quincena de Pago *
+                  </label>
+                  <select
+                    value={selectedPeriod}
+                    onChange={(e) => setSelectedPeriod(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    required
+                  >
+                    <option value="">Seleccionar quincena...</option>
+                    {paymentPeriods.map(period => (
+                      <option key={period.id} value={period.id}>
+                        {period.name} ({new Date(period.start_date).toLocaleDateString()} - {new Date(period.end_date).toLocaleDateString()})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Selecciona la quincena a la que corresponden estas comisiones
+                  </p>
+                </div>
               </div>
 
               <div className="border border-slate-200 rounded-lg p-4 space-y-2">
@@ -666,7 +723,7 @@ export function CommissionBillingModule() {
 
               <div className="flex justify-end space-x-3 pt-4">
                 <button
-                  onClick={() => setShowBillingModal(false)}
+                  onClick={closeBillingModal}
                   disabled={processing}
                   className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition disabled:opacity-50"
                 >
