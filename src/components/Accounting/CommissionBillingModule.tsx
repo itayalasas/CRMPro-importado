@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
+import { usePartnerNotificationQueue } from '../../hooks/usePartnerNotificationQueue';
 import {
   DollarSign,
   FileText,
@@ -62,6 +63,9 @@ export function CommissionBillingModule() {
   const [ivaRate, setIvaRate] = useState(22);
   const [processing, setProcessing] = useState(false);
   const toast = useToast();
+
+  // Activar procesamiento automático de notificaciones de partners
+  usePartnerNotificationQueue();
 
   const [partnerForm, setPartnerForm] = useState<Partial<Partner>>({
     name: '',

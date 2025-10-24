@@ -27,15 +27,17 @@ Deno.serve(async (req: Request) => {
       template_name,
       recipient_email,
       order_id,
+      invoice_id,
       wait_for_invoice,
       data,
     } = payload;
 
-    if (!template_name || !recipient_email || !order_id) {
+    // Validar que tengamos al menos order_id o invoice_id
+    if (!template_name || !recipient_email || (!order_id && !invoice_id)) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: "Se requiere template_name, recipient_email y order_id" 
+        JSON.stringify({
+          success: false,
+          error: "Se requiere template_name, recipient_email y (order_id o invoice_id)"
         }),
         {
           status: 400,
@@ -44,27 +46,58 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { data: order, error: orderError } = await supabase
-      .from("orders")
-      .select("*")
-      .eq("id", order_id)
-      .maybeSingle();
+    // Si es una factura de comisión, usamos invoice_id, sino order_id
+    let referenceId = order_id || invoice_id;
+    let referenceType = order_id ? "order" : "invoice";
+    let referenceEntity: any = null;
 
-    if (orderError || !order) {
-      console.error("❌ Orden no encontrada:", order_id);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: `Orden no encontrada: ${order_id}` 
-        }),
-        {
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+    if (referenceType === "order") {
+      const { data: order, error: orderError } = await supabase
+        .from("orders")
+        .select("*")
+        .eq("id", order_id)
+        .maybeSingle();
+
+      if (orderError || !order) {
+        console.error("❌ Orden no encontrada:", order_id);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `Orden no encontrada: ${order_id}`
+          }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      referenceEntity = order;
+      console.log("✅ Orden encontrada:", order.id, order.order_number);
+    } else {
+      const { data: invoice, error: invoiceError } = await supabase
+        .from("invoices")
+        .select("*")
+        .eq("id", invoice_id)
+        .maybeSingle();
+
+      if (invoiceError || !invoice) {
+        console.error("❌ Factura no encontrada:", invoice_id);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `Factura no encontrada: ${invoice_id}`
+          }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      referenceEntity = invoice;
+      console.log("✅ Factura encontrada:", invoice.id, invoice.invoice_number);
     }
-
-    console.log("✅ Orden encontrada:", order.id, order.order_number);
 
     const { data: emailConfig } = await supabase
       .from("external_invoice_api_config")
@@ -98,7 +131,7 @@ Deno.serve(async (req: Request) => {
     const communicationPayload = {
       template_name,
       recipient_email,
-      order_id,
+      order_id: referenceId,
       wait_for_invoice: wait_for_invoice || false,
       data: data || {},
     };
@@ -112,7 +145,7 @@ Deno.serve(async (req: Request) => {
         response_payload: null,
         status_code: null,
         status: 'pending',
-        external_reference: order_id,
+        external_reference: referenceId,
       })
       .select()
       .single();
@@ -181,12 +214,19 @@ Deno.serve(async (req: Request) => {
       }
 
       if (!isSuccess) {
-        console.error("❌ Error en pending-communication - Actualizando orden a sent-error-email");
+        console.error("❌ Error en pending-communication - Actualizando estado a sent-error-email");
 
-        await supabase
-          .from("orders")
-          .update({ status: "sent-error-email" })
-          .eq("id", order_id);
+        if (referenceType === "order") {
+          await supabase
+            .from("orders")
+            .update({ status: "sent-error-email" })
+            .eq("id", referenceId);
+        } else {
+          await supabase
+            .from("invoices")
+            .update({ status: "sent-error-email" })
+            .eq("id", referenceId);
+        }
 
         return new Response(
           JSON.stringify({
@@ -194,7 +234,8 @@ Deno.serve(async (req: Request) => {
             error: "Error en la comunicación por email",
             status: communicationResponse.status,
             details: communicationResult,
-            order_status_updated: "sent-error-email",
+            reference_type: referenceType,
+            status_updated: "sent-error-email",
           }),
           {
             status: communicationResponse.status,
@@ -203,22 +244,30 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      console.log("✅ Comunicación enviada exitosamente - Actualizando orden a 'shipped'");
+      console.log("✅ Comunicación enviada exitosamente - Actualizando estado");
 
-      await supabase
-        .from("orders")
-        .update({ status: "shipped" })
-        .eq("id", order_id);
+      if (referenceType === "order") {
+        await supabase
+          .from("orders")
+          .update({ status: "shipped" })
+          .eq("id", referenceId);
+      } else {
+        await supabase
+          .from("invoices")
+          .update({ status: "sent", sent_at: new Date().toISOString() })
+          .eq("id", referenceId);
+      }
 
       return new Response(
         JSON.stringify({
           success: true,
-          order_id: order.id,
-          order_number: order.order_number,
+          reference_id: referenceEntity.id,
+          reference_type: referenceType,
+          reference_number: referenceEntity.order_number || referenceEntity.invoice_number,
           template_name,
           recipient_email,
           communication_response: communicationResult,
-          order_status_updated: "shipped",
+          status_updated: referenceType === "order" ? "shipped" : "sent",
           message: "Comunicación enviada exitosamente",
         }),
         {
@@ -229,11 +278,18 @@ Deno.serve(async (req: Request) => {
       
     } catch (fetchError) {
       console.error("❌ Error llamando a pending-communication:", fetchError);
-      
-      await supabase
-        .from("orders")
-        .update({ status: "sent-error-email" })
-        .eq("id", order_id);
+
+      if (referenceType === "order") {
+        await supabase
+          .from("orders")
+          .update({ status: "sent-error-email" })
+          .eq("id", referenceId);
+      } else {
+        await supabase
+          .from("invoices")
+          .update({ status: "sent-error-email" })
+          .eq("id", referenceId);
+      }
       
       if (logEntry) {
         await supabase
@@ -250,10 +306,11 @@ Deno.serve(async (req: Request) => {
       
       return new Response(
         JSON.stringify({ 
-          success: false, 
+          success: false,
           error: "Error de red llamando a pending-communication",
           details: fetchError.message,
-          order_status_updated: "sent-error-email",
+          reference_type: referenceType,
+          status_updated: "sent-error-email",
         }),
         {
           status: 500,
