@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
 import { Plus, FileText, DollarSign, TrendingUp, AlertTriangle, CheckCircle, Clock, Search, Calendar, Building2, Download, Send, X, Trash2, Eye, CreditCard as Edit, ShoppingCart, Percent, Hash, Package } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { ConfirmDialog } from '../Common/ConfirmDialog';
 
 interface InvoiceItem {
   id?: string;
@@ -90,6 +91,12 @@ export function InvoicesModule() {
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
   const [stats, setStats] = useState({
     total: 0,
     draft: 0,
@@ -651,19 +658,25 @@ export function InvoicesModule() {
   };
 
   const handleDelete = async (invoiceId: string) => {
-    if (!confirm('¿Está seguro de eliminar esta factura?')) return;
+    setConfirmDialog({
+      isOpen: true,
+      title: '¿Eliminar factura?',
+      message: 'Esta acción no se puede deshacer. La factura y todos sus items se eliminarán permanentemente.',
+      onConfirm: async () => {
+        const { error } = await supabase
+          .from('invoices')
+          .delete()
+          .eq('id', invoiceId);
 
-    const { error } = await supabase
-      .from('invoices')
-      .delete()
-      .eq('id', invoiceId);
-
-    if (!error) {
-      toast.success('Factura eliminada');
-      loadInvoices();
-    } else {
-      toast.error('Error al eliminar factura');
-    }
+        if (!error) {
+          toast.success('Factura eliminada');
+          loadInvoices();
+        } else {
+          toast.error('Error al eliminar factura');
+        }
+        setConfirmDialog({ ...confirmDialog, isOpen: false });
+      }
+    });
   };
 
   const filteredInvoices = invoices.filter(invoice =>
@@ -1469,6 +1482,14 @@ export function InvoicesModule() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+      />
     </div>
   );
 }

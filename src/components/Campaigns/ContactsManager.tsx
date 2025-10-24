@@ -92,8 +92,9 @@ export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
     if (!error) {
       loadContacts();
       resetForm();
+      toast.showToast('Contacto agregado exitosamente', 'success');
     } else {
-      alert(`Error al guardar contacto: ${error.message}`);
+      toast.showToast(`Error al guardar contacto: ${error.message}`, 'error');
     }
   };
 

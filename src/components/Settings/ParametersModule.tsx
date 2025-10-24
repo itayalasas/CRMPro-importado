@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
+import { ConfirmDialog } from '../Common/ConfirmDialog';
 
 interface Parameter {
   id: string;
@@ -36,6 +37,12 @@ const ParametersModule: React.FC = () => {
     is_active: true,
     is_default: false,
     sort_order: 0
+  });
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
   });
 
   const tabs = [
@@ -154,20 +161,26 @@ const ParametersModule: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Estás seguro de eliminar este parámetro?')) return;
+    setConfirmDialog({
+      isOpen: true,
+      title: '¿Eliminar parámetro?',
+      message: 'Esta acción no se puede deshacer. El parámetro se eliminará permanentemente.',
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase
+            .from(activeTab)
+            .delete()
+            .eq('id', id);
 
-    try {
-      const { error } = await supabase
-        .from(activeTab)
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      toast.success('Parámetro eliminado correctamente');
-      loadParameters();
-    } catch (error: any) {
-      toast.error('Error al eliminar: ' + error.message);
-    }
+          if (error) throw error;
+          toast.success('Parámetro eliminado correctamente');
+          loadParameters();
+        } catch (error: any) {
+          toast.error('Error al eliminar: ' + error.message);
+        }
+        setConfirmDialog({ ...confirmDialog, isOpen: false });
+      }
+    });
   };
 
   const handleToggleActive = async (param: Parameter) => {
@@ -486,6 +499,14 @@ const ParametersModule: React.FC = () => {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+      />
     </div>
   );
 };
