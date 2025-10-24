@@ -269,8 +269,8 @@ export function CommissionBillingModule() {
                 unit_price: subtotal,
                 line_total: subtotal,
                 total_price: subtotal,
-                tax_rate: ivaRate,
-                item_type: 'service'
+                item_type: 'service',
+                currency: 'UYU'
               });
           }
         });
