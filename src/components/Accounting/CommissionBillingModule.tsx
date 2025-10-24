@@ -234,7 +234,7 @@ export function CommissionBillingModule() {
         throw new Error('Error creando factura: ' + invoiceError.message);
       }
 
-      const { error: orderError } = await supabase
+      const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
           order_number: `COM-ORD-${Date.now()}`,
@@ -251,29 +251,32 @@ export function CommissionBillingModule() {
           notes: `Orden para factura de comisiones ${invoiceNumber}`
         })
         .select('id')
-        .single()
-        .then(async ({ data: order }) => {
-          if (order) {
-            await supabase
-              .from('invoices')
-              .update({ order_id: order.id })
-              .eq('id', commissionInvoice.id);
+        .single();
 
-            await supabase
-              .from('order_items')
-              .insert({
-                order_id: order.id,
-                product_name: 'Comisión por ventas',
-                description: `Comisiones de ${selectedGroup.invoices.length} facturas procesadas`,
-                quantity: 1,
-                unit_price: subtotal,
-                line_total: subtotal,
-                total_price: subtotal,
-                item_type: 'service',
-                currency: 'UYU'
-              });
-          }
-        });
+      if (orderError) {
+        throw new Error('Error creando orden: ' + orderError.message);
+      }
+
+      if (order) {
+        await supabase
+          .from('invoices')
+          .update({ order_id: order.id })
+          .eq('id', commissionInvoice.id);
+
+        await supabase
+          .from('order_items')
+          .insert({
+            order_id: order.id,
+            product_name: 'Comisión por ventas',
+            description: `Comisiones de ${selectedGroup.invoices.length} facturas procesadas`,
+            quantity: 1,
+            unit_price: subtotal,
+            line_total: subtotal,
+            total_price: subtotal,
+            item_type: 'service',
+            currency: 'UYU'
+          });
+      }
 
       const invoiceIds = selectedGroup.invoices.map(inv => inv.id);
       await supabase
