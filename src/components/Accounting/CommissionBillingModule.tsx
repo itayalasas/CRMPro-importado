@@ -321,7 +321,7 @@ export function CommissionBillingModule() {
       await supabase
         .from('invoices')
         .update({
-          commission_billed: true,
+          commission_invoiced: true,
           commission_invoice_id: commissionInvoice.id
         })
         .in('id', invoiceIds);
@@ -383,7 +383,7 @@ export function CommissionBillingModule() {
         </button>
       </div>
 
-      {activeTab === 'invoices' && <CommissionInvoicesView />}
+      {activeTab === 'invoices' && <CommissionInvoicesView onInvoiceCancelled={fetchPendingInvoices} />}
 
       {activeTab === 'periods' && <PaymentPeriodsManager />}
 

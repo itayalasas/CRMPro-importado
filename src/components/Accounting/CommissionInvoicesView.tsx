@@ -45,7 +45,11 @@ interface AssociatedInvoice {
   status: string;
 }
 
-export function CommissionInvoicesView() {
+interface CommissionInvoicesViewProps {
+  onInvoiceCancelled?: () => void;
+}
+
+export function CommissionInvoicesView({ onInvoiceCancelled }: CommissionInvoicesViewProps) {
   const [invoices, setInvoices] = useState<CommissionInvoice[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<CommissionInvoice | null>(null);
   const [associatedInvoices, setAssociatedInvoices] = useState<AssociatedInvoice[]>([]);
@@ -124,6 +128,11 @@ export function CommissionInvoicesView() {
           toast.success(`Factura anulada. ${data.freed_invoices_count} facturas liberadas`);
           setShowDetailModal(false);
           fetchCommissionInvoices();
+
+          // Notificar al componente padre para refrescar la lista de facturas pendientes
+          if (onInvoiceCancelled) {
+            onInvoiceCancelled();
+          }
         } catch (error: any) {
           toast.error('Error al anular factura: ' + error.message);
         }
