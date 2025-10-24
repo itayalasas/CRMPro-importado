@@ -347,7 +347,7 @@ Deno.serve(async (req: Request) => {
           }
         }
 
-        const orderNumber = `DC-${Date.now()}-${orderData.id.substring(0, 8)}`;
+        const orderNumber = `DC-${Date.now()}`;
 
         let subtotal = orderData.subtotal || 0;
         let taxRate = orderData.iva_rate || 0;

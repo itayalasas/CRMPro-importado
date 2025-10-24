@@ -1,16 +1,18 @@
 /*
-  # Actualizar Trigger de Factura Automática para Incluir Partner
+  # Eliminar Sufijo Aleatorio de Números de Factura y Orden
   
   1. Cambios
-    - Agregar partner_id al INSERT de invoices
-    - Copiar partner_id desde la orden
-  
+    - Actualizar función generate_invoice_from_order() para generar números sin sufijo
+    - Formato anterior: INV-1761341845-8a691ef0
+    - Formato nuevo: INV-1761341845
+    
   2. Propósito
-    - Asociar automáticamente facturas con partners
-    - Permitir facturación de comisiones agrupada por partner
+    - Cumplir con estándar profesional de numeración
+    - Números más cortos y legibles
+    - Mantener unicidad con timestamp en milisegundos
 */
 
--- Actualizar función para incluir partner_id
+-- Actualizar función para generar facturas sin sufijo aleatorio
 CREATE OR REPLACE FUNCTION generate_invoice_from_order()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -35,7 +37,7 @@ BEGIN
     -- Obtener datos completos de la orden
     SELECT * INTO v_order_record FROM orders WHERE id = NEW.id;
 
-    -- Generar número de factura único
+    -- Generar número de factura único (sin sufijo aleatorio)
     v_invoice_number := 'INV-' || EXTRACT(EPOCH FROM NOW())::bigint;
 
     -- Calcular totales de los items
@@ -141,6 +143,5 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- El trigger ya existe, solo se actualiza la función
 COMMENT ON FUNCTION generate_invoice_from_order() IS 
-  'Genera factura automática desde orden confirmada, incluye partner_id para facturación de comisiones';
+  'Genera factura automática desde orden confirmada con formato INV-TIMESTAMP';

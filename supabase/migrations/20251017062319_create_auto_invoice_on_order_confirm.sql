@@ -16,7 +16,7 @@
 
   3. Notas
     - Las facturas se crean en estado 'draft' para revisión antes de envío a DGI
-    - El número de factura se genera automáticamente con formato INV-TIMESTAMP-ID
+    - El número de factura se genera automáticamente con formato INV-TIMESTAMP
     - Preserva la relación con el cliente y los términos de pago
 */
 
@@ -46,7 +46,7 @@ BEGIN
     SELECT * INTO v_order_record FROM orders WHERE id = NEW.id;
 
     -- Generar número de factura único
-    v_invoice_number := 'INV-' || EXTRACT(EPOCH FROM NOW())::bigint || '-' || substring(NEW.id::text, 1, 8);
+    v_invoice_number := 'INV-' || EXTRACT(EPOCH FROM NOW())::bigint;
 
     -- Calcular totales de los items
     SELECT 
