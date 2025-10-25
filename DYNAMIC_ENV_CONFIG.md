@@ -218,10 +218,28 @@ En caso de error:
 - Verificar que las variables tengan el prefijo `VITE_`
 - Reiniciar el servidor de desarrollo (`npm run dev`)
 
-## Archivos Relacionados
+## Archivos Actualizados
 
+Todos los archivos que usaban `import.meta.env` directamente han sido actualizados para usar `getEnvVar()`:
+
+### Core Libraries
 - `src/lib/envLoader.ts` - Servicio de carga de configuración
+- `src/lib/supabase.ts` - Cliente Supabase con lazy initialization
+- `src/lib/externalAuth.ts` - Auth externo con config dinámica
+- `src/lib/userService.ts` - Búsqueda de usuarios
+- `src/lib/twilioService.ts` - Servicio Twilio
+
+### Hooks
+- `src/hooks/useInvoiceAutoValidation.ts`
+- `src/hooks/useInvoiceEmailQueue.ts`
+- `src/hooks/usePartnerNotificationQueue.ts`
+
+### Components
 - `src/main.tsx` - Punto de entrada con carga de config
 - `src/components/Common/LoadingScreen.tsx` - Pantalla de carga
-- `src/lib/supabase.ts` - Cliente Supabase con config dinámica
-- `src/lib/externalAuth.ts` - Auth externo con config dinámica
+- `src/components/Auth/LoginForm.tsx` - Formulario de login
+- `src/components/Campaigns/CampaignsModule.tsx` - Módulo de campañas
+- `src/components/Inbox/InboxModule.tsx` - Módulo de inbox
+- `src/components/Invoices/InvoicesModule.tsx` - Módulo de facturas
+
+**Total: 15 archivos actualizados** para usar configuración dinámica

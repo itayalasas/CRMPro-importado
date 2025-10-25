@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { getEnvVar } from '../../lib/envLoader';
 import { useToast } from '../../contexts/ToastContext';
 import { Plus, FileText, DollarSign, TrendingUp, AlertTriangle, CheckCircle, Clock, Search, Calendar, Building2, Download, Send, X, Trash2, Eye, CreditCard as Edit, ShoppingCart, Percent, Hash, Package } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -539,8 +540,8 @@ export function InvoicesModule() {
 
       if (formData.status === 'validated' && previousStatus !== 'validated') {
         try {
-          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-          const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+          const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
+          const supabaseKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
 
           const response = await fetch(`${supabaseUrl}/functions/v1/send-invoice-email`, {
             method: 'POST',

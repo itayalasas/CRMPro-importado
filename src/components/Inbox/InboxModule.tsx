@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { getEnvVar } from '../../lib/envLoader';
 import {
   Mail, Send, Inbox as InboxIcon, Plus, Ticket, Star, Archive, Trash2,
   Reply, Forward, RefreshCw, Search, Paperclip, MoreHorizontal, Check,
@@ -179,8 +180,8 @@ export function InboxModule() {
     setLoading(true);
 
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
+      const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
 
       const externalToken = externalAuth.getStoredToken();
       if (!externalToken) {
@@ -330,8 +331,8 @@ export function InboxModule() {
     toast.info('Enviando email...');
 
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
+      const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
 
       console.log('[INBOX] Calling send-inbox-email function');
 
