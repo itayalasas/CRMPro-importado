@@ -4,7 +4,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey, X-Dogcatify-Signature",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey, X-Dogcatify-Signature, X-DogCatiFy-Signature",
 };
 
 interface DogCatifyCustomer {
@@ -94,7 +94,7 @@ interface WebhookPayload {
   data: DogCatifyOrder;
 }
 
-async function verifySignature(payload: any, signature: string): Promise<boolean> {
+async function verifySignature(payloadString: string, signature: string): Promise<boolean> {
   const webhookSecret = Deno.env.get("DOGCATIFY_WEBHOOK_SECRET");
 
   if (!webhookSecret) {
@@ -104,7 +104,8 @@ async function verifySignature(payload: any, signature: string): Promise<boolean
 
   try {
     const encoder = new TextEncoder();
-    const data = encoder.encode(JSON.stringify(payload));
+    // IMPORTANTE: Usar el string del payload directamente, NO hacer JSON.stringify() de nuevo
+    const data = encoder.encode(payloadString);
     const key = encoder.encode(webhookSecret);
 
     const cryptoKey = await crypto.subtle.importKey(
@@ -119,6 +120,10 @@ async function verifySignature(payload: any, signature: string): Promise<boolean
     const expected = Array.from(new Uint8Array(signatureBytes))
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
+
+    console.log("Firma esperada:", expected);
+    console.log("Firma recibida:", signature);
+    console.log("¿Coinciden?", signature === expected);
 
     return signature === expected;
   } catch (error) {
@@ -152,7 +157,11 @@ Deno.serve(async (req: Request) => {
     console.log("=== WEBHOOK DOGCATIFY RECIBIDO ===");
     console.log("Método:", req.method);
 
-    const signature = req.headers.get("x-dogcatify-signature");
+    // Leer la firma del header (intentar ambos formatos)
+    let signature = req.headers.get("x-dogcatify-signature");
+    if (!signature) {
+      signature = req.headers.get("X-DogCatiFy-Signature");
+    }
 
     const contentType = req.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
@@ -168,8 +177,29 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const payload: WebhookPayload = await req.json();
-    console.log("Payload recibido:", JSON.stringify(payload, null, 2));
+    // IMPORTANTE: Leer el body como texto primero para poder verificar la firma
+    const bodyText = await req.text();
+    console.log("Body recibido (primeros 500 chars):", bodyText.substring(0, 500));
+
+    // Parsear el JSON
+    let payload: WebhookPayload;
+    try {
+      payload = JSON.parse(bodyText);
+    } catch (parseError) {
+      console.error("Error parseando JSON:", parseError);
+      return new Response(
+        JSON.stringify({
+          error: "Invalid JSON",
+          message: "El body no es un JSON válido"
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    console.log("Payload parseado exitosamente");
 
     const { event, order_id, data: orderData } = payload;
 
@@ -192,9 +222,10 @@ Deno.serve(async (req: Request) => {
     if (signature) {
       console.log("Verificando firma...");
       console.log("Firma recibida:", signature);
-      console.log("Payload para verificar:", JSON.stringify(payload).substring(0, 200) + "...");
+      console.log("Longitud del body:", bodyText.length);
 
-      const isValid = await verifySignature(payload, signature);
+      // Verificar usando el body raw
+      const isValid = await verifySignature(bodyText, signature);
       if (!isValid) {
         console.error("⚠️ Firma inválida - CONTINUANDO DE TODOS MODOS (modo debug)");
         console.error("Secret configurado:", Deno.env.get("DOGCATIFY_WEBHOOK_SECRET") ? "SÍ" : "NO");
@@ -210,10 +241,10 @@ Deno.serve(async (req: Request) => {
         );
         */
       } else {
-        console.log("✓ Firma verificada correctamente");
+        console.log("✅ Firma verificada correctamente");
       }
     } else {
-      console.log("⚠️ No se recibió firma en el header x-dogcatify-signature");
+      console.log("⚠️ No se recibió firma en ningún header");
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
