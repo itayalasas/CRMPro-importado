@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { externalAuth } from '../../lib/externalAuth';
 import { Shield, ArrowRight, CheckCircle, Calendar } from 'lucide-react';
+import { getEnvVar } from '../../lib/envLoader';
 
 type AuthMode = 'login' | 'register';
 
@@ -9,9 +10,9 @@ export function LoginForm() {
 
   const handleAuth = () => {
     const redirectUri = `${window.location.origin}/callback`;
-    const baseUrl = import.meta.env.VITE_AUTH_URL;
-    const appId = import.meta.env.VITE_AUTH_APP_ID;
-    const apiKey = import.meta.env.VITE_AUTH_API_KEY;
+    const baseUrl = getEnvVar('VITE_AUTH_URL');
+    const appId = getEnvVar('VITE_AUTH_APP_ID');
+    const apiKey = getEnvVar('VITE_AUTH_API_KEY');
 
     const page = mode === 'register' ? 'register' : 'login';
     const authUrl = `${baseUrl}/${page}?app_id=${encodeURIComponent(appId)}&redirect_uri=${encodeURIComponent(redirectUri)}&api_key=${encodeURIComponent(apiKey)}`;
