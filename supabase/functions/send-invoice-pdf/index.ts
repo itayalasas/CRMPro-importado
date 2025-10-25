@@ -95,20 +95,33 @@ Deno.serve(async (req: Request) => {
 
     const defaultTaxRate = invoice.orders?.tax_rate || 22;
 
-    const items = (orderItems || []).map((item: any) => {
+    const items = (orderItems || []).map((item: any, index: number) => {
       const cantidad = parseFloat(String(item.quantity || 1));
       const precioUnitario = parseFloat(String(item.unit_price || 0));
+      const descuentoPorcentaje = parseFloat(String(item.discount_percent || 0));
       const ivaPorcentaje = parseFloat(String(item.tax_rate || defaultTaxRate));
-      const subtotalItem = cantidad * precioUnitario;
-      const ivaItem = subtotalItem * (ivaPorcentaje / 100);
-      const totalItem = subtotalItem + ivaItem;
+
+      // Calcular descuento en valor
+      const descuentoValor = precioUnitario * (descuentoPorcentaje / 100);
+      const precioConDescuento = precioUnitario - descuentoValor;
+
+      // Calcular subtotal (precio con descuento * cantidad)
+      const lineSubtotal = precioConDescuento * cantidad;
+
+      // Calcular IVA sobre el subtotal
+      const ivaItem = lineSubtotal * (ivaPorcentaje / 100);
+
+      // Total del item
+      const totalItem = lineSubtotal + ivaItem;
 
       return {
+        numero: index + 1,
         descripcion: item.product_name || item.description || "",
         cantidad: cantidad,
-        precio_unitario: precioUnitario,
+        precio_unitario: Math.round(precioUnitario * 100) / 100,
+        descuento: Math.round(descuentoValor * cantidad * 100) / 100,
+        line_subtotal: Math.round(lineSubtotal * 100) / 100,
         iva_porcentaje: ivaPorcentaje,
-        subtotal: Math.round(subtotalItem * 100) / 100,
         iva: Math.round(ivaItem * 100) / 100,
         total: Math.round(totalItem * 100) / 100
       };
@@ -122,21 +135,66 @@ Deno.serve(async (req: Request) => {
       const shippingTotal = shippingSubtotal + shippingIva;
 
       items.push({
+        numero: items.length + 1,
         descripcion: "Costo de Envío",
         cantidad: 1,
         precio_unitario: Math.round(shippingSubtotal * 100) / 100,
+        descuento: 0,
+        line_subtotal: Math.round(shippingSubtotal * 100) / 100,
         iva_porcentaje: shippingTaxRate,
-        subtotal: Math.round(shippingSubtotal * 100) / 100,
         iva: Math.round(shippingIva * 100) / 100,
         total: Math.round(shippingTotal * 100) / 100
       });
     }
 
-    const calculatedSubtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
+    const calculatedSubtotal = items.reduce((sum, item) => sum + item.line_subtotal, 0);
     const calculatedIva = items.reduce((sum, item) => sum + item.iva, 0);
     const calculatedTotal = items.reduce((sum, item) => sum + item.total, 0);
 
     const recipientEmail = invoice.clients?.email || invoice.partners?.email || "";
+
+    // Determinar los datos del emisor (issuer)
+    // Si es factura de comisión, usar datos del partner
+    // Si es factura normal, usar datos de configuración general o valores por defecto
+    let issuerData: any = {
+      numero_cfe: invoice.invoice_number,
+      serie: invoice.serie_cfe || "A",
+      fecha_emision: invoice.issue_date || new Date().toISOString().split('T')[0],
+      moneda: invoice.currency || "UYU",
+      subtotal: Math.round(calculatedSubtotal * 100) / 100,
+      iva: Math.round(calculatedIva * 100) / 100,
+      total: Math.round(calculatedTotal * 100) / 100
+    };
+
+    // Si es factura de comisión, usar datos del partner
+    if (invoice.is_commission_invoice && invoice.partners) {
+      issuerData = {
+        ...issuerData,
+        rut: invoice.partners.rut || "211234560018",
+        razon_social: invoice.partners.company_name || invoice.partners.name || "Partner",
+        direccion: invoice.partners.address || "",
+        ciudad: invoice.partners.city || "",
+        telefono: invoice.partners.phone || "",
+        email: invoice.partners.email || ""
+      };
+    } else {
+      // Para facturas normales, usar datos de configuración general
+      const { data: generalSettings } = await supabase
+        .from("general_settings")
+        .select("*")
+        .limit(1)
+        .maybeSingle();
+
+      issuerData = {
+        ...issuerData,
+        rut: generalSettings?.rut || invoice.rut_emisor || "211234560018",
+        razon_social: generalSettings?.company_name || invoice.company_name || "Empresa Demo S.A.",
+        direccion: generalSettings?.address || "",
+        ciudad: generalSettings?.city || "Montevideo",
+        telefono: generalSettings?.phone || "",
+        email: generalSettings?.email || ""
+      };
+    }
 
     const requestPayload = {
       pdf_template_name: "invoice_email_service",
@@ -144,6 +202,14 @@ Deno.serve(async (req: Request) => {
       order_id: invoice.order_id,
       wait_for_invoice: false,
       data: {
+        items: items,
+        issuer: issuerData,
+        totals: {
+          subtotal: Math.round(calculatedSubtotal * 100) / 100,
+          tax_label: `IVA (${defaultTaxRate}%)`,
+          tax_amount: Math.round(calculatedIva * 100) / 100,
+          grand_total: Math.round(calculatedTotal * 100) / 100
+        },
         response_payload: {
           success: invoice.dgi_estado ? true : false,
           approved: invoice.dgi_estado === 'aprobado',
@@ -160,18 +226,6 @@ Deno.serve(async (req: Request) => {
           dgi_id_efactura: invoice.dgi_id_efactura || "",
           dgi_fecha_validacion: invoice.dgi_fecha_validacion || new Date().toISOString()
         },
-        issuer: {
-          numero_cfe: invoice.invoice_number,
-          serie: invoice.serie_cfe || "A",
-          rut: invoice.rut_emisor || "211234560018",
-          razon_social: invoice.company_name || "Empresa Demo S.A.",
-          fecha_emision: invoice.issue_date || new Date().toISOString().split('T')[0],
-          moneda: invoice.currency || "UYU",
-          subtotal: Math.round(calculatedSubtotal * 100) / 100,
-          iva: Math.round(calculatedIva * 100) / 100,
-          total: Math.round(calculatedTotal * 100) / 100
-        },
-        items: items,
         datos_adicionales: {
           observaciones: invoice.notes || invoice.observations || "",
           forma_pago: invoice.orders?.payment_method || "mercadopago"
