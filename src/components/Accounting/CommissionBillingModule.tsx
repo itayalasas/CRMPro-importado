@@ -248,31 +248,7 @@ export function CommissionBillingModule() {
       const taxAmount = selectedGroup.iva_amount;
       const totalAmount = selectedGroup.total_with_iva;
 
-      const { data: commissionInvoice, error: invoiceError } = await supabase
-        .from('invoices')
-        .insert({
-          invoice_number: invoiceNumber,
-          client_id: null,
-          order_id: null,
-          partner_id: partner.id,
-          payment_period_id: selectedPeriod,
-          issue_date: new Date().toISOString().split('T')[0],
-          due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          subtotal: subtotal,
-          tax_amount: taxAmount,
-          total_amount: totalAmount,
-          status: 'draft',
-          is_commission_invoice: true,
-          commission_iva_rate: ivaRate,
-          notes: `Factura de comisiones - ${selectedGroup.invoices.length} facturas procesadas`
-        })
-        .select()
-        .single();
-
-      if (invoiceError) {
-        throw new Error('Error creando factura: ' + invoiceError.message);
-      }
-
+      // PASO 1: Crear la orden PRIMERO
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -296,26 +272,46 @@ export function CommissionBillingModule() {
         throw new Error('Error creando orden: ' + orderError.message);
       }
 
-      if (order) {
-        await supabase
-          .from('invoices')
-          .update({ order_id: order.id })
-          .eq('id', commissionInvoice.id);
+      // PASO 2: Crear la factura con el order_id correcto
+      const { data: commissionInvoice, error: invoiceError} = await supabase
+        .from('invoices')
+        .insert({
+          invoice_number: invoiceNumber,
+          client_id: null,
+          order_id: order.id,
+          partner_id: partner.id,
+          payment_period_id: selectedPeriod,
+          issue_date: new Date().toISOString().split('T')[0],
+          due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          subtotal: subtotal,
+          tax_amount: taxAmount,
+          total_amount: totalAmount,
+          status: 'draft',
+          is_commission_invoice: true,
+          commission_iva_rate: ivaRate,
+          notes: `Factura de comisiones - ${selectedGroup.invoices.length} facturas procesadas`
+        })
+        .select()
+        .single();
 
-        await supabase
-          .from('order_items')
-          .insert({
-            order_id: order.id,
-            product_name: 'Comisión por ventas',
-            description: `Comisiones de ${selectedGroup.invoices.length} facturas procesadas`,
-            quantity: 1,
-            unit_price: subtotal,
-            line_total: subtotal,
-            total_price: subtotal,
-            item_type: 'service',
-            currency: 'UYU'
-          });
+      if (invoiceError) {
+        throw new Error('Error creando factura: ' + invoiceError.message);
       }
+
+      // PASO 3: Crear el item de orden
+      await supabase
+        .from('order_items')
+        .insert({
+          order_id: order.id,
+          product_name: 'Comisión por ventas',
+          description: `Comisiones de ${selectedGroup.invoices.length} facturas procesadas`,
+          quantity: 1,
+          unit_price: subtotal,
+          line_total: subtotal,
+          total_price: subtotal,
+          item_type: 'service',
+          currency: 'UYU'
+        });
 
       const invoiceIds = selectedGroup.invoices.map(inv => inv.id);
       await supabase
