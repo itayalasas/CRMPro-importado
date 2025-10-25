@@ -536,9 +536,9 @@ Deno.serve(async (req: Request) => {
         const { error: updateError } = await supabase
           .from("orders")
           .update({
-            status: orderData.status,
-            payment_status: orderData.payment_status,
-            payment_method: orderData.payment_method,
+            status: orderData.status || 'pending',
+            payment_status: orderData.payment_status || 'unpaid',
+            payment_method: orderData.payment_method || 'unknown',
             updated_at: new Date().toISOString()
           })
           .eq("id", existingOrder.id);
