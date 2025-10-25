@@ -98,17 +98,39 @@ Componente raíz que:
 
 ## Integración en Servicios
 
-### Supabase Client
+### Supabase Client (Lazy Initialization)
+
+**IMPORTANTE**: El cliente de Supabase usa inicialización lazy (diferida) para evitar que se ejecute antes de que las variables de entorno se carguen.
+
 ```typescript
 // src/lib/supabase.ts
 import { getEnvVar } from './envLoader';
 
-function getSupabaseCredentials() {
-  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
-  const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
-  // ...
+// NO se crea el cliente inmediatamente
+let baseClient: SupabaseClient | null = null;
+
+// Se crea solo cuando se accede por primera vez
+function getBaseClient(): SupabaseClient {
+  if (!baseClient) {
+    const { supabaseUrl, supabaseAnonKey } = getSupabaseCredentials();
+    baseClient = createClient(supabaseUrl, supabaseAnonKey);
+  }
+  return baseClient;
 }
+
+// Proxy para acceso lazy
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(target, prop) {
+    const client = getBaseClient(); // Crea el cliente solo cuando se usa
+    return client[prop as keyof SupabaseClient];
+  }
+}) as SupabaseClient;
 ```
+
+**Por qué es necesario**:
+- Si el cliente se crea inmediatamente (`const client = createClient(...)`), falla porque las variables aún no están cargadas
+- Con lazy initialization, el cliente se crea solo cuando se accede por primera vez
+- Para ese momento, las variables ya están disponibles desde la API
 
 ### External Auth
 ```typescript
