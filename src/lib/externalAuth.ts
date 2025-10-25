@@ -37,13 +37,20 @@ interface TokenPayload {
   aud: string;
 }
 
-const AUTH_URL = import.meta.env.VITE_AUTH_URL;
-const APP_ID = import.meta.env.VITE_AUTH_APP_ID;
-const API_KEY = import.meta.env.VITE_AUTH_API_KEY;
-const APP_URL = import.meta.env.VITE_APP_URL || window.location.origin;
+import { getEnvVar } from './envLoader';
+
+function getAuthConfig() {
+  return {
+    AUTH_URL: getEnvVar('VITE_AUTH_URL'),
+    APP_ID: getEnvVar('VITE_AUTH_APP_ID'),
+    API_KEY: getEnvVar('VITE_AUTH_API_KEY'),
+    APP_URL: getEnvVar('VITE_APP_URL') || window.location.origin,
+  };
+}
 
 export const externalAuth = {
   redirectToLogin() {
+    const { AUTH_URL, APP_ID, API_KEY, APP_URL } = getAuthConfig();
     const redirectUri = `${APP_URL}/callback`;
     const loginUrl = `${AUTH_URL}/login?app_id=${encodeURIComponent(APP_ID)}&redirect_uri=${encodeURIComponent(redirectUri)}&api_key=${encodeURIComponent(API_KEY)}`;
     window.location.href = loginUrl;
@@ -151,6 +158,7 @@ export const externalAuth = {
 
   async refreshAccessToken(refreshToken: string): Promise<string | null> {
     try {
+      const { AUTH_URL, APP_ID, API_KEY } = getAuthConfig();
       const response = await fetch(`${AUTH_URL}/refresh`, {
         method: 'POST',
         headers: {
@@ -185,6 +193,7 @@ export const externalAuth = {
 
   async logout() {
     try {
+      const { AUTH_URL, APP_ID, API_KEY } = getAuthConfig();
       const token = this.getStoredToken();
       if (token) {
         await fetch(`${AUTH_URL}/logout`, {

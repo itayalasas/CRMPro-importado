@@ -1,18 +1,25 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { externalAuth } from './externalAuth';
+import { getEnvVar } from './envLoader';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+function getSupabaseCredentials() {
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
+  const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Missing Supabase environment variables');
+  }
+
+  return { supabaseUrl, supabaseAnonKey };
 }
 
+const { supabaseUrl, supabaseAnonKey } = getSupabaseCredentials();
 const baseClient = createClient(supabaseUrl, supabaseAnonKey);
 let authenticatedClient: SupabaseClient | null = null;
 
 function getAuthenticatedClient(): SupabaseClient {
   if (!authenticatedClient) {
+    const { supabaseUrl, supabaseAnonKey } = getSupabaseCredentials();
     authenticatedClient = createClient(supabaseUrl, supabaseAnonKey);
   }
 
