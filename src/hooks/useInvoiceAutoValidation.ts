@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { getEnvVar } from '../lib/envLoader';
 
 export function useInvoiceAutoValidation() {
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -29,11 +30,11 @@ export function useInvoiceAutoValidation() {
           console.log(`📋 Encontradas ${pendingInvoices.length} facturas pendientes, enviando a procesar...`);
 
           const response = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-pending-invoices`,
+            `${getEnvVar('VITE_SUPABASE_URL')}/functions/v1/process-pending-invoices`,
             {
               method: 'POST',
               headers: {
-                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                'Authorization': `Bearer ${getEnvVar('VITE_SUPABASE_ANON_KEY')}`,
                 'Content-Type': 'application/json',
               },
             }

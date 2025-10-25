@@ -1,3 +1,5 @@
+import { getEnvVar } from './envLoader';
+
 interface User {
   id: string;
   email: string;
@@ -22,9 +24,9 @@ interface UserSearchResponse {
 
 export async function searchUsers(query: string = '', limit: number = 10, offset: number = 0): Promise<User[]> {
   try {
-    const authSystemUrl = import.meta.env.VITE_AUTH_SYSTEM_URL;
-    const appId = import.meta.env.VITE_AUTH_APP_ID;
-    const apiKey = import.meta.env.VITE_AUTH_API_KEY;
+    const authSystemUrl = getEnvVar('VITE_AUTH_SYSTEM_URL');
+    const appId = getEnvVar('VITE_AUTH_APP_ID');
+    const apiKey = getEnvVar('VITE_AUTH_API_KEY');
 
     if (!authSystemUrl || !appId || !apiKey) {
       console.error('Missing authentication configuration');

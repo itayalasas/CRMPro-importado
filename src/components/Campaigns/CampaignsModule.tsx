@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { getEnvVar } from '../../lib/envLoader';
 import {
   Plus, Mail, Users, Send, Edit2, Trash2, BarChart3, Eye, TrendingUp,
   MousePointerClick, Activity, Clock, CheckCircle, AlertCircle, Zap, UserPlus,
@@ -357,9 +358,9 @@ export function CampaignsModule() {
         try {
           toast.success('Iniciando envío de campaña...');
 
-          const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-campaign-emails`;
+          const apiUrl = `${getEnvVar('VITE_SUPABASE_URL')}/functions/v1/send-campaign-emails`;
           const headers = {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer ${getEnvVar('VITE_SUPABASE_ANON_KEY')}`,
             'Content-Type': 'application/json',
           };
 
@@ -396,9 +397,9 @@ export function CampaignsModule() {
         try {
           toast.success('Reintentando envíos fallidos...');
 
-          const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-campaign-emails`;
+          const apiUrl = `${getEnvVar('VITE_SUPABASE_URL')}/functions/v1/send-campaign-emails`;
           const headers = {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer ${getEnvVar('VITE_SUPABASE_ANON_KEY')}`,
             'Content-Type': 'application/json',
           };
 

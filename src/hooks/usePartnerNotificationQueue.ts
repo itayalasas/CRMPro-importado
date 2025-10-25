@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { getEnvVar } from '../lib/envLoader';
 
 export function usePartnerNotificationQueue() {
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -36,11 +37,11 @@ export function usePartnerNotificationQueue() {
                 .eq('id', notification.id);
 
               const response = await fetch(
-                `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-order-communication`,
+                `${getEnvVar('VITE_SUPABASE_URL')}/functions/v1/send-order-communication`,
                 {
                   method: 'POST',
                   headers: {
-                    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                    'Authorization': `Bearer ${getEnvVar('VITE_SUPABASE_ANON_KEY')}`,
                     'Content-Type': 'application/json',
                   },
                   body: JSON.stringify(notification.payload),

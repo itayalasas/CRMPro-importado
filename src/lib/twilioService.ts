@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { externalAuth } from './externalAuth';
+import { getEnvVar } from './envLoader';
 
 interface TwilioConfig {
   account_sid: string;
@@ -65,7 +66,7 @@ export class TwilioService {
     try {
       const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${this.config.account_sid}/Calls.json`;
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
       const twilioWebhookUrl = `${supabaseUrl}/functions/v1/twilio-voice-webhook`;
 
 
@@ -260,8 +261,8 @@ export class TwilioService {
   async connectIncomingCall(callSid: string): Promise<{ success: boolean; error?: string }> {
     try {
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
+      const anonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
 
       const externalToken = externalAuth.getStoredToken();
       const user = externalAuth.getStoredUser();
@@ -298,8 +299,8 @@ export class TwilioService {
 
   async getTwilioToken(): Promise<{ token: string; identity: string } | null> {
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
+      const anonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
 
       const externalToken = externalAuth.getStoredToken();
       const user = externalAuth.getStoredUser();
