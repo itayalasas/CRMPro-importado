@@ -141,7 +141,7 @@ Deno.serve(async (req: Request) => {
     const requestPayload = {
       pdf_template_name: "invoice_email_service",
       recipient_email: recipientEmail,
-      order_id: invoice.orders?.dogcatify_order_id || invoice.order_id,
+      order_id: invoice.order_id,
       wait_for_invoice: false,
       data: {
         response_payload: {
@@ -199,7 +199,6 @@ Deno.serve(async (req: Request) => {
     } else if (config.auth_type === "bearer" && authCreds.token) {
       headers["Authorization"] = `Bearer ${authCreds.token}`;
     } else if (config.auth_type === "api_key" && authCreds.key && authCreds.value) {
-      // Para api_key, solo agregar el header personalizado (ej: x-api-key)
       headers[authCreds.key] = authCreds.value;
     }
 
