@@ -546,16 +546,18 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      case "order.updated": {
-        console.log("Actualizando orden existente...");
+      case "order.updated":
+      case "payment.updated": {
+        console.log(`Procesando ${event}...`);
 
         const { data: existingOrder } = await supabase
           .from("orders")
-          .select("id")
+          .select("id, order_number, status, payment_status")
           .eq("external_order_id", orderData.id)
           .maybeSingle();
 
         if (!existingOrder) {
+          console.error(`No se encontró orden con external_order_id: ${orderData.id}`);
           return new Response(
             JSON.stringify({
               error: "Order not found",
@@ -568,23 +570,58 @@ Deno.serve(async (req: Request) => {
           );
         }
 
-        await supabase
+        const updateData: any = {
+          status: orderData.status || existingOrder.status,
+          updated_at: new Date().toISOString()
+        };
+
+        if (orderData.payment_info) {
+          updateData.payment_status = orderData.payment_info.payment_status || existingOrder.payment_status;
+
+          if (orderData.payment_info.payment_id) {
+            updateData.payment_id = orderData.payment_info.payment_id;
+          }
+
+          if (orderData.payment_info.payment_method) {
+            updateData.payment_method = orderData.payment_info.payment_method;
+          }
+
+          console.log(`Payment info: status=${updateData.payment_status}, id=${orderData.payment_info.payment_id}`);
+        }
+
+        if (orderData.totals && orderData.totals.total_amount) {
+          updateData.total_amount = orderData.totals.total_amount;
+        }
+
+        const { error: updateError } = await supabase
           .from("orders")
-          .update({
-            status: orderData.status || 'pending',
-            payment_status: orderData.payment_info?.payment_status || 'unpaid',
-            updated_at: new Date().toISOString()
-          })
+          .update(updateData)
           .eq("id", existingOrder.id);
 
-        console.log("✓ Orden actualizada:", existingOrder.id);
+        if (updateError) {
+          console.error("Error actualizando orden:", updateError);
+          throw updateError;
+        }
+
+        console.log(`✓ Orden actualizada: ${existingOrder.order_number}`);
+        console.log(`  Estado anterior: ${existingOrder.status} → ${updateData.status}`);
+        console.log(`  Pago anterior: ${existingOrder.payment_status} → ${updateData.payment_status}`);
+
+        if (updateData.payment_status === 'paid' || updateData.payment_status === 'confirmed') {
+          console.log("🎉 Pago confirmado! La orden puede cambiar a 'confirmed' automáticamente");
+        }
 
         return new Response(
           JSON.stringify({
             success: true,
-            message: "Orden actualizada exitosamente",
+            message: `${event === 'payment.updated' ? 'Pago' : 'Orden'} actualizado exitosamente`,
             order: {
-              id: existingOrder.id
+              id: existingOrder.id,
+              order_number: existingOrder.order_number,
+              previous_status: existingOrder.status,
+              new_status: updateData.status,
+              previous_payment_status: existingOrder.payment_status,
+              new_payment_status: updateData.payment_status
             }
           }),
           {
