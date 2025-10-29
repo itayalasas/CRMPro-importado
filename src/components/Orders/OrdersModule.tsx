@@ -1566,14 +1566,6 @@ export function OrdersModule() {
                         {selectedOrder.external_order_id}
                       </p>
                     </div>
-                    {selectedOrder.external_partner_id && (
-                      <div>
-                        <span className="text-sm text-slate-600">ID de Partner:</span>
-                        <p className="font-mono text-sm font-semibold text-slate-900 break-all">
-                          {selectedOrder.external_partner_id}
-                        </p>
-                      </div>
-                    )}
                     {selectedOrder.payment_method && (
                       <div>
                         <span className="text-sm text-slate-600">Método de Pago:</span>
@@ -1584,6 +1576,75 @@ export function OrdersModule() {
                     )}
                     {selectedOrder.metadata && (
                       <>
+                        {selectedOrder.metadata.partner_breakdown?.partners && (
+                          <div className="md:col-span-2 bg-white rounded-lg p-4 border border-blue-100">
+                            <h4 className="font-semibold text-slate-900 mb-3 flex items-center">
+                              <Package className="w-4 h-4 mr-2 text-blue-600" />
+                              {Object.keys(selectedOrder.metadata.partner_breakdown.partners).length > 1
+                                ? `Partners (${Object.keys(selectedOrder.metadata.partner_breakdown.partners).length})`
+                                : 'Partner'}
+                            </h4>
+                            <div className="space-y-4">
+                              {Object.entries(selectedOrder.metadata.partner_breakdown.partners).map(([partnerId, partnerData]: [string, any]) => (
+                                <div key={partnerId} className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                    <div className="md:col-span-2">
+                                      <span className="text-slate-600">Nombre:</span>
+                                      <p className="font-semibold text-slate-900">{partnerData.partner_name}</p>
+                                    </div>
+                                    {selectedOrder.metadata.partner?.business_name && partnerId === selectedOrder.metadata.partner.id && (
+                                      <>
+                                        {selectedOrder.metadata.partner.rut && (
+                                          <div>
+                                            <span className="text-slate-600">RUT:</span>
+                                            <p className="font-semibold text-slate-900">{selectedOrder.metadata.partner.rut}</p>
+                                          </div>
+                                        )}
+                                        {selectedOrder.metadata.partner.email && (
+                                          <div>
+                                            <span className="text-slate-600">Email:</span>
+                                            <p className="font-semibold text-slate-900">{selectedOrder.metadata.partner.email}</p>
+                                          </div>
+                                        )}
+                                        {selectedOrder.metadata.partner.phone && (
+                                          <div>
+                                            <span className="text-slate-600">Teléfono:</span>
+                                            <p className="font-semibold text-slate-900">{selectedOrder.metadata.partner.phone}</p>
+                                          </div>
+                                        )}
+                                        {selectedOrder.metadata.partner.calle && selectedOrder.metadata.partner.numero && (
+                                          <div className="md:col-span-2">
+                                            <span className="text-slate-600">Dirección:</span>
+                                            <p className="font-semibold text-slate-900">
+                                              {selectedOrder.metadata.partner.calle} {selectedOrder.metadata.partner.numero}
+                                              {selectedOrder.metadata.partner.barrio && `, ${selectedOrder.metadata.partner.barrio}`}
+                                              {selectedOrder.metadata.partner.codigo_postal && ` - CP: ${selectedOrder.metadata.partner.codigo_postal}`}
+                                            </p>
+                                          </div>
+                                        )}
+                                      </>
+                                    )}
+                                    <div className="md:col-span-2">
+                                      <span className="text-slate-600">Productos:</span>
+                                      <div className="mt-1 space-y-1">
+                                        {partnerData.items.map((item: any, idx: number) => (
+                                          <div key={idx} className="text-sm">
+                                            <span className="font-medium text-slate-900">{item.name}</span>
+                                            <span className="text-slate-600"> - Qty: {item.quantity} × ${item.price}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <span className="text-slate-600">Subtotal Partner:</span>
+                                      <p className="font-semibold text-slate-900">${partnerData.subtotal} UYU</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                         {selectedOrder.metadata.customer && (
                           <div className="md:col-span-2 bg-white rounded-lg p-4 border border-blue-100">
                             <h4 className="font-semibold text-slate-900 mb-3 flex items-center">
@@ -1591,10 +1652,12 @@ export function OrdersModule() {
                               Información del Cliente (DogCatify)
                             </h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                              {selectedOrder.metadata.customer.full_name && (
+                              {(selectedOrder.metadata.customer.display_name || selectedOrder.metadata.customer.full_name) && (
                                 <div>
                                   <span className="text-slate-600">Nombre:</span>
-                                  <p className="font-semibold text-slate-900">{selectedOrder.metadata.customer.full_name}</p>
+                                  <p className="font-semibold text-slate-900">
+                                    {selectedOrder.metadata.customer.display_name || selectedOrder.metadata.customer.full_name}
+                                  </p>
                                 </div>
                               )}
                               {selectedOrder.metadata.customer.email && (
@@ -1609,22 +1672,22 @@ export function OrdersModule() {
                                   <p className="font-semibold text-slate-900">{selectedOrder.metadata.customer.phone}</p>
                                 </div>
                               )}
-                              {selectedOrder.metadata.customer.city && (
+                              {(selectedOrder.metadata.customer.barrio || selectedOrder.metadata.customer.city) && (
                                 <div>
                                   <span className="text-slate-600">Ciudad:</span>
-                                  <p className="font-semibold text-slate-900">{selectedOrder.metadata.customer.city}</p>
+                                  <p className="font-semibold text-slate-900">
+                                    {selectedOrder.metadata.customer.barrio || selectedOrder.metadata.customer.city}
+                                  </p>
                                 </div>
                               )}
-                              {selectedOrder.metadata.customer.address && (
+                              {(selectedOrder.metadata.customer.calle || selectedOrder.metadata.customer.address) && (
                                 <div className="md:col-span-2">
                                   <span className="text-slate-600">Dirección:</span>
-                                  <p className="font-semibold text-slate-900">{selectedOrder.metadata.customer.address}</p>
-                                </div>
-                              )}
-                              {selectedOrder.metadata.customer.country && (
-                                <div>
-                                  <span className="text-slate-600">País:</span>
-                                  <p className="font-semibold text-slate-900">{selectedOrder.metadata.customer.country}</p>
+                                  <p className="font-semibold text-slate-900">
+                                    {selectedOrder.metadata.customer.calle
+                                      ? `${selectedOrder.metadata.customer.calle} ${selectedOrder.metadata.customer.numero || ''}, ${selectedOrder.metadata.customer.barrio || ''} - CP: ${selectedOrder.metadata.customer.codigo_postal || ''}`
+                                      : selectedOrder.metadata.customer.address}
+                                  </p>
                                 </div>
                               )}
                             </div>
