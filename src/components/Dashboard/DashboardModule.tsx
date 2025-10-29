@@ -27,6 +27,8 @@ interface Stats {
   totalRevenue: number;
   revenueGrowth: number;
   pendingRevenue: number;
+  totalCommissions: number;
+  paidCommissions: number;
   openTickets: number;
   avgResolutionTime: number;
   ticketSatisfaction: number;
@@ -56,6 +58,8 @@ export function DashboardModule() {
     totalRevenue: 0,
     revenueGrowth: 15.3,
     pendingRevenue: 0,
+    totalCommissions: 0,
+    paidCommissions: 0,
     openTickets: 0,
     avgResolutionTime: 0,
     ticketSatisfaction: 94,
@@ -163,6 +167,8 @@ export function DashboardModule() {
       newClientsLastMonth,
       invoices,
       pendingInvoices,
+      commissionInvoices,
+      paidCommissionInvoices,
       tickets,
       calls,
       campaigns,
@@ -176,6 +182,8 @@ export function DashboardModule() {
       supabase.from('clients').select('*', { count: 'exact', head: true }).gte('created_at', firstDayLastMonth.toISOString()).lte('created_at', lastDayLastMonth.toISOString()),
       supabase.from('invoices').select('total_amount').eq('status', 'paid'),
       supabase.from('invoices').select('total_amount').in('status', ['sent', 'overdue', 'validated', 'sent-error']),
+      supabase.from('invoices').select('commission_amount').not('commission_amount', 'is', null).gt('commission_amount', 0),
+      supabase.from('invoices').select('commission_amount').eq('status', 'paid').not('commission_amount', 'is', null).gt('commission_amount', 0),
       supabase.from('tickets').select('*', { count: 'exact', head: true }).in('status', ['open', 'in_progress']),
       supabase.from('calls').select('duration'),
       supabase.from('campaigns').select('*', { count: 'exact', head: true }).in('status', ['scheduled', 'sending']),
@@ -186,6 +194,8 @@ export function DashboardModule() {
 
     const totalRevenue = invoices.data?.reduce((sum, inv) => sum + Number(inv.total_amount), 0) || 0;
     const pendingRevenue = pendingInvoices.data?.reduce((sum, inv) => sum + Number(inv.total_amount), 0) || 0;
+    const totalCommissions = commissionInvoices.data?.reduce((sum, inv) => sum + Number(inv.commission_amount), 0) || 0;
+    const paidCommissions = paidCommissionInvoices.data?.reduce((sum, inv) => sum + Number(inv.commission_amount), 0) || 0;
 
     const totalCallDuration = calls.data?.reduce((sum, call) => sum + call.duration, 0) || 0;
     const avgCallDuration = calls.data?.length ? Math.floor(totalCallDuration / calls.data.length) : 0;
@@ -208,6 +218,8 @@ export function DashboardModule() {
       totalRevenue,
       revenueGrowth: 15.3,
       pendingRevenue,
+      totalCommissions,
+      paidCommissions,
       openTickets: tickets.count || 0,
       avgResolutionTime: 4.5,
       ticketSatisfaction: 94,
@@ -321,7 +333,7 @@ export function DashboardModule() {
         <p className="text-slate-600 mt-2 text-sm sm:text-base lg:text-lg">Vista completa del rendimiento de tu negocio</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-xl p-6 text-white transform hover:scale-105 transition-transform">
           <div className="flex items-center justify-between mb-4">
             <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm">
@@ -389,7 +401,7 @@ export function DashboardModule() {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-xl p-6 text-white transform hover:scale-105 transition-transform">
+        <div className="bg-gradient-to-br from-cyan-500 to-teal-600 rounded-2xl shadow-xl p-6 text-white transform hover:scale-105 transition-transform">
           <div className="flex items-center justify-between mb-4">
             <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm">
               <Mail className="w-8 h-8" />
@@ -402,10 +414,31 @@ export function DashboardModule() {
             </div>
           </div>
           <div className="space-y-1">
-            <p className="text-purple-100 text-sm font-medium">Campañas Este Mes</p>
+            <p className="text-cyan-100 text-sm font-medium">Campañas Este Mes</p>
             <p className="text-4xl font-bold">{stats.campaignsActive}</p>
-            <p className="text-purple-100 text-xs">
+            <p className="text-cyan-100 text-xs">
               {stats.emailOpenRate.toFixed(1)}% tasa de éxito
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-amber-500 to-yellow-600 rounded-2xl shadow-xl p-6 text-white transform hover:scale-105 transition-transform">
+          <div className="flex items-center justify-between mb-4">
+            <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm">
+              <TrendingUp className="w-8 h-8" />
+            </div>
+            <div className="text-right">
+              <div className="flex items-center space-x-1">
+                <CheckCircle className="w-4 h-4" />
+                <span className="text-sm font-medium">Ganancias</span>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <p className="text-amber-100 text-sm font-medium">Comisiones Totales</p>
+            <p className="text-4xl font-bold">${stats.totalCommissions.toFixed(2)}</p>
+            <p className="text-amber-100 text-xs">
+              ${stats.paidCommissions.toFixed(2)} cobradas
             </p>
           </div>
         </div>
