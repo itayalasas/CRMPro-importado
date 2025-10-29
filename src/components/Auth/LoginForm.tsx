@@ -21,9 +21,9 @@ export function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex">
-      {/* Left Panel */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-600 to-blue-800 p-12 flex-col justify-between">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200 flex items-center justify-center p-4 sm:p-6 lg:p-0">
+      {/* Left Panel - Desktop Only */}
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-600 via-blue-700 to-blue-900 p-12 flex-col justify-between min-h-screen">
         <div className="flex items-center space-x-3">
           <Calendar className="w-8 h-8 text-white" />
           <span className="text-2xl font-bold text-white">CRM Pro</span>
@@ -76,36 +76,36 @@ export function LoginForm() {
       </div>
 
       {/* Right Panel */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
+      <div className="w-full lg:w-1/2 flex items-center justify-center lg:p-8">
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
           <div className="lg:hidden flex items-center justify-center mb-8">
-            <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-4 rounded-2xl">
+            <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-4 rounded-2xl shadow-2xl">
               <Shield className="w-10 h-10 text-white" />
             </div>
           </div>
 
           {/* Auth Card */}
-          <div className="bg-white rounded-3xl shadow-xl p-10">
+          <div className="bg-white rounded-2xl lg:rounded-3xl shadow-2xl p-6 sm:p-8 lg:p-10">
             <div className="flex items-center justify-center mb-6">
               <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-5 rounded-2xl shadow-lg">
                 <Shield className="w-10 h-10 text-white" />
               </div>
             </div>
 
-            <h2 className="text-3xl font-bold text-center mb-2 text-slate-900">
+            <h2 className="text-2xl sm:text-3xl font-bold text-center mb-2 text-slate-900">
               {mode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'}
             </h2>
-            <p className="text-center text-slate-600 mb-8">
+            <p className="text-center text-slate-600 mb-8 text-sm sm:text-base">
               Usa tu sistema de autenticación empresarial para acceder de forma segura
             </p>
 
             <button
               onClick={handleAuth}
-              className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-4 rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 transition-all transform hover:scale-[1.02] shadow-lg flex items-center justify-center space-x-3 group"
+              className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3.5 sm:py-4 rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 active:scale-95 transition-all shadow-lg flex items-center justify-center space-x-3 group"
             >
               <Shield className="w-5 h-5" />
-              <span>{mode === 'login' ? 'Iniciar Sesión' : 'Registrarme'}</span>
+              <span className="text-sm sm:text-base">{mode === 'login' ? 'Iniciar Sesión' : 'Registrarme'}</span>
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
 
