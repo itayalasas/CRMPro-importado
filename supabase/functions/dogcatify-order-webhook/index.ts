@@ -375,10 +375,13 @@ Deno.serve(async (req: Request) => {
         let shippingCost = 0;
         let shippingTaxAmount = 0;
 
-        if (orderData.shipping_info && orderData.shipping_info.shipping_cost) {
+        if ((orderData as any).partner_breakdown?.shipping_cost) {
+          shippingCost = (orderData as any).partner_breakdown.shipping_cost || 0;
+          console.log(`Costo de envío detectado desde partner_breakdown: $${shippingCost}`);
+        } else if (orderData.shipping_info && orderData.shipping_info.shipping_cost) {
           shippingCost = orderData.shipping_info.shipping_cost || 0;
           shippingTaxAmount = orderData.shipping_info.shipping_iva_amount || 0;
-          console.log(`Costo de envío detectado: $${shippingCost}, IVA envío: $${shippingTaxAmount}`);
+          console.log(`Costo de envío detectado desde shipping_info: $${shippingCost}, IVA envío: $${shippingTaxAmount}`);
         } else if (orderData.shipping_cost) {
           shippingCost = orderData.shipping_cost || 0;
           console.log(`Costo de envío (campo directo): $${shippingCost}`);
