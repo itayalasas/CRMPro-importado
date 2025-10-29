@@ -104,7 +104,6 @@ async function verifySignature(payloadString: string, signature: string): Promis
 
   try {
     const encoder = new TextEncoder();
-    // IMPORTANTE: Usar el string del payload directamente, NO hacer JSON.stringify() de nuevo
     const data = encoder.encode(payloadString);
     const key = encoder.encode(webhookSecret);
 
@@ -157,7 +156,6 @@ Deno.serve(async (req: Request) => {
     console.log("=== WEBHOOK DOGCATIFY RECIBIDO ===");
     console.log("Método:", req.method);
 
-    // Leer la firma del header (intentar ambos formatos)
     let signature = req.headers.get("x-dogcatify-signature");
     if (!signature) {
       signature = req.headers.get("X-DogCatiFy-Signature");
@@ -177,11 +175,9 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // IMPORTANTE: Leer el body como texto primero para poder verificar la firma
     const bodyText = await req.text();
     console.log("Body recibido (primeros 500 chars):", bodyText.substring(0, 500));
 
-    // Parsear el JSON
     let payload: WebhookPayload;
     try {
       payload = JSON.parse(bodyText);
@@ -224,22 +220,10 @@ Deno.serve(async (req: Request) => {
       console.log("Firma recibida:", signature);
       console.log("Longitud del body:", bodyText.length);
 
-      // Verificar usando el body raw
       const isValid = await verifySignature(bodyText, signature);
       if (!isValid) {
         console.error("⚠️ Firma inválida - CONTINUANDO DE TODOS MODOS (modo debug)");
         console.error("Secret configurado:", Deno.env.get("DOGCATIFY_WEBHOOK_SECRET") ? "SÍ" : "NO");
-        // TEMPORAL: Permitir continuar aunque la firma sea inválida para debugging
-        // TODO: Descomentar esto cuando la firma funcione correctamente
-        /*
-        return new Response(
-          JSON.stringify({ error: "Invalid signature" }),
-          {
-            status: 401,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-        */
       } else {
         console.log("✅ Firma verificada correctamente");
       }
@@ -316,7 +300,6 @@ Deno.serve(async (req: Request) => {
           console.log("✓ Cliente creado:", clientId);
         }
 
-        // Procesar y registrar Partner si viene en el webhook
         let partnerId = null;
         if (orderData.partner) {
           const partnerData = orderData.partner;
@@ -332,7 +315,6 @@ Deno.serve(async (req: Request) => {
             partnerId = existingPartner.id;
             console.log("✓ Partner existente encontrado:", partnerId);
 
-            // Actualizar datos del partner
             const { error: updatePartnerError } = await supabase
               .from("partners")
               .update({
@@ -356,7 +338,6 @@ Deno.serve(async (req: Request) => {
               console.log("✓ Datos del partner actualizados");
             }
           } else {
-            // Crear nuevo partner
             const partnerInsertData = {
               external_id: partnerData.id,
               name: partnerData.business_name,
@@ -391,10 +372,6 @@ Deno.serve(async (req: Request) => {
 
         const orderNumber = `DC-${Date.now()}`;
 
-        let subtotal = orderData.subtotal || 0;
-        let taxRate = orderData.iva_rate || 0;
-        let taxAmount = orderData.iva_amount || 0;
-        let totalAmount = orderData.total_amount || 0;
         let shippingCost = 0;
         let shippingTaxAmount = 0;
 
@@ -407,21 +384,47 @@ Deno.serve(async (req: Request) => {
           console.log(`Costo de envío (campo directo): $${shippingCost}`);
         }
 
-        if (subtotal === 0 || taxAmount === 0) {
-          if (taxRate > 0 && totalAmount > 0) {
-            const totalWithoutShipping = totalAmount - shippingCost - shippingTaxAmount;
-            subtotal = totalWithoutShipping / (1 + taxRate / 100);
-            taxAmount = totalWithoutShipping - subtotal;
-          } else {
-            subtotal = totalAmount - shippingCost - shippingTaxAmount;
-            taxAmount = 0;
-            taxRate = 0;
-          }
+        let subtotal = 0;
+        let taxRate = orderData.iva_rate || 0;
+        let taxAmount = 0;
+        let totalAmount = orderData.total_amount || 0;
+        let discountAmount = 0;
+
+        if (orderData.subtotal && orderData.iva_amount) {
+          subtotal = orderData.subtotal;
+          taxAmount = orderData.iva_amount;
+          console.log(`Usando valores de Dogcatify: Subtotal=${subtotal}, IVA=${taxAmount}`);
+        } else if (totalAmount > 0 && taxRate > 0) {
+          const totalWithoutShipping = totalAmount - shippingCost - shippingTaxAmount;
+          subtotal = totalWithoutShipping / (1 + taxRate / 100);
+          taxAmount = totalWithoutShipping - subtotal;
+          console.log(`Calculado desde total: Subtotal=${subtotal}, IVA=${taxAmount}`);
         } else {
-          totalAmount = subtotal + taxAmount + shippingCost + shippingTaxAmount;
+          subtotal = totalAmount - shippingCost - shippingTaxAmount;
+          taxAmount = 0;
+          taxRate = 0;
+          console.log(`Sin IVA: Subtotal=${subtotal}`);
         }
 
-        console.log(`Cálculos financieros: Subtotal=${subtotal}, IVA=${taxAmount} (${taxRate}%), Envío=${shippingCost}, IVA Envío=${shippingTaxAmount}, Total=${totalAmount}`);
+        if (orderData.items) {
+          const itemsSubtotal = orderData.items.reduce((sum: number, item: DogCatifyItem) => {
+            const itemSubtotal = item.subtotal || (item.price * item.quantity);
+            return sum + itemSubtotal;
+          }, 0);
+
+          const itemsTotal = orderData.items.reduce((sum: number, item: DogCatifyItem) => {
+            const itemSubtotal = item.subtotal || (item.price * item.quantity);
+            const itemTax = item.iva_amount || 0;
+            return sum + itemSubtotal + itemTax;
+          }, 0);
+
+          if (itemsSubtotal > 0) {
+            discountAmount = itemsTotal - totalAmount + shippingCost + shippingTaxAmount;
+            if (discountAmount < 0) discountAmount = 0;
+          }
+        }
+
+        console.log(`Cálculos financieros: Subtotal=${subtotal.toFixed(2)}, IVA=${taxAmount.toFixed(2)} (${taxRate}%), Descuento=${discountAmount.toFixed(2)}, Envío=${shippingCost}, IVA Envío=${shippingTaxAmount}, Total=${totalAmount}`);
 
         const shippingAddress = orderData.shipping_info?.shipping_address || orderData.shipping_address || `${customerData.calle} ${customerData.numero}`;
         const orderCurrency = orderData.items && orderData.items.length > 0 ? orderData.items[0].currency : 'UYU';
@@ -445,7 +448,7 @@ Deno.serve(async (req: Request) => {
             subtotal: subtotal,
             tax_rate: taxRate,
             tax_amount: taxAmount + shippingTaxAmount,
-            discount_amount: 0,
+            discount_amount: discountAmount,
             shipping_cost: shippingCost,
             shipping_address: shippingAddress,
             billing_address: shippingAddress,
