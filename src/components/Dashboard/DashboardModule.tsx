@@ -111,10 +111,42 @@ export function DashboardModule() {
       )
       .subscribe();
 
+    const ordersChannel = supabase
+      .channel('dashboard-orders')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders'
+        },
+        () => {
+          loadDashboardData();
+        }
+      )
+      .subscribe();
+
+    const invoicesChannel = supabase
+      .channel('dashboard-invoices')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'invoices'
+        },
+        () => {
+          loadDashboardData();
+        }
+      )
+      .subscribe();
+
     return () => {
       clearInterval(interval);
       supabase.removeChannel(campaignsChannel);
       supabase.removeChannel(clientsChannel);
+      supabase.removeChannel(ordersChannel);
+      supabase.removeChannel(invoicesChannel);
     };
   }, []);
 
@@ -143,7 +175,7 @@ export function DashboardModule() {
       supabase.from('clients').select('*', { count: 'exact', head: true }).gte('created_at', firstDayThisMonth.toISOString()),
       supabase.from('clients').select('*', { count: 'exact', head: true }).gte('created_at', firstDayLastMonth.toISOString()).lte('created_at', lastDayLastMonth.toISOString()),
       supabase.from('invoices').select('total_amount').eq('status', 'paid'),
-      supabase.from('invoices').select('total_amount').in('status', ['sent', 'overdue']),
+      supabase.from('invoices').select('total_amount').in('status', ['sent', 'overdue', 'validated', 'sent-error']),
       supabase.from('tickets').select('*', { count: 'exact', head: true }).in('status', ['open', 'in_progress']),
       supabase.from('calls').select('duration'),
       supabase.from('campaigns').select('*', { count: 'exact', head: true }).in('status', ['scheduled', 'sending']),

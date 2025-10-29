@@ -293,16 +293,16 @@ export function InvoicesModule() {
       .reduce((sum, i) => sum + Number(i.total_amount), 0);
 
     const pending = invoicesData
-      .filter(i => i.status === 'sent' || i.status === 'overdue')
+      .filter(i => i.status === 'sent' || i.status === 'overdue' || i.status === 'validated' || i.status === 'sent-error')
       .reduce((sum, i) => sum + Number(i.total_amount), 0);
 
     setStats({
       total: invoicesData.length,
       draft: invoicesData.filter(i => i.status === 'draft').length,
-      sent: invoicesData.filter(i => i.status === 'sent').length,
+      sent: invoicesData.filter(i => i.status === 'sent' || i.status === 'validated').length,
       paid: invoicesData.filter(i => i.status === 'paid').length,
-      overdue: invoicesData.filter(i => i.status === 'overdue').length,
-      cancelled: invoicesData.filter(i => i.status === 'cancelled').length,
+      overdue: invoicesData.filter(i => i.status === 'overdue' || i.status === 'sent-error').length,
+      cancelled: invoicesData.filter(i => i.status === 'cancelled' || i.status === 'refused').length,
       totalRevenue,
       pending,
       thisMonth: invoicesData.filter(i => new Date(i.created_at) >= firstDayThisMonth).length

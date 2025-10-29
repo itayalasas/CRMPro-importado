@@ -142,6 +142,25 @@ export function OrdersModule() {
   useEffect(() => {
     loadOrders();
     loadParameters();
+
+    const ordersChannel = supabase
+      .channel('orders-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders'
+        },
+        () => {
+          loadOrders();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(ordersChannel);
+    };
   }, []);
 
   const loadParameters = async () => {
@@ -214,9 +233,11 @@ export function OrdersModule() {
     const now = new Date();
     const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const totalRevenue = ordersData
-      .filter(o => o.status === 'completed')
-      .reduce((sum, o) => sum + Number(o.total_amount), 0);
+    const completedOrders = ordersData.filter(o =>
+      o.status === 'completed' || o.status === 'confirmed' || o.status === 'shipped'
+    );
+
+    const totalRevenue = completedOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
 
     setStats({
       total: ordersData.length,
@@ -226,8 +247,8 @@ export function OrdersModule() {
       completed: ordersData.filter(o => o.status === 'completed').length,
       cancelled: ordersData.filter(o => o.status === 'cancelled').length,
       totalRevenue,
-      avgOrderValue: ordersData.filter(o => o.status === 'completed').length > 0
-        ? totalRevenue / ordersData.filter(o => o.status === 'completed').length
+      avgOrderValue: completedOrders.length > 0
+        ? totalRevenue / completedOrders.length
         : 0,
       thisMonth: ordersData.filter(o => new Date(o.created_at) >= firstDayThisMonth).length
     });
