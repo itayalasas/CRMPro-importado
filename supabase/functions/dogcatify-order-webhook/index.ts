@@ -391,16 +391,16 @@ Deno.serve(async (req: Request) => {
         let discountAmount = 0;
 
         if (orderData.subtotal && orderData.iva_amount) {
-          subtotal = orderData.subtotal;
-          taxAmount = orderData.iva_amount;
+          subtotal = Math.ceil(orderData.subtotal * 100) / 100;
+          taxAmount = Math.ceil(orderData.iva_amount * 100) / 100;
           console.log(`Usando valores de Dogcatify: Subtotal=${subtotal}, IVA=${taxAmount}`);
         } else if (totalAmount > 0 && taxRate > 0) {
           const totalWithoutShipping = totalAmount - shippingCost - shippingTaxAmount;
-          subtotal = totalWithoutShipping / (1 + taxRate / 100);
-          taxAmount = totalWithoutShipping - subtotal;
+          subtotal = Math.ceil((totalWithoutShipping / (1 + taxRate / 100)) * 100) / 100;
+          taxAmount = Math.ceil((totalWithoutShipping - subtotal) * 100) / 100;
           console.log(`Calculado desde total: Subtotal=${subtotal}, IVA=${taxAmount}`);
         } else {
-          subtotal = totalAmount - shippingCost - shippingTaxAmount;
+          subtotal = Math.ceil((totalAmount - shippingCost - shippingTaxAmount) * 100) / 100;
           taxAmount = 0;
           taxRate = 0;
           console.log(`Sin IVA: Subtotal=${subtotal}`);
@@ -419,7 +419,7 @@ Deno.serve(async (req: Request) => {
           }, 0);
 
           if (itemsSubtotal > 0) {
-            discountAmount = itemsTotal - totalAmount + shippingCost + shippingTaxAmount;
+            discountAmount = Math.ceil((itemsTotal - totalAmount + shippingCost + shippingTaxAmount) * 100) / 100;
             if (discountAmount < 0) discountAmount = 0;
           }
         }
@@ -477,6 +477,11 @@ Deno.serve(async (req: Request) => {
           const itemSubtotal = item.subtotal || (item.price * item.quantity);
           const itemIvaAmount = item.iva_amount || (itemSubtotal * (itemIvaRate / 100));
 
+          const roundedUnitPrice = Math.ceil(item.price * 100) / 100;
+          const roundedSubtotal = Math.ceil(itemSubtotal * 100) / 100;
+          const roundedIvaAmount = Math.ceil(itemIvaAmount * 100) / 100;
+          const roundedTotalPrice = Math.ceil((itemSubtotal + itemIvaAmount) * 100) / 100;
+
           const { error: itemError } = await supabase
             .from("order_items")
             .insert({
@@ -484,11 +489,11 @@ Deno.serve(async (req: Request) => {
               product_name: item.name,
               description: `Partner: ${item.partnerName}`,
               quantity: item.quantity,
-              unit_price: item.price,
+              unit_price: roundedUnitPrice,
               discount_percent: item.discount_percentage || 0,
-              line_total: itemSubtotal,
-              total_price: itemSubtotal + itemIvaAmount,
-              currency: itemCurrencyCode
+              line_total: roundedSubtotal,
+              total_price: roundedTotalPrice,
+              currency: item.currency || orderCurrency
             });
 
           if (itemError) {
