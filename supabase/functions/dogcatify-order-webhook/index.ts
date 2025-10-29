@@ -380,7 +380,7 @@ Deno.serve(async (req: Request) => {
             tax_rate: orderData.totals.iva_rate,
             tax_amount: orderData.totals.iva_amount + orderData.totals.shipping_iva_amount,
             discount_amount: 0,
-            shipping_cost: orderData.totals.shipping_cost,
+            shipping_cost: orderData.shipping_info?.shipping_cost || 0,
             shipping_address: orderData.shipping_info.shipping_address,
             billing_address: orderData.shipping_info.shipping_address,
             currency: orderCurrency,
@@ -411,7 +411,7 @@ Deno.serve(async (req: Request) => {
               .insert({
                 order_id: order.id,
                 product_name: item.name,
-                description: `${item.name} (Partner: ${partner.business_name})`,
+                description: item.name,
                 quantity: item.quantity,
                 unit_price: parseFloat(itemUnitPriceWithoutTax.toFixed(2)),
                 discount_percent: 0,
