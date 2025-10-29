@@ -474,13 +474,18 @@ Deno.serve(async (req: Request) => {
         for (const item of orderData.items) {
           const itemCurrencyCode = item.currency_code_dgi || (item.currency === 'UYU' ? '858' : item.currency === 'USD' ? '840' : '858');
           const itemIvaRate = item.iva_rate || taxRate || 0;
+
           const itemSubtotal = item.subtotal || (item.price * item.quantity);
           const itemIvaAmount = item.iva_amount || (itemSubtotal * (itemIvaRate / 100));
 
-          const roundedUnitPrice = Math.ceil(item.price * 100) / 100;
+          const itemUnitPriceWithoutTax = itemSubtotal / item.quantity;
+
+          const roundedUnitPrice = Math.ceil(itemUnitPriceWithoutTax * 100) / 100;
           const roundedSubtotal = Math.ceil(itemSubtotal * 100) / 100;
           const roundedIvaAmount = Math.ceil(itemIvaAmount * 100) / 100;
           const roundedTotalPrice = Math.ceil((itemSubtotal + itemIvaAmount) * 100) / 100;
+
+          console.log(`Item: ${item.name}, Price con IVA: ${item.price}, Subtotal sin IVA: ${itemSubtotal}, Unit sin IVA: ${itemUnitPriceWithoutTax}, IVA: ${itemIvaAmount}, Total: ${itemSubtotal + itemIvaAmount}`);
 
           const { error: itemError } = await supabase
             .from("order_items")
