@@ -99,6 +99,31 @@ interface WebhookPayload {
   data: DogCatifyOrder;
 }
 
+function mapPaymentStatus(dogcatifyStatus: string | null): string {
+  if (!dogcatifyStatus) return 'unpaid';
+
+  const statusMap: Record<string, string> = {
+    'approved': 'paid',
+    'paid': 'paid',
+    'confirmed': 'confirmed',
+    'pending': 'pending',
+    'processing': 'processing',
+    'in_process': 'processing',
+    'rejected': 'cancelled',
+    'cancelled': 'cancelled',
+    'refunded': 'refunded',
+    'unpaid': 'unpaid'
+  };
+
+  const mapped = statusMap[dogcatifyStatus.toLowerCase()];
+  if (!mapped) {
+    console.warn(`Unknown payment status: ${dogcatifyStatus}, defaulting to 'pending'`);
+    return 'pending';
+  }
+
+  return mapped;
+}
+
 async function verifySignature(payloadString: string, signature: string): Promise<boolean> {
   const webhookSecret = Deno.env.get("DOGCATIFY_WEBHOOK_SECRET");
 
@@ -373,7 +398,7 @@ Deno.serve(async (req: Request) => {
             client_id: clientId,
             partner_id: primaryPartnerId,
             status: orderData.status || 'pending',
-            payment_status: orderData.payment_info?.payment_status || 'unpaid',
+            payment_status: mapPaymentStatus(orderData.payment_info?.payment_status),
             payment_method: orderData.payment_method || 'mercadopago',
             total_amount: orderData.totals.total_amount,
             subtotal: orderData.totals.subtotal,
@@ -576,7 +601,7 @@ Deno.serve(async (req: Request) => {
         };
 
         if (orderData.payment_info) {
-          updateData.payment_status = orderData.payment_info.payment_status || existingOrder.payment_status;
+          updateData.payment_status = mapPaymentStatus(orderData.payment_info.payment_status);
 
           if (orderData.payment_info.payment_id) {
             updateData.payment_id = orderData.payment_info.payment_id;
