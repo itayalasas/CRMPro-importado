@@ -16,7 +16,6 @@ interface DogCatifyCustomer {
   numero: string;
   barrio: string;
   codigo_postal: string;
-  location?: any;
 }
 
 interface DogCatifyItem {
@@ -24,67 +23,73 @@ interface DogCatifyItem {
   name: string;
   image?: string;
   price: number;
-  currency: string;
   quantity: number;
-  partnerId: string;
-  partnerName: string;
-  iva_rate?: number;
-  iva_amount?: number;
-  subtotal?: number;
-  original_price?: number;
-  discount_percentage?: number;
-  currency_code_dgi?: string;
-}
-
-interface ShippingInfo {
-  shipping_cost: number;
-  shipping_total: number;
-  shipping_address: string;
-  shipping_iva_amount: number;
+  subtotal: number;
+  iva_rate: number;
+  iva_amount: number;
+  currency: string;
+  currency_code_dgi: string;
 }
 
 interface DogCatifyPartner {
   id: string;
-  rut: string;
-  calle: string;
+  business_name: string;
   email: string;
   phone: string;
-  barrio: string;
+  rut: string;
+  calle: string;
   numero: string;
-  business_name: string;
+  barrio: string;
   codigo_postal: string;
+  commission_percentage: number;
+  is_primary: boolean;
+  items: DogCatifyItem[];
+  subtotal: number;
+  iva_amount: number;
+  commission_amount: number;
+  partner_amount: number;
+  total: number;
+}
+
+interface DogCatifyTotals {
+  subtotal: number;
+  iva_amount: number;
+  iva_rate: number;
+  iva_included_in_price: boolean;
+  shipping_cost: number;
+  shipping_iva_amount: number;
+  total_commission: number;
+  total_partner_amount: number;
+  total_amount: number;
+  total_partners: number;
+}
+
+interface ShippingInfo {
+  shipping_cost: number;
+  shipping_iva_amount: number;
+  shipping_total: number;
+  shipping_address: string;
+}
+
+interface PaymentInfo {
+  payment_id: string | null;
+  payment_status: string | null;
+  payment_method: string;
+  payment_preference_id: string | null;
 }
 
 interface DogCatifyOrder {
   id: string;
-  partner_id: string;
-  customer_id: string;
   status: string;
-  payment_status: string | null;
-  payment_method: string;
-  total_amount: number;
-  partner_amount: number;
-  commission_amount: number;
   order_type: string;
-  shipping_address: string;
-  shipping_cost?: number;
-  shipping_info?: ShippingInfo | null;
+  payment_method: string;
+  customer: DogCatifyCustomer;
+  partners: DogCatifyPartner[];
+  totals: DogCatifyTotals;
+  shipping_info: ShippingInfo;
+  payment_info: PaymentInfo;
   created_at: string;
   updated_at: string;
-  customer: DogCatifyCustomer;
-  partner?: DogCatifyPartner;
-  items: DogCatifyItem[];
-  pet_id?: string | null;
-  booking_id?: string | null;
-  service_id?: string | null;
-  payment_id?: string | null;
-  payment_preference_id?: string | null;
-  booking_notes?: string | null;
-  appointment_date?: string | null;
-  appointment_time?: string | null;
-  iva_rate?: number;
-  iva_amount?: number;
-  subtotal?: number;
 }
 
 interface WebhookPayload {
@@ -143,7 +148,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         error: "Method not allowed",
-        message: "Este endpoint solo acepta peticiones POST con un JSON válido en el body"
+        message: "Este endpoint solo acepta peticiones POST"
       }),
       {
         status: 405,
@@ -154,12 +159,8 @@ Deno.serve(async (req: Request) => {
 
   try {
     console.log("=== WEBHOOK DOGCATIFY RECIBIDO ===");
-    console.log("Método:", req.method);
 
-    let signature = req.headers.get("x-dogcatify-signature");
-    if (!signature) {
-      signature = req.headers.get("X-DogCatiFy-Signature");
-    }
+    let signature = req.headers.get("x-dogcatify-signature") || req.headers.get("X-DogCatiFy-Signature");
 
     const contentType = req.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
@@ -214,21 +215,18 @@ Deno.serve(async (req: Request) => {
 
     console.log("Evento:", event);
     console.log("Order ID:", order_id);
+    console.log("Total Partners:", orderData.partners?.length || 0);
 
     if (signature) {
       console.log("Verificando firma...");
-      console.log("Firma recibida:", signature);
-      console.log("Longitud del body:", bodyText.length);
-
       const isValid = await verifySignature(bodyText, signature);
       if (!isValid) {
         console.error("⚠️ Firma inválida - CONTINUANDO DE TODOS MODOS (modo debug)");
-        console.error("Secret configurado:", Deno.env.get("DOGCATIFY_WEBHOOK_SECRET") ? "SÍ" : "NO");
       } else {
         console.log("✅ Firma verificada correctamente");
       }
     } else {
-      console.log("⚠️ No se recibió firma en ningún header");
+      console.log("⚠️ No se recibió firma");
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -237,7 +235,7 @@ Deno.serve(async (req: Request) => {
 
     switch (event) {
       case "order.created": {
-        console.log("Procesando nueva orden...");
+        console.log("Procesando nueva orden con múltiples partners...");
 
         const customerData = orderData.customer;
         let clientId = null;
@@ -245,7 +243,7 @@ Deno.serve(async (req: Request) => {
         const { data: existingClient } = await supabase
           .from("clients")
           .select("id")
-          .eq("external_id", orderData.customer_id)
+          .eq("external_id", customerData.id)
           .maybeSingle();
 
         if (existingClient) {
@@ -253,7 +251,7 @@ Deno.serve(async (req: Request) => {
           console.log("✓ Cliente existente encontrado:", clientId);
 
           const fullAddress = `${customerData.calle} ${customerData.numero}, ${customerData.barrio}`;
-          const { error: updateError } = await supabase
+          await supabase
             .from("clients")
             .update({
               contact_name: customerData.display_name,
@@ -266,28 +264,24 @@ Deno.serve(async (req: Request) => {
             })
             .eq("id", clientId);
 
-          if (!updateError) {
-            console.log("✓ Datos del cliente actualizados");
-          }
+          console.log("✓ Datos del cliente actualizados");
         } else {
           const fullAddress = `${customerData.calle} ${customerData.numero}, ${customerData.barrio}`;
 
-          const clientInsertData: any = {
-            external_id: orderData.customer_id,
-            contact_name: customerData.display_name,
-            company_name: customerData.display_name,
-            email: customerData.email,
-            phone: customerData.phone,
-            address: fullAddress,
-            city: customerData.barrio,
-            country: "Uruguay",
-            status: "active",
-            source: "dogcatify"
-          };
-
           const { data: newClient, error: clientError } = await supabase
             .from("clients")
-            .insert(clientInsertData)
+            .insert({
+              external_id: customerData.id,
+              contact_name: customerData.display_name,
+              company_name: customerData.display_name,
+              email: customerData.email,
+              phone: customerData.phone,
+              address: fullAddress,
+              city: customerData.barrio,
+              country: "Uruguay",
+              status: "active",
+              source: "dogcatify"
+            })
             .select("id")
             .single();
 
@@ -300,45 +294,51 @@ Deno.serve(async (req: Request) => {
           console.log("✓ Cliente creado:", clientId);
         }
 
-        let partnerId = null;
-        if (orderData.partner) {
-          const partnerData = orderData.partner;
-          console.log("Procesando partner:", partnerData.business_name);
+        const primaryPartner = orderData.partners.find(p => p.is_primary) || orderData.partners[0];
+        const orderNumber = `DC-${Date.now()}`;
+        const orderCurrency = primaryPartner.items[0]?.currency || 'UYU';
 
-          const { data: existingPartner } = await supabase
+        console.log("Partner primario:", primaryPartner.business_name);
+        console.log("Totales globales:", orderData.totals);
+
+        let primaryPartnerId = null;
+        const partnerData = primaryPartner;
+
+        const { data: existingPartner } = await supabase
+          .from("partners")
+          .select("id")
+          .eq("external_id", partnerData.id)
+          .maybeSingle();
+
+        if (existingPartner) {
+          primaryPartnerId = existingPartner.id;
+          console.log("✓ Partner primario existente:", primaryPartnerId);
+
+          await supabase
             .from("partners")
-            .select("id")
-            .eq("external_id", partnerData.id)
-            .maybeSingle();
+            .update({
+              name: partnerData.business_name,
+              business_name: partnerData.business_name,
+              rut: partnerData.rut,
+              email: partnerData.email,
+              phone: partnerData.phone,
+              calle: partnerData.calle,
+              numero: partnerData.numero,
+              barrio: partnerData.barrio,
+              postal_code: partnerData.codigo_postal,
+              address: `${partnerData.calle} ${partnerData.numero}, ${partnerData.barrio}`,
+              city: partnerData.barrio,
+              country: "Uruguay",
+              commission_percentage: partnerData.commission_percentage,
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", primaryPartnerId);
 
-          if (existingPartner) {
-            partnerId = existingPartner.id;
-            console.log("✓ Partner existente encontrado:", partnerId);
-
-            const { error: updatePartnerError } = await supabase
-              .from("partners")
-              .update({
-                name: partnerData.business_name,
-                business_name: partnerData.business_name,
-                rut: partnerData.rut,
-                email: partnerData.email,
-                phone: partnerData.phone,
-                calle: partnerData.calle,
-                numero: partnerData.numero,
-                barrio: partnerData.barrio,
-                postal_code: partnerData.codigo_postal,
-                address: `${partnerData.calle} ${partnerData.numero}, ${partnerData.barrio}`,
-                city: partnerData.barrio,
-                country: "Uruguay",
-                updated_at: new Date().toISOString()
-              })
-              .eq("id", partnerId);
-
-            if (!updatePartnerError) {
-              console.log("✓ Datos del partner actualizados");
-            }
-          } else {
-            const partnerInsertData = {
+          console.log("✓ Partner primario actualizado");
+        } else {
+          const { data: newPartner, error: partnerError } = await supabase
+            .from("partners")
+            .insert({
               external_id: partnerData.id,
               name: partnerData.business_name,
               business_name: partnerData.business_name,
@@ -352,115 +352,43 @@ Deno.serve(async (req: Request) => {
               address: `${partnerData.calle} ${partnerData.numero}, ${partnerData.barrio}`,
               city: partnerData.barrio,
               country: "Uruguay",
+              commission_percentage: partnerData.commission_percentage,
               is_active: true
-            };
+            })
+            .select("id")
+            .single();
 
-            const { data: newPartner, error: partnerError } = await supabase
-              .from("partners")
-              .insert(partnerInsertData)
-              .select("id")
-              .single();
-
-            if (partnerError) {
-              console.error("Error creando partner:", partnerError);
-            } else {
-              partnerId = newPartner.id;
-              console.log("✓ Partner creado:", partnerId);
-            }
+          if (partnerError) {
+            console.error("Error creando partner primario:", partnerError);
+          } else {
+            primaryPartnerId = newPartner.id;
+            console.log("✓ Partner primario creado:", primaryPartnerId);
           }
         }
-
-        const orderNumber = `DC-${Date.now()}`;
-
-        let shippingCost = 0;
-        let shippingTaxAmount = 0;
-
-        if ((orderData as any).partner_breakdown?.shipping_cost) {
-          shippingCost = (orderData as any).partner_breakdown.shipping_cost || 0;
-          console.log(`Costo de envío detectado desde partner_breakdown: $${shippingCost}`);
-        } else if (orderData.shipping_info && orderData.shipping_info.shipping_cost) {
-          shippingCost = orderData.shipping_info.shipping_cost || 0;
-          shippingTaxAmount = orderData.shipping_info.shipping_iva_amount || 0;
-          console.log(`Costo de envío detectado desde shipping_info: $${shippingCost}, IVA envío: $${shippingTaxAmount}`);
-        } else if (orderData.shipping_cost) {
-          shippingCost = orderData.shipping_cost || 0;
-          console.log(`Costo de envío (campo directo): $${shippingCost}`);
-        }
-
-        let subtotal = 0;
-        let taxRate = orderData.iva_rate || 0;
-        let taxAmount = 0;
-        let totalAmount = orderData.total_amount || 0;
-        let discountAmount = 0;
-
-        if (orderData.subtotal && orderData.iva_amount) {
-          subtotal = parseFloat(orderData.subtotal.toFixed(2));
-          taxAmount = parseFloat(orderData.iva_amount.toFixed(2));
-          console.log(`Usando valores de Dogcatify: Subtotal=${subtotal}, IVA=${taxAmount}`);
-        } else if (totalAmount > 0 && taxRate > 0) {
-          const totalWithoutShipping = totalAmount - shippingCost - shippingTaxAmount;
-          subtotal = parseFloat((totalWithoutShipping / (1 + taxRate / 100)).toFixed(2));
-          taxAmount = parseFloat((totalWithoutShipping - subtotal).toFixed(2));
-          console.log(`Calculado desde total: Subtotal=${subtotal}, IVA=${taxAmount}`);
-        } else {
-          subtotal = parseFloat((totalAmount - shippingCost - shippingTaxAmount).toFixed(2));
-          taxAmount = 0;
-          taxRate = 0;
-          console.log(`Sin IVA: Subtotal=${subtotal}`);
-        }
-
-        if (orderData.items) {
-          const itemsSubtotal = orderData.items.reduce((sum: number, item: DogCatifyItem) => {
-            const itemSubtotal = item.subtotal || (item.price * item.quantity);
-            return sum + itemSubtotal;
-          }, 0);
-
-          const itemsTotal = orderData.items.reduce((sum: number, item: DogCatifyItem) => {
-            const itemSubtotal = item.subtotal || (item.price * item.quantity);
-            const itemTax = item.iva_amount || 0;
-            return sum + itemSubtotal + itemTax;
-          }, 0);
-
-          if (itemsSubtotal > 0) {
-            discountAmount = parseFloat((itemsTotal - totalAmount + shippingCost + shippingTaxAmount).toFixed(2));
-            if (discountAmount < 0) discountAmount = 0;
-          }
-        }
-
-        console.log(`Cálculos financieros: Subtotal=${subtotal.toFixed(2)}, IVA=${taxAmount.toFixed(2)} (${taxRate}%), Descuento=${discountAmount.toFixed(2)}, Envío=${shippingCost}, IVA Envío=${shippingTaxAmount}, Total=${totalAmount}`);
-
-        const shippingAddress = orderData.shipping_info?.shipping_address || orderData.shipping_address || `${customerData.calle} ${customerData.numero}`;
-        const orderCurrency = orderData.items && orderData.items.length > 0 ? orderData.items[0].currency : 'UYU';
-        console.log("Moneda de la orden:", orderCurrency);
-
-        const commissionAmount = orderData.commission_amount || 0;
-        const commissionRate = totalAmount > 0 && commissionAmount > 0
-          ? (commissionAmount / totalAmount) * 100
-          : 0;
 
         const { data: order, error: orderError } = await supabase
           .from("orders")
           .insert({
             order_number: orderNumber,
             client_id: clientId,
-            partner_id: partnerId,
+            partner_id: primaryPartnerId,
             status: orderData.status || 'pending',
-            payment_status: orderData.payment_status || 'unpaid',
-            payment_method: orderData.payment_method || 'unknown',
-            total_amount: totalAmount,
-            subtotal: subtotal,
-            tax_rate: taxRate,
-            tax_amount: taxAmount + shippingTaxAmount,
-            discount_amount: discountAmount,
-            shipping_cost: shippingCost,
-            shipping_address: shippingAddress,
-            billing_address: shippingAddress,
+            payment_status: orderData.payment_info?.payment_status || 'unpaid',
+            payment_method: orderData.payment_method || 'mercadopago',
+            total_amount: orderData.totals.total_amount,
+            subtotal: orderData.totals.subtotal,
+            tax_rate: orderData.totals.iva_rate,
+            tax_amount: orderData.totals.iva_amount + orderData.totals.shipping_iva_amount,
+            discount_amount: 0,
+            shipping_cost: orderData.totals.shipping_cost,
+            shipping_address: orderData.shipping_info.shipping_address,
+            billing_address: orderData.shipping_info.shipping_address,
             currency: orderCurrency,
             external_order_id: orderData.id,
-            external_partner_id: orderData.partner_id,
-            commission_amount: commissionAmount,
-            commission_rate: Math.round(commissionRate * 100) / 100,
-            notes: `Orden importada desde DogCatify (${orderData.items[0]?.partnerName || 'Partner'})\nTipo: ${orderData.order_type}\nMétodo de pago: ${orderData.payment_method}\nMonto partner: ${orderData.partner_amount}\nComisión: ${orderData.commission_amount}${shippingCost > 0 ? `\nEnvío: $${shippingCost} (IVA: $${shippingTaxAmount})` : ''}`,
+            external_partner_id: primaryPartner.id,
+            commission_amount: orderData.totals.total_commission,
+            commission_rate: primaryPartner.commission_percentage,
+            notes: `Orden multi-partner desde DogCatify\nTipo: ${orderData.order_type}\nMétodo de pago: ${orderData.payment_method}\nTotal Partners: ${orderData.totals.total_partners}\nTotal Comisión: $${orderData.totals.total_commission}\nTotal Partner: $${orderData.totals.total_partner_amount}`,
             metadata: orderData,
             order_date: new Date(orderData.created_at).toISOString().split('T')[0]
           })
@@ -474,51 +402,142 @@ Deno.serve(async (req: Request) => {
 
         console.log("✓ Orden creada:", orderNumber, "ID:", order.id);
 
-        for (const item of orderData.items) {
-          const itemCurrencyCode = item.currency_code_dgi || (item.currency === 'UYU' ? '858' : item.currency === 'USD' ? '840' : '858');
-          const itemIvaRate = item.iva_rate || taxRate || 0;
+        for (const partner of orderData.partners) {
+          for (const item of partner.items) {
+            const itemUnitPriceWithoutTax = item.subtotal / item.quantity;
 
-          const itemSubtotal = item.subtotal || (item.price * item.quantity);
-          const itemIvaAmount = item.iva_amount || (itemSubtotal * (itemIvaRate / 100));
-
-          const itemUnitPriceWithoutTax = itemSubtotal / item.quantity;
-
-          const unitPrice = parseFloat(itemUnitPriceWithoutTax.toFixed(2));
-          const lineTotal = parseFloat(itemSubtotal.toFixed(2));
-          const ivaAmount = parseFloat(itemIvaAmount.toFixed(2));
-          const totalPrice = parseFloat((itemSubtotal + itemIvaAmount).toFixed(2));
-
-          console.log(`Item: ${item.name}, Price con IVA: ${item.price}, Subtotal sin IVA: ${itemSubtotal}, Unit sin IVA: ${itemUnitPriceWithoutTax}, IVA: ${itemIvaAmount}, Total: ${itemSubtotal + itemIvaAmount}`);
-
-          const { error: itemError } = await supabase
-            .from("order_items")
-            .insert({
-              order_id: order.id,
-              product_name: item.name,
-              description: item.name,
-              quantity: item.quantity,
-              unit_price: unitPrice,
-              discount_percent: item.discount_percentage || 0,
-              line_total: lineTotal,
-              total_price: totalPrice,
-              currency: item.currency || orderCurrency
-            });
-
-          if (itemError) {
-            console.error("Error insertando item:", itemError);
+            await supabase
+              .from("order_items")
+              .insert({
+                order_id: order.id,
+                product_name: item.name,
+                description: `${item.name} (Partner: ${partner.business_name})`,
+                quantity: item.quantity,
+                unit_price: parseFloat(itemUnitPriceWithoutTax.toFixed(2)),
+                discount_percent: 0,
+                line_total: parseFloat(item.subtotal.toFixed(2)),
+                total_price: parseFloat((item.subtotal + item.iva_amount).toFixed(2)),
+                currency: item.currency
+              });
           }
         }
 
-        console.log("✓ Items de orden insertados:", orderData.items.length);
+        console.log("✓ Items de orden insertados");
+
+        const createdInvoices = [];
+
+        for (const partner of orderData.partners) {
+          console.log(`\n📄 Procesando factura para partner: ${partner.business_name}`);
+
+          let partnerIdForInvoice = primaryPartnerId;
+
+          if (partner.id !== primaryPartner.id) {
+            const { data: otherPartner } = await supabase
+              .from("partners")
+              .select("id")
+              .eq("external_id", partner.id)
+              .maybeSingle();
+
+            if (otherPartner) {
+              partnerIdForInvoice = otherPartner.id;
+            } else {
+              const { data: newOtherPartner } = await supabase
+                .from("partners")
+                .insert({
+                  external_id: partner.id,
+                  name: partner.business_name,
+                  business_name: partner.business_name,
+                  rut: partner.rut,
+                  email: partner.email,
+                  phone: partner.phone,
+                  calle: partner.calle,
+                  numero: partner.numero,
+                  barrio: partner.barrio,
+                  postal_code: partner.codigo_postal,
+                  address: `${partner.calle} ${partner.numero}, ${partner.barrio}`,
+                  city: partner.barrio,
+                  country: "Uruguay",
+                  commission_percentage: partner.commission_percentage,
+                  is_active: true
+                })
+                .select("id")
+                .single();
+
+              if (newOtherPartner) {
+                partnerIdForInvoice = newOtherPartner.id;
+              }
+            }
+          }
+
+          const invoiceNumber = `INV-${Date.now()}-${partner.id.substring(0, 8)}`;
+          const issueDate = new Date().toISOString().split('T')[0];
+          const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+          const { data: invoice, error: invoiceError } = await supabase
+            .from("invoices")
+            .insert({
+              invoice_number: invoiceNumber,
+              client_id: clientId,
+              order_id: order.id,
+              partner_id: partnerIdForInvoice,
+              issue_date: issueDate,
+              due_date: dueDate,
+              status: 'draft',
+              subtotal: partner.subtotal,
+              tax_amount: partner.iva_amount,
+              discount_amount: 0,
+              total_amount: partner.total,
+              commission_amount: partner.commission_amount,
+              commission_rate: partner.commission_percentage,
+              notes: `Factura para partner: ${partner.business_name}\nComisión: ${partner.commission_percentage}%\nMonto comisión: $${partner.commission_amount}\nMonto partner: $${partner.partner_amount}`,
+              terms: `Pago a 30 días\nComisión: ${partner.commission_percentage}%`
+            })
+            .select()
+            .single();
+
+          if (invoiceError) {
+            console.error(`Error creando factura para ${partner.business_name}:`, invoiceError);
+            continue;
+          }
+
+          console.log(`✓ Factura creada: ${invoiceNumber}`);
+
+          for (const item of partner.items) {
+            const itemUnitPriceWithoutTax = item.subtotal / item.quantity;
+
+            await supabase
+              .from("invoice_items")
+              .insert({
+                invoice_id: invoice.id,
+                description: item.name,
+                quantity: item.quantity,
+                unit_price: parseFloat(itemUnitPriceWithoutTax.toFixed(2)),
+                tax_rate: item.iva_rate,
+                discount: 0,
+                subtotal: parseFloat(item.subtotal.toFixed(2))
+              });
+          }
+
+          console.log(`✓ Items de factura insertados para ${partner.business_name}`);
+          createdInvoices.push({
+            partner: partner.business_name,
+            invoice_number: invoiceNumber,
+            amount: partner.total,
+            commission: partner.commission_amount,
+            commission_percentage: partner.commission_percentage
+          });
+        }
 
         return new Response(
           JSON.stringify({
             success: true,
-            message: "Orden procesada exitosamente",
+            message: "Orden procesada exitosamente con múltiples partners",
             order: {
               id: order.id,
-              order_number: orderNumber
-            }
+              order_number: orderNumber,
+              total_partners: orderData.partners.length
+            },
+            invoices: createdInvoices
           }),
           {
             status: 200,
@@ -549,20 +568,14 @@ Deno.serve(async (req: Request) => {
           );
         }
 
-        const { error: updateError } = await supabase
+        await supabase
           .from("orders")
           .update({
             status: orderData.status || 'pending',
-            payment_status: orderData.payment_status || 'unpaid',
-            payment_method: orderData.payment_method || 'unknown',
+            payment_status: orderData.payment_info?.payment_status || 'unpaid',
             updated_at: new Date().toISOString()
           })
           .eq("id", existingOrder.id);
-
-        if (updateError) {
-          console.error("Error actualizando orden:", updateError);
-          throw updateError;
-        }
 
         console.log("✓ Orden actualizada:", existingOrder.id);
 

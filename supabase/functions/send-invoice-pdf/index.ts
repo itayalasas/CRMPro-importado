@@ -208,7 +208,9 @@ Deno.serve(async (req: Request) => {
         issuer: issuerData,
         totals: {
           subtotal: calculatedSubtotal,
-          tax_label: `IVA (${defaultTaxRate}%)`,
+          tax_label: invoice.is_commission_invoice
+            ? `Comisión (${invoice.commission_rate || 5}%)`
+            : `IVA (${defaultTaxRate}%)`,
           tax_amount: calculatedIva,
           grand_total: calculatedTotal
         },
