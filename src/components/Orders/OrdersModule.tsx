@@ -110,10 +110,6 @@ export function OrdersModule() {
     return currencyMap[code] || code;
   };
 
-  const roundUp = (value: number): number => {
-    return Math.ceil(value * 100) / 100;
-  };
-
   const [formData, setFormData] = useState({
     order_date: new Date().toISOString().split('T')[0],
     due_date: '',
@@ -1706,13 +1702,13 @@ export function OrdersModule() {
                               </td>
                               <td className="px-4 py-3 text-center text-slate-900">{item.quantity}</td>
                               <td className="px-4 py-3 text-right text-slate-900">
-                                ${roundUp(item.unit_price).toFixed(2)} {convertCurrencyCode(item.currency)}
+                                ${item.unit_price.toFixed(2)} {convertCurrencyCode(item.currency)}
                               </td>
                               <td className="px-4 py-3 text-center text-slate-900">
                                 {item.discount_percent > 0 ? `${item.discount_percent}%` : '-'}
                               </td>
                               <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                                ${roundUp(item.line_total).toFixed(2)} {convertCurrencyCode(item.currency)}
+                                ${item.line_total.toFixed(2)} {convertCurrencyCode(item.currency)}
                               </td>
                             </tr>
                           );
@@ -1734,7 +1730,7 @@ export function OrdersModule() {
                   <div className="flex justify-between items-center">
                     <span className="text-slate-700">Subtotal:</span>
                     <span className="font-semibold text-slate-900">
-                      ${roundUp(selectedOrder.subtotal).toFixed(2)} {selectedOrder.currency}
+                      ${selectedOrder.subtotal.toFixed(2)} {selectedOrder.currency}
                     </span>
                   </div>
                   {(() => {
@@ -1742,7 +1738,7 @@ export function OrdersModule() {
                       const discountAmount = item.quantity * item.unit_price * (item.discount_percent / 100);
                       return sum + discountAmount;
                     }, 0);
-                    const totalDiscount = roundUp(totalItemsDiscount + (selectedOrder.discount_amount || 0));
+                    const totalDiscount = totalItemsDiscount + (selectedOrder.discount_amount || 0);
 
                     return totalDiscount > 0 && (
                       <div className="flex justify-between items-center">
@@ -1756,21 +1752,21 @@ export function OrdersModule() {
                   <div className="flex justify-between items-center">
                     <span className="text-slate-700">IVA/Tax ({selectedOrder.tax_rate}%):</span>
                     <span className="font-semibold text-slate-900">
-                      ${roundUp(selectedOrder.tax_amount).toFixed(2)} {selectedOrder.currency}
+                      ${selectedOrder.tax_amount.toFixed(2)} {selectedOrder.currency}
                     </span>
                   </div>
                   {selectedOrder.shipping_cost > 0 && (
                     <div className="flex justify-between items-center">
                       <span className="text-slate-700">Envío:</span>
                       <span className="font-semibold text-slate-900">
-                        ${roundUp(selectedOrder.shipping_cost).toFixed(2)} {selectedOrder.currency}
+                        ${selectedOrder.shipping_cost.toFixed(2)} {selectedOrder.currency}
                       </span>
                     </div>
                   )}
                   <div className="pt-3 border-t-2 border-emerald-300 flex justify-between items-center">
                     <span className="text-lg font-bold text-slate-900">Total:</span>
                     <span className="text-2xl font-bold text-emerald-600">
-                      ${roundUp(selectedOrder.total_amount).toFixed(2)} {selectedOrder.currency}
+                      ${selectedOrder.total_amount.toFixed(2)} {selectedOrder.currency}
                     </span>
                   </div>
                 </div>
