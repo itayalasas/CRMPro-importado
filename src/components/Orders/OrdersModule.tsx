@@ -65,6 +65,7 @@ export function OrdersModule() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [selectedOrderItems, setSelectedOrderItems] = useState<OrderItem[]>([]);
+  const [selectedPartnerTab, setSelectedPartnerTab] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [clientSearch, setClientSearch] = useState('');
   const [filteredClients, setFilteredClients] = useState<Client[]>([]);
@@ -1576,75 +1577,87 @@ export function OrdersModule() {
                     )}
                     {selectedOrder.metadata && (
                       <>
-                        {selectedOrder.metadata.partner_breakdown?.partners && (
-                          <div className="md:col-span-2 bg-white rounded-lg p-4 border border-blue-100">
-                            <h4 className="font-semibold text-slate-900 mb-3 flex items-center">
-                              <Package className="w-4 h-4 mr-2 text-blue-600" />
-                              {Object.keys(selectedOrder.metadata.partner_breakdown.partners).length > 1
-                                ? `Partners (${Object.keys(selectedOrder.metadata.partner_breakdown.partners).length})`
-                                : 'Partner'}
-                            </h4>
-                            <div className="space-y-4">
-                              {Object.entries(selectedOrder.metadata.partner_breakdown.partners).map(([partnerId, partnerData]: [string, any]) => (
-                                <div key={partnerId} className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                                    <div className="md:col-span-2">
-                                      <span className="text-slate-600">Nombre:</span>
-                                      <p className="font-semibold text-slate-900">{partnerData.partner_name}</p>
-                                    </div>
-                                    {selectedOrder.metadata.partner?.business_name && partnerId === selectedOrder.metadata.partner.id && (
-                                      <>
-                                        {selectedOrder.metadata.partner.rut && (
-                                          <div>
-                                            <span className="text-slate-600">RUT:</span>
-                                            <p className="font-semibold text-slate-900">{selectedOrder.metadata.partner.rut}</p>
-                                          </div>
-                                        )}
-                                        {selectedOrder.metadata.partner.email && (
-                                          <div>
-                                            <span className="text-slate-600">Email:</span>
-                                            <p className="font-semibold text-slate-900">{selectedOrder.metadata.partner.email}</p>
-                                          </div>
-                                        )}
-                                        {selectedOrder.metadata.partner.phone && (
-                                          <div>
-                                            <span className="text-slate-600">Teléfono:</span>
-                                            <p className="font-semibold text-slate-900">{selectedOrder.metadata.partner.phone}</p>
-                                          </div>
-                                        )}
-                                        {selectedOrder.metadata.partner.calle && selectedOrder.metadata.partner.numero && (
-                                          <div className="md:col-span-2">
-                                            <span className="text-slate-600">Dirección:</span>
-                                            <p className="font-semibold text-slate-900">
-                                              {selectedOrder.metadata.partner.calle} {selectedOrder.metadata.partner.numero}
-                                              {selectedOrder.metadata.partner.barrio && `, ${selectedOrder.metadata.partner.barrio}`}
-                                              {selectedOrder.metadata.partner.codigo_postal && ` - CP: ${selectedOrder.metadata.partner.codigo_postal}`}
-                                            </p>
-                                          </div>
-                                        )}
-                                      </>
-                                    )}
-                                    <div className="md:col-span-2">
-                                      <span className="text-slate-600">Productos:</span>
-                                      <div className="mt-1 space-y-1">
-                                        {partnerData.items.map((item: any, idx: number) => (
-                                          <div key={idx} className="text-sm">
-                                            <span className="font-medium text-slate-900">{item.name}</span>
-                                            <span className="text-slate-600"> - Qty: {item.quantity} × ${item.price}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <span className="text-slate-600">Subtotal Partner:</span>
-                                      <p className="font-semibold text-slate-900">${partnerData.subtotal} UYU</p>
-                                    </div>
-                                  </div>
+                        {selectedOrder.metadata.partner_breakdown?.partners && (() => {
+                          const partners = Object.entries(selectedOrder.metadata.partner_breakdown.partners);
+                          const hasMultiplePartners = partners.length > 1;
+
+                          if (!selectedPartnerTab && partners.length > 0) {
+                            setSelectedPartnerTab(partners[0][0]);
+                          }
+
+                          const currentPartner = partners.find(([id]) => id === selectedPartnerTab);
+                          const [currentPartnerId, currentPartnerData] = currentPartner || partners[0] || [null, null];
+
+                          if (!currentPartnerData) return null;
+
+                          return (
+                            <div className="md:col-span-2 bg-white rounded-lg p-4 border border-blue-100">
+                              <h4 className="font-semibold text-slate-900 mb-3 flex items-center justify-between">
+                                <span className="flex items-center">
+                                  <Package className="w-4 h-4 mr-2 text-blue-600" />
+                                  {hasMultiplePartners ? `Partners (${partners.length})` : 'Partner'}
+                                </span>
+                              </h4>
+
+                              {hasMultiplePartners && (
+                                <div className="flex gap-2 mb-4 border-b border-slate-200">
+                                  {partners.map(([partnerId, partnerData]: [string, any]) => (
+                                    <button
+                                      key={partnerId}
+                                      onClick={() => setSelectedPartnerTab(partnerId)}
+                                      className={`px-4 py-2 text-sm font-medium transition-colors ${
+                                        selectedPartnerTab === partnerId
+                                          ? 'text-blue-600 border-b-2 border-blue-600'
+                                          : 'text-slate-600 hover:text-slate-900'
+                                      }`}
+                                    >
+                                      {partnerData.partner_name}
+                                    </button>
+                                  ))}
                                 </div>
-                              ))}
+                              )}
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                <div className="md:col-span-2">
+                                  <span className="text-slate-600">Nombre:</span>
+                                  <p className="font-semibold text-slate-900">{currentPartnerData.partner_name}</p>
+                                </div>
+                                {selectedOrder.metadata.partner?.business_name && currentPartnerId === selectedOrder.metadata.partner.id && (
+                                  <>
+                                    {selectedOrder.metadata.partner.rut && (
+                                      <div>
+                                        <span className="text-slate-600">RUT:</span>
+                                        <p className="font-semibold text-slate-900">{selectedOrder.metadata.partner.rut}</p>
+                                      </div>
+                                    )}
+                                    {selectedOrder.metadata.partner.email && (
+                                      <div>
+                                        <span className="text-slate-600">Email:</span>
+                                        <p className="font-semibold text-slate-900">{selectedOrder.metadata.partner.email}</p>
+                                      </div>
+                                    )}
+                                    {selectedOrder.metadata.partner.phone && (
+                                      <div>
+                                        <span className="text-slate-600">Teléfono:</span>
+                                        <p className="font-semibold text-slate-900">{selectedOrder.metadata.partner.phone}</p>
+                                      </div>
+                                    )}
+                                    {selectedOrder.metadata.partner.calle && selectedOrder.metadata.partner.numero && (
+                                      <div className="md:col-span-2">
+                                        <span className="text-slate-600">Dirección:</span>
+                                        <p className="font-semibold text-slate-900">
+                                          {selectedOrder.metadata.partner.calle} {selectedOrder.metadata.partner.numero}
+                                          {selectedOrder.metadata.partner.barrio && `, ${selectedOrder.metadata.partner.barrio}`}
+                                          {selectedOrder.metadata.partner.codigo_postal && ` - CP: ${selectedOrder.metadata.partner.codigo_postal}`}
+                                        </p>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
                         {selectedOrder.metadata.customer && (
                           <div className="md:col-span-2 bg-white rounded-lg p-4 border border-blue-100">
                             <h4 className="font-semibold text-slate-900 mb-3 flex items-center">

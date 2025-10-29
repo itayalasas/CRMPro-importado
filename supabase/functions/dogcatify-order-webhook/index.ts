@@ -495,7 +495,7 @@ Deno.serve(async (req: Request) => {
             .insert({
               order_id: order.id,
               product_name: item.name,
-              description: `Partner: ${item.partnerName}`,
+              description: item.name,
               quantity: item.quantity,
               unit_price: unitPrice,
               discount_percent: item.discount_percentage || 0,
