@@ -27,7 +27,7 @@ interface Order {
   id: string;
   order_number: string;
   total_amount: number;
-  payment_status: 'unpaid' | 'partial' | 'paid';
+  payment_status: 'unpaid' | 'pending' | 'processing' | 'partial' | 'paid' | 'confirmed' | 'refunded' | 'cancelled';
   status: string;
   order_date: string;
   clients: {
@@ -264,7 +264,9 @@ export function AccountingModule() {
     order.clients?.company_name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const unpaidOrders = filteredOrders.filter(o => o.payment_status === 'unpaid');
+  const unpaidOrders = filteredOrders.filter(o =>
+    o.payment_status === 'unpaid' || o.payment_status === 'pending'
+  );
   const partialOrders = filteredOrders.filter(o => o.payment_status === 'partial');
 
   if (loading) {
