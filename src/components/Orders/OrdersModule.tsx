@@ -233,22 +233,22 @@ export function OrdersModule() {
     const now = new Date();
     const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const completedOrders = ordersData.filter(o =>
-      o.status === 'completed' || o.status === 'confirmed' || o.status === 'shipped'
+    const paidOrders = ordersData.filter(o =>
+      o.payment_status === 'paid' || o.payment_status === 'confirmed'
     );
 
-    const totalRevenue = completedOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
+    const totalRevenue = paidOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
 
     setStats({
       total: ordersData.length,
-      pending: ordersData.filter(o => o.status === 'pending').length,
+      pending: ordersData.filter(o => o.status === 'pending' || o.payment_status === 'unpaid').length,
       confirmed: ordersData.filter(o => o.status === 'confirmed').length,
-      in_progress: ordersData.filter(o => o.status === 'in_progress').length,
-      completed: ordersData.filter(o => o.status === 'completed').length,
+      in_progress: ordersData.filter(o => o.status === 'in_progress' || o.status === 'processing').length,
+      completed: ordersData.filter(o => o.status === 'completed' || o.status === 'shipped' || o.payment_status === 'paid').length,
       cancelled: ordersData.filter(o => o.status === 'cancelled').length,
       totalRevenue,
-      avgOrderValue: completedOrders.length > 0
-        ? totalRevenue / completedOrders.length
+      avgOrderValue: paidOrders.length > 0
+        ? totalRevenue / paidOrders.length
         : 0,
       thisMonth: ordersData.filter(o => new Date(o.created_at) >= firstDayThisMonth).length
     });
