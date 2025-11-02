@@ -868,12 +868,7 @@ export function InvoicesModule() {
                     </td>
                     <td className="py-4 px-4">
                       <span className="text-lg font-bold text-emerald-600">
-                        ${(
-                          invoice.subtotal -
-                          invoice.discount_amount +
-                          invoice.tax_amount +
-                          (invoice.orders?.shipping_cost || 0)
-                        ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ${Number(invoice.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </td>
                     <td className="py-4 px-4">
