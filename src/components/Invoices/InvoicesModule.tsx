@@ -435,32 +435,31 @@ export function InvoicesModule() {
   };
 
   const calculateTotals = (itemsList: InvoiceItem[]) => {
-    const subtotal = itemsList.reduce((sum, item) => {
-      const itemSubtotal = item.quantity * item.unit_price;
-      return sum + itemSubtotal;
-    }, 0);
+    const round = (num: number) => Math.round(num * 100) / 100;
 
-    const discountAmount = itemsList.reduce((sum, item) => {
-      const itemSubtotal = item.quantity * item.unit_price;
-      const itemDiscount = (itemSubtotal * (item.discount || 0)) / 100;
-      return sum + itemDiscount;
-    }, 0);
+    let subtotal = 0;
+    let discountAmount = 0;
+    let taxAmount = 0;
 
-    const subtotalAfterDiscount = subtotal - discountAmount;
-
-    const taxAmount = itemsList.reduce((sum, item) => {
+    itemsList.forEach((item) => {
       const itemSubtotal = item.quantity * item.unit_price;
       const itemDiscount = (itemSubtotal * (item.discount || 0)) / 100;
       const itemSubtotalAfterDiscount = itemSubtotal - itemDiscount;
       const itemTax = (itemSubtotalAfterDiscount * (item.tax_rate || 0)) / 100;
-      return sum + itemTax;
-    }, 0);
+
+      subtotal += itemSubtotal;
+      discountAmount += itemDiscount;
+      taxAmount += itemTax;
+    });
+
+    const subtotalAfterDiscount = subtotal - discountAmount;
+    const total = subtotalAfterDiscount + taxAmount;
 
     return {
-      subtotal,
-      discountAmount,
-      taxAmount,
-      total: subtotalAfterDiscount + taxAmount
+      subtotal: round(subtotal),
+      discountAmount: round(discountAmount),
+      taxAmount: round(taxAmount),
+      total: round(total)
     };
   };
 

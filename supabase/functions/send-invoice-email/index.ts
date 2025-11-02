@@ -160,11 +160,13 @@ Deno.serve(async (req: Request) => {
       logo_url: settings.company_logo_url || ""
     };
 
+    const round = (num: number) => Math.round(num * 100) / 100;
+
     const subtotalTax22 = Number(invoice.subtotal) || 0;
     const tax22 = Number(invoice.tax_amount) || 0;
     const discount = Number(invoice.discount_amount) || 0;
     const shippingCost = Number(order?.shipping_cost) || 0;
-    const total = subtotalTax22 - discount + tax22 + shippingCost;
+    const total = round(subtotalTax22 - discount + tax22 + shippingCost);
 
     const doc = new jsPDF();
 
