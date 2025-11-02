@@ -1476,10 +1476,20 @@ export function InvoicesModule() {
                     <span>Subtotal:</span>
                     <span className="font-semibold">${selectedInvoice.subtotal.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between text-slate-700">
-                    <span>Descuento:</span>
-                    <span className="font-semibold text-red-600">-${selectedInvoice.discount_amount.toFixed(2)}</span>
-                  </div>
+                  {(() => {
+                    const totalDiscount = selectedInvoiceItems.reduce((sum, item) => {
+                      const itemSubtotal = item.quantity * item.unit_price;
+                      const discountAmount = itemSubtotal * (item.discount / 100);
+                      return sum + discountAmount;
+                    }, 0);
+
+                    return totalDiscount > 0 && (
+                      <div className="flex justify-between text-slate-700">
+                        <span>Descuento:</span>
+                        <span className="font-semibold text-red-600">-${totalDiscount.toFixed(2)}</span>
+                      </div>
+                    );
+                  })()}
                   <div className="flex justify-between text-slate-700">
                     <span>IVA:</span>
                     <span className="font-semibold">${selectedInvoice.tax_amount.toFixed(2)}</span>
