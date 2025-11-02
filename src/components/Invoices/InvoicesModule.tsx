@@ -1497,12 +1497,7 @@ export function InvoicesModule() {
                   )}
                   <div className="flex justify-between text-2xl font-bold text-emerald-600 pt-3 border-t-2 border-emerald-200">
                     <span>TOTAL:</span>
-                    <span>${(
-                      selectedInvoice.subtotal -
-                      selectedInvoice.discount_amount +
-                      selectedInvoice.tax_amount +
-                      (selectedInvoice.orders?.shipping_cost || 0)
-                    ).toFixed(2)}</span>
+                    <span>${Number(selectedInvoice.total_amount).toFixed(2)}</span>
                   </div>
                 </div>
               </div>
