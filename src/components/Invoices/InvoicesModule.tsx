@@ -218,7 +218,7 @@ export function InvoicesModule() {
       .select(`
         *,
         clients(contact_name, company_name, email, address, city, country, phone),
-        orders(order_number, status)
+        orders(order_number, status, shipping_cost)
       `)
       .order('created_at', { ascending: false });
 
@@ -288,13 +288,22 @@ export function InvoicesModule() {
     const now = new Date();
     const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
+    const getInvoiceTotal = (invoice: Invoice) => {
+      return (
+        Number(invoice.subtotal) -
+        Number(invoice.discount_amount) +
+        Number(invoice.tax_amount) +
+        Number(invoice.orders?.shipping_cost || 0)
+      );
+    };
+
     const totalRevenue = invoicesData
       .filter(i => i.status === 'paid')
-      .reduce((sum, i) => sum + Number(i.total_amount), 0);
+      .reduce((sum, i) => sum + getInvoiceTotal(i), 0);
 
     const pending = invoicesData
       .filter(i => i.status === 'sent' || i.status === 'overdue' || i.status === 'validated' || i.status === 'sent-error')
-      .reduce((sum, i) => sum + Number(i.total_amount), 0);
+      .reduce((sum, i) => sum + getInvoiceTotal(i), 0);
 
     setStats({
       total: invoicesData.length,
@@ -859,7 +868,12 @@ export function InvoicesModule() {
                     </td>
                     <td className="py-4 px-4">
                       <span className="text-lg font-bold text-emerald-600">
-                        ${invoice.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        ${(
+                          invoice.subtotal -
+                          invoice.discount_amount +
+                          invoice.tax_amount +
+                          (invoice.orders?.shipping_cost || 0)
+                        ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </td>
                     <td className="py-4 px-4">
