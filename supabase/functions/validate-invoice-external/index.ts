@@ -371,10 +371,9 @@ Deno.serve(async (req: Request) => {
         pending_validation: false
       };
 
-      if (responseMapping.numero_cfe) {
-        const numeroCFE = getNestedValue({ response: responsePayload }, responseMapping.numero_cfe);
-        if (numeroCFE) updateData.numero_cfe = numeroCFE;
-      }
+      // Mantener el invoice_number original como numero_cfe
+      // El DGI devuelve un numero_cfe con sufijo que no queremos usar
+      updateData.numero_cfe = invoice.invoice_number;
 
       if (responseMapping.serie_cfe) {
         const serieCFE = getNestedValue({ response: responsePayload }, responseMapping.serie_cfe);
