@@ -101,26 +101,25 @@ Deno.serve(async (req: Request) => {
       const descuentoPorcentaje = parseFloat(String(item.discount_percent || 0));
       const ivaPorcentaje = parseFloat(String(item.tax_rate || defaultTaxRate));
 
-      // Calcular descuento en valor (redondear hacia arriba)
-      const descuentoValor = precioUnitario * (descuentoPorcentaje / 100);
-      const descuentoRedondeado = Math.ceil(descuentoValor * cantidad);
-      const precioConDescuento = precioUnitario - descuentoValor;
+      // Calcular subtotal (precio original * cantidad) - Este es el subtotal sin descuento
+      const lineSubtotal = Math.round(precioUnitario * cantidad * 100) / 100;
 
-      // Calcular subtotal (precio con descuento * cantidad, redondear hacia arriba)
-      const lineSubtotal = Math.ceil(precioConDescuento * cantidad);
+      // Calcular descuento en valor (solo informativo, NO se resta del total)
+      const descuentoValor = Math.round(lineSubtotal * (descuentoPorcentaje / 100) * 100) / 100;
 
-      // Calcular IVA sobre el subtotal (redondear hacia arriba)
-      const ivaItem = Math.ceil(lineSubtotal * (ivaPorcentaje / 100));
+      // Calcular IVA sobre el subtotal ORIGINAL (sin aplicar descuento)
+      const ivaItem = Math.round(lineSubtotal * (ivaPorcentaje / 100) * 100) / 100;
 
-      // Total del item (sumar valores ya redondeados)
-      const totalItem = lineSubtotal + ivaItem;
+      // Total del item (subtotal + IVA, SIN restar descuento)
+      const totalItem = Math.round((lineSubtotal + ivaItem) * 100) / 100;
 
       return {
         numero: index + 1,
         descripcion: item.product_name || item.description || "",
         cantidad: cantidad,
-        precio_unitario: Math.ceil(precioUnitario),
-        descuento: descuentoRedondeado,
+        precio_unitario: Math.round(precioUnitario * 100) / 100,
+        descuento_porcentaje: descuentoPorcentaje,
+        descuento: descuentoValor,
         line_subtotal: lineSubtotal,
         iva_porcentaje: ivaPorcentaje,
         iva: ivaItem,
@@ -131,15 +130,16 @@ Deno.serve(async (req: Request) => {
     const shippingCost = parseFloat(String(invoice.orders?.shipping_cost || 0));
     if (shippingCost > 0) {
       const shippingTaxRate = 22;
-      const shippingSubtotal = Math.ceil(shippingCost);
-      const shippingIva = Math.ceil(shippingSubtotal * (shippingTaxRate / 100));
-      const shippingTotal = shippingSubtotal + shippingIva;
+      const shippingSubtotal = Math.round(shippingCost * 100) / 100;
+      const shippingIva = Math.round(shippingSubtotal * (shippingTaxRate / 100) * 100) / 100;
+      const shippingTotal = Math.round((shippingSubtotal + shippingIva) * 100) / 100;
 
       items.push({
         numero: items.length + 1,
         descripcion: "Costo de Envío",
         cantidad: 1,
         precio_unitario: shippingSubtotal,
+        descuento_porcentaje: 0,
         descuento: 0,
         line_subtotal: shippingSubtotal,
         iva_porcentaje: shippingTaxRate,
@@ -149,9 +149,10 @@ Deno.serve(async (req: Request) => {
     }
 
     // Calcular totales sumando los valores ya redondeados de cada item
-    const calculatedSubtotal = items.reduce((sum, item) => sum + item.line_subtotal, 0);
-    const calculatedIva = items.reduce((sum, item) => sum + item.iva, 0);
-    const calculatedTotal = items.reduce((sum, item) => sum + item.total, 0);
+    const totalDescuentos = Math.round(items.reduce((sum, item) => sum + item.descuento, 0) * 100) / 100;
+    const calculatedSubtotal = Math.round(items.reduce((sum, item) => sum + item.line_subtotal, 0) * 100) / 100;
+    const calculatedIva = Math.round(items.reduce((sum, item) => sum + item.iva, 0) * 100) / 100;
+    const calculatedTotal = Math.round(items.reduce((sum, item) => sum + item.total, 0) * 100) / 100;
 
     const recipientEmail = invoice.clients?.email || invoice.partners?.email || "";
 
@@ -164,6 +165,7 @@ Deno.serve(async (req: Request) => {
       fecha_emision: invoice.issue_date || new Date().toISOString().split('T')[0],
       moneda: invoice.currency || "UYU",
       subtotal: calculatedSubtotal,
+      descuento: totalDescuentos,
       iva: calculatedIva,
       total: calculatedTotal
     };
@@ -208,6 +210,7 @@ Deno.serve(async (req: Request) => {
         issuer: issuerData,
         totals: {
           subtotal: calculatedSubtotal,
+          discount: totalDescuentos,
           tax_label: invoice.is_commission_invoice
             ? `Comisión (${invoice.commission_rate || 5}%)`
             : `IVA (${defaultTaxRate}%)`,
