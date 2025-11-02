@@ -18,10 +18,7 @@ function getNestedValue(obj: any, path: string): any {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   const startTime = Date.now();
@@ -34,72 +31,58 @@ Deno.serve(async (req: Request) => {
     const { invoice_id, config_id }: SendPDFRequest = await req.json();
 
     if (!invoice_id) {
-      return new Response(
-        JSON.stringify({ error: "invoice_id es requerido" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: "invoice_id es requerido" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const { data: invoice, error: invoiceError } = await supabase
-      .from("invoices")
-      .select(`
-        *,
-        clients (*),
-        orders (*),
-        partners (*)
-      `)
-      .eq("id", invoice_id)
-      .single();
+    const { data: invoice, error: invoiceError } = await supabase.from("invoices").select(`*, clients (*), orders (*), partners (*)`).eq("id", invoice_id).single();
 
     if (invoiceError || !invoice) {
-      return new Response(
-        JSON.stringify({ error: "Factura no encontrada" }),
-        {
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: "Factura no encontrada" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const { data: orderItems } = await supabase
-      .from("order_items")
-      .select("*")
-      .eq("order_id", invoice.order_id);
+    const { data: orderItems } = await supabase.from("order_items").select("*").eq("order_id", invoice.order_id);
 
-    let configQuery = supabase
-      .from("external_invoice_api_config")
-      .select("*")
-      .eq("is_active", true)
-      .eq("config_type", "pdf_generation");
-
-    if (config_id) {
-      configQuery = configQuery.eq("id", config_id);
-    }
+    let configQuery = supabase.from("external_invoice_api_config").select("*").eq("is_active", true).eq("config_type", "pdf_generation");
+    if (config_id) configQuery = configQuery.eq("id", config_id);
 
     const { data: configs, error: configError } = await configQuery;
 
     if (configError || !configs || configs.length === 0) {
-      return new Response(
-        JSON.stringify({ error: "No hay configuración de PDF activa disponible" }),
-        {
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: "No hay configuración de PDF activa disponible" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const config = configs[0];
-
     const defaultTaxRate = invoice.orders?.tax_rate || 22;
+
+    const orderMetadata = invoice.orders?.metadata || {};
+    const partnersMetadata = orderMetadata.partners || [];
+    const itemsMetadataMap = new Map();
+
+    partnersMetadata.forEach((partner: any) => {
+      (partner.items || []).forEach((metaItem: any) => {
+        const key = metaItem.name || metaItem.id;
+        if (key) itemsMetadataMap.set(key, metaItem);
+      });
+    });
 
     const items = (orderItems || []).map((item: any, index: number) => {
       const cantidad = parseFloat(String(item.quantity || 1));
       const precioUnitario = parseFloat(String(item.unit_price || 0));
       const descuentoPorcentaje = parseFloat(String(item.discount_percent || 0));
       const ivaPorcentaje = parseFloat(String(item.tax_rate || defaultTaxRate));
+
+      const itemKey = item.product_name || item.external_product_id;
+      const metaItem = itemsMetadataMap.get(itemKey);
+      const precioOriginal = metaItem?.original_price || metaItem?.price_original || precioUnitario;
 
       const lineSubtotal = Math.round(precioUnitario * cantidad * 100) / 100;
       const descuentoValor = Math.round(lineSubtotal * (descuentoPorcentaje / 100) * 100) / 100;
@@ -110,7 +93,7 @@ Deno.serve(async (req: Request) => {
         numero: index + 1,
         descripcion: item.product_name || item.description || "",
         cantidad: cantidad,
-        original_price: Math.round(precioUnitario * 100) / 100,
+        original_price: Math.round(parseFloat(String(precioOriginal)) * 100) / 100,
         precio_unitario: Math.round(precioUnitario * 100) / 100,
         descuento_porcentaje: descuentoPorcentaje,
         descuento: descuentoValor,
@@ -172,12 +155,7 @@ Deno.serve(async (req: Request) => {
         email: invoice.partners.email || ""
       };
     } else {
-      const { data: generalSettings } = await supabase
-        .from("general_settings")
-        .select("*")
-        .limit(1)
-        .maybeSingle();
-
+      const { data: generalSettings } = await supabase.from("general_settings").select("*").limit(1).maybeSingle();
       issuerData = {
         ...issuerData,
         rut: generalSettings?.rut || invoice.rut_emisor || "211234560018",
@@ -227,18 +205,12 @@ Deno.serve(async (req: Request) => {
       }
     };
 
-    console.log("Request payload:", JSON.stringify(requestPayload, null, 2));
-
     const headers: Record<string, string> = { "Content-Type": "application/json" };
-
     if (config.headers) {
-      for (const [key, value] of Object.entries(config.headers)) {
-        headers[key] = String(value);
-      }
+      for (const [key, value] of Object.entries(config.headers)) headers[key] = String(value);
     }
 
     const authCreds = config.auth_credentials as any;
-
     if (config.auth_type === "basic" && authCreds.username && authCreds.password) {
       headers["Authorization"] = `Basic ${btoa(`${authCreds.username}:${authCreds.password}`)}`;
     } else if (config.auth_type === "bearer" && authCreds.token) {
@@ -261,14 +233,7 @@ Deno.serve(async (req: Request) => {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-        const response = await fetch(config.api_url, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(requestPayload),
-          signal: controller.signal,
-        });
-
+        const response = await fetch(config.api_url, { method: "POST", headers, body: JSON.stringify(requestPayload), signal: controller.signal });
         clearTimeout(timeoutId);
         statusCode = response.status;
         responsePayload = await response.json();
@@ -350,10 +315,7 @@ Deno.serve(async (req: Request) => {
       log_id: logEntry?.id,
       request_payload: requestPayload,
       response_payload: responsePayload,
-    }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (error: any) {
     return new Response(JSON.stringify({ error: "Internal server error", message: error.message }), {
       status: 500,
