@@ -84,7 +84,59 @@ Deno.serve(async (req: Request) => {
 
         const primaryPartner = orderData.partners.find((p: any) => p.is_primary) || orderData.partners[0];
         const orderCurrency = primaryPartner?.items?.[0]?.currency || "UYU";
-        const partnerId = primaryPartner?.id || null;
+
+        let partnerId: string | null = null;
+        if (primaryPartner?.id) {
+          const { data: existingPartner } = await supabase
+            .from("partners")
+            .select("id")
+            .eq("external_id", primaryPartner.id)
+            .maybeSingle();
+
+          if (existingPartner) {
+            partnerId = existingPartner.id;
+            await supabase
+              .from("partners")
+              .update({
+                name: primaryPartner.business_name,
+                business_name: primaryPartner.business_name,
+                email: primaryPartner.email,
+                phone: primaryPartner.phone,
+                rut: primaryPartner.rut,
+                calle: primaryPartner.calle,
+                numero: primaryPartner.numero,
+                barrio: primaryPartner.barrio,
+                city: primaryPartner.barrio,
+                commission_percentage: primaryPartner.commission_percentage || 0,
+              })
+              .eq("id", partnerId);
+            console.log("✓ Partner actualizado");
+          } else {
+            const { data: newPartner, error: partnerError } = await supabase
+              .from("partners")
+              .insert({
+                external_id: primaryPartner.id,
+                name: primaryPartner.business_name,
+                business_name: primaryPartner.business_name,
+                email: primaryPartner.email,
+                phone: primaryPartner.phone,
+                rut: primaryPartner.rut,
+                calle: primaryPartner.calle,
+                numero: primaryPartner.numero,
+                barrio: primaryPartner.barrio,
+                city: primaryPartner.barrio,
+                country: "Uruguay",
+                commission_percentage: primaryPartner.commission_percentage || 0,
+                is_active: true,
+              })
+              .select("id")
+              .single();
+
+            if (partnerError) throw partnerError;
+            partnerId = newPartner.id;
+            console.log("✓ Partner creado");
+          }
+        }
 
         const totals = orderData.totals;
         const { data: order, error: orderError } = await supabase
