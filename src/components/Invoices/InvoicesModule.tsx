@@ -428,7 +428,7 @@ export function InvoicesModule() {
     const discountAmount = (subtotalBeforeDiscount * discount) / 100;
     const subtotalAfterDiscount = subtotalBeforeDiscount - discountAmount;
     const taxAmount = (subtotalAfterDiscount * taxRate) / 100;
-    newItems[index].subtotal = subtotalAfterDiscount + taxAmount;
+    newItems[index].subtotal = subtotalAfterDiscount;
 
     setItems(newItems);
     calculateTotals(newItems);
@@ -1443,9 +1443,20 @@ export function InvoicesModule() {
                     <span>IVA:</span>
                     <span className="font-semibold">${selectedInvoice.tax_amount.toFixed(2)}</span>
                   </div>
+                  {selectedInvoice.orders?.shipping_cost && selectedInvoice.orders.shipping_cost > 0 && (
+                    <div className="flex justify-between text-slate-700">
+                      <span>Envío:</span>
+                      <span className="font-semibold">${Number(selectedInvoice.orders.shipping_cost).toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-2xl font-bold text-emerald-600 pt-3 border-t-2 border-emerald-200">
                     <span>TOTAL:</span>
-                    <span>${selectedInvoice.total_amount.toFixed(2)}</span>
+                    <span>${(
+                      selectedInvoice.subtotal -
+                      selectedInvoice.discount_amount +
+                      selectedInvoice.tax_amount +
+                      (selectedInvoice.orders?.shipping_cost || 0)
+                    ).toFixed(2)}</span>
                   </div>
                 </div>
               </div>

@@ -164,7 +164,7 @@ Deno.serve(async (req: Request) => {
     const tax22 = Number(invoice.tax_amount) || 0;
     const discount = Number(invoice.discount_amount) || 0;
     const shippingCost = Number(order?.shipping_cost) || 0;
-    const total = Number(invoice.total_amount) || 0;
+    const total = subtotalTax22 - discount + tax22 + shippingCost;
 
     const doc = new jsPDF();
 
