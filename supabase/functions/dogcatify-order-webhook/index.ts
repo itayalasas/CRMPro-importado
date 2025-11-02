@@ -21,6 +21,7 @@ interface DogCatifyCustomer {
 interface DogCatifyItem {
   id: string;
   name: string;
+  type?: string;
   image?: string;
   price: number;
   quantity: number;
@@ -29,6 +30,12 @@ interface DogCatifyItem {
   iva_amount: number;
   currency: string;
   currency_code_dgi: string;
+  pet_name?: string;
+  pet_id?: string;
+  appointment_date?: string;
+  appointment_time?: string;
+  service_name?: string;
+  booking_notes?: string;
 }
 
 interface DogCatifyPartner {
@@ -442,7 +449,8 @@ Deno.serve(async (req: Request) => {
                 discount_percent: 0,
                 line_total: parseFloat(item.subtotal.toFixed(2)),
                 total_price: parseFloat((item.subtotal + item.iva_amount).toFixed(2)),
-                currency: item.currency
+                currency: item.currency,
+                item_type: item.type || 'product'
               });
           }
         }
