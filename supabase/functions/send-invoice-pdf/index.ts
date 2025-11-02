@@ -101,16 +101,9 @@ Deno.serve(async (req: Request) => {
       const descuentoPorcentaje = parseFloat(String(item.discount_percent || 0));
       const ivaPorcentaje = parseFloat(String(item.tax_rate || defaultTaxRate));
 
-      // Calcular subtotal (precio original * cantidad) - Este es el subtotal sin descuento
       const lineSubtotal = Math.round(precioUnitario * cantidad * 100) / 100;
-
-      // Calcular descuento en valor (solo informativo, NO se resta del total)
       const descuentoValor = Math.round(lineSubtotal * (descuentoPorcentaje / 100) * 100) / 100;
-
-      // Calcular IVA sobre el subtotal ORIGINAL (sin aplicar descuento)
       const ivaItem = Math.round(lineSubtotal * (ivaPorcentaje / 100) * 100) / 100;
-
-      // Total del item (subtotal + IVA, SIN restar descuento)
       const totalItem = Math.round((lineSubtotal + ivaItem) * 100) / 100;
 
       return {
@@ -148,7 +141,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Calcular totales sumando los valores ya redondeados de cada item
     const totalDescuentos = Math.round(items.reduce((sum, item) => sum + item.descuento, 0) * 100) / 100;
     const calculatedSubtotal = Math.round(items.reduce((sum, item) => sum + item.line_subtotal, 0) * 100) / 100;
     const calculatedIva = Math.round(items.reduce((sum, item) => sum + item.iva, 0) * 100) / 100;
@@ -156,9 +148,6 @@ Deno.serve(async (req: Request) => {
 
     const recipientEmail = invoice.clients?.email || invoice.partners?.email || "";
 
-    // Determinar los datos del emisor (issuer)
-    // Si es factura de comisión, usar datos del partner
-    // Si es factura normal, usar datos de configuración general o valores por defecto
     let issuerData: any = {
       numero_cfe: invoice.invoice_number,
       serie: invoice.serie_cfe || "A",
@@ -170,8 +159,7 @@ Deno.serve(async (req: Request) => {
       total: calculatedTotal
     };
 
-    // Si es factura de comisión, usar datos del partner
-    if (invoice.is_commission_invoice && invoice.partners) {
+    if (invoice.partner_id && invoice.partners) {
       issuerData = {
         ...issuerData,
         rut: invoice.partners.rut || "211234560018",
@@ -182,7 +170,6 @@ Deno.serve(async (req: Request) => {
         email: invoice.partners.email || ""
       };
     } else {
-      // Para facturas normales, usar datos de configuración general
       const { data: generalSettings } = await supabase
         .from("general_settings")
         .select("*")
@@ -211,9 +198,7 @@ Deno.serve(async (req: Request) => {
         totals: {
           subtotal: calculatedSubtotal,
           discount: totalDescuentos,
-          tax_label: invoice.is_commission_invoice
-            ? `Comisión (${invoice.commission_rate || 5}%)`
-            : `IVA (${defaultTaxRate}%)`,
+          tax_label: invoice.is_commission_invoice ? `Comisión (${invoice.commission_rate || 5}%)` : `IVA (${defaultTaxRate}%)`,
           tax_amount: calculatedIva,
           grand_total: calculatedTotal
         },
@@ -240,11 +225,9 @@ Deno.serve(async (req: Request) => {
       }
     };
 
-    console.log("Request payload (PDF Generation format):", JSON.stringify(requestPayload, null, 2));
+    console.log("Request payload:", JSON.stringify(requestPayload, null, 2));
 
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
 
     if (config.headers) {
       for (const [key, value] of Object.entries(config.headers)) {
@@ -255,15 +238,12 @@ Deno.serve(async (req: Request) => {
     const authCreds = config.auth_credentials as any;
 
     if (config.auth_type === "basic" && authCreds.username && authCreds.password) {
-      const encoded = btoa(`${authCreds.username}:${authCreds.password}`);
-      headers["Authorization"] = `Basic ${encoded}`;
+      headers["Authorization"] = `Basic ${btoa(`${authCreds.username}:${authCreds.password}`)}`;
     } else if (config.auth_type === "bearer" && authCreds.token) {
       headers["Authorization"] = `Bearer ${authCreds.token}`;
     } else if (config.auth_type === "api_key" && authCreds.key && authCreds.value) {
       headers[authCreds.key] = authCreds.value;
     }
-
-    console.log("Request headers:", JSON.stringify(headers, null, 2));
 
     let responsePayload: any = null;
     let statusCode = 0;
@@ -288,34 +268,27 @@ Deno.serve(async (req: Request) => {
         });
 
         clearTimeout(timeoutId);
-
         statusCode = response.status;
         responsePayload = await response.json();
 
-        console.log("Response:", JSON.stringify(responsePayload, null, 2));
-
         if (response.ok) {
           status = "success";
-
           if (responsePayload.success === true) {
             pdfId = responsePayload.data?.pdf_id || null;
           } else {
             status = "error";
             errorMessage = responsePayload.message || "PDF generation failed";
           }
-
           break;
         } else {
           errorMessage = responsePayload.message || `HTTP ${statusCode}`;
           status = "error";
-
           if (retryCount < maxRetries) {
             retryCount++;
             await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
             continue;
           }
         }
-
         break;
       } catch (error: any) {
         if (error.name === "AbortError") {
@@ -325,100 +298,64 @@ Deno.serve(async (req: Request) => {
           status = "error";
           errorMessage = error.message;
         }
-
         if (retryCount < maxRetries) {
           retryCount++;
           await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
           continue;
         }
-
         break;
       }
     }
 
     const duration = Date.now() - startTime;
 
-    await supabase
-      .from("invoice_pdf_queue")
-      .update({
-        status: status === "success" ? "sent" : "failed",
-        last_error: errorMessage,
-        pdf_id: pdfId,
-        processed_at: new Date().toISOString(),
-        attempts: retryCount + 1
-      })
-      .eq("invoice_id", invoice_id)
-      .eq("config_id", config.id);
+    await supabase.from("invoice_pdf_queue").update({
+      status: status === "success" ? "sent" : "failed",
+      last_error: errorMessage,
+      pdf_id: pdfId,
+      processed_at: new Date().toISOString(),
+      attempts: retryCount + 1
+    }).eq("invoice_id", invoice_id).eq("config_id", config.id);
 
-    const { data: logEntry } = await supabase
-      .from("external_invoice_validation_log")
-      .insert({
-        invoice_id: invoice_id,
-        config_id: config.id,
-        request_payload: requestPayload,
-        response_payload: responsePayload,
-        status_code: statusCode,
-        status: status,
-        error_message: errorMessage,
-        validation_result: status === "success" ? "approved" : "error",
-        external_reference: pdfId,
-        duration_ms: duration,
-        retry_count: retryCount,
-      })
-      .select()
-      .single();
+    const { data: logEntry } = await supabase.from("external_invoice_validation_log").insert({
+      invoice_id: invoice_id,
+      config_id: config.id,
+      request_payload: requestPayload,
+      response_payload: responsePayload,
+      status_code: statusCode,
+      status: status,
+      error_message: errorMessage,
+      validation_result: status === "success" ? "approved" : "error",
+      external_reference: pdfId,
+      duration_ms: duration,
+      retry_count: retryCount,
+    }).select().single();
 
     if (status === "success") {
-      await supabase
-        .from("invoices")
-        .update({
-          status: "sent",
-          sent_at: new Date().toISOString(),
-        })
-        .eq("id", invoice_id);
-
-      console.log(`✅ Factura ${invoice_id} marcada como 'sent'`);
+      await supabase.from("invoices").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", invoice_id);
     } else {
-      await supabase
-        .from("invoices")
-        .update({
-          status: "sent-error",
-          observations: `Error al enviar PDF: ${errorMessage || "Error desconocido"}`
-        })
-        .eq("id", invoice_id);
-
-      console.log(`❌ Factura ${invoice_id} marcada como 'sent-error': ${errorMessage}`);
+      await supabase.from("invoices").update({ status: "sent-error", observations: `Error al enviar PDF: ${errorMessage || "Error desconocido"}` }).eq("id", invoice_id);
     }
 
-    return new Response(
-      JSON.stringify({
-        success: status === "success",
-        pdf_id: pdfId,
-        status: status,
-        status_code: statusCode,
-        message: errorMessage || "PDF enviado exitosamente",
-        duration_ms: duration,
-        retry_count: retryCount,
-        log_id: logEntry?.id,
-        request_payload: requestPayload,
-        response_payload: responsePayload,
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return new Response(JSON.stringify({
+      success: status === "success",
+      pdf_id: pdfId,
+      status: status,
+      status_code: statusCode,
+      message: errorMessage || "PDF enviado exitosamente",
+      duration_ms: duration,
+      retry_count: retryCount,
+      log_id: logEntry?.id,
+      request_payload: requestPayload,
+      response_payload: responsePayload,
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error: any) {
-    console.error("Error sending PDF:", error);
-    return new Response(
-      JSON.stringify({
-        error: "Internal server error",
-        message: error.message
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return new Response(JSON.stringify({ error: "Internal server error", message: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
