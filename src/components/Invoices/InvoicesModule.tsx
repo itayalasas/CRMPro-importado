@@ -615,6 +615,29 @@ export function InvoicesModule() {
     generateInvoiceNumber();
   };
 
+  const handleDownloadPDF = async (invoiceId: string) => {
+    try {
+      toast.success('Generando PDF...');
+
+      const { data, error } = await supabase.functions.invoke('send-invoice-pdf', {
+        body: { invoice_id: invoiceId }
+      });
+
+      if (error) {
+        toast.error('Error al generar PDF: ' + error.message);
+        return;
+      }
+
+      if (data?.success) {
+        toast.success('PDF generado exitosamente. Se envió al correo del cliente.');
+      } else {
+        toast.error(data?.message || 'Error al generar PDF');
+      }
+    } catch (error: any) {
+      toast.error('Error al descargar PDF: ' + error.message);
+    }
+  };
+
   const updateStatus = async (invoiceId: string, newStatus: Invoice['status']) => {
     const { error } = await supabase
       .from('invoices')
@@ -1574,7 +1597,10 @@ export function InvoicesModule() {
                 >
                   Cerrar
                 </button>
-                <button className="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition font-medium flex items-center gap-2">
+                <button
+                  onClick={() => handleDownloadPDF(selectedInvoice.id)}
+                  className="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition font-medium flex items-center gap-2"
+                >
                   <Download className="w-5 h-5" />
                   Descargar PDF
                 </button>
