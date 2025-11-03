@@ -1629,7 +1629,54 @@ export function InvoicesModule() {
                   {selectedInvoice.notes && (
                     <div>
                       <h4 className="font-semibold text-slate-900 mb-2">Notas:</h4>
-                      <p className="text-slate-700">{selectedInvoice.notes}</p>
+                      <div className="text-slate-700">
+                        {(() => {
+                          // Detectar números de factura en formato COM-XXXXX, INV-XXXXX, DC-XXXXX, etc
+                          const invoiceNumberRegex = /([A-Z]+-\d+)/g;
+                          const parts = selectedInvoice.notes.split(invoiceNumberRegex);
+
+                          return parts.map((part, index) => {
+                            // Si coincide con el patrón de número de factura
+                            if (invoiceNumberRegex.test(part)) {
+                              return (
+                                <button
+                                  key={index}
+                                  onClick={async () => {
+                                    // Buscar la factura por número
+                                    const { data: relatedInvoice } = await supabase
+                                      .from('invoices')
+                                      .select(`
+                                        *,
+                                        clients(contact_name, company_name, email, address, city, country, phone),
+                                        orders(id, order_number, status, shipping_cost, metadata)
+                                      `)
+                                      .eq('invoice_number', part)
+                                      .single();
+
+                                    if (relatedInvoice) {
+                                      // Cargar items de la factura
+                                      const { data: items } = await supabase
+                                        .from('invoice_items')
+                                        .select('*')
+                                        .eq('invoice_id', relatedInvoice.id)
+                                        .order('created_at');
+
+                                      setSelectedInvoice(relatedInvoice);
+                                      setSelectedInvoiceItems(items || []);
+                                    } else {
+                                      toast.error(`No se encontró la factura ${part}`);
+                                    }
+                                  }}
+                                  className="text-emerald-600 hover:text-emerald-700 underline font-semibold hover:bg-emerald-50 px-1 rounded transition"
+                                >
+                                  {part}
+                                </button>
+                              );
+                            }
+                            return <span key={index}>{part}</span>;
+                          });
+                        })()}
+                      </div>
                     </div>
                   )}
                   {selectedInvoice.terms && (
