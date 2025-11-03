@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { FileText, AlertCircle, RefreshCw, X, Eye, Calendar, DollarSign } from 'lucide-react';
+import {
+  FileText, AlertCircle, RefreshCw, X, Eye, Calendar, DollarSign,
+  ChevronDown, ChevronRight, Users, CheckCircle, Clock, XCircle
+} from 'lucide-react';
 import { ConfirmDialog } from '../Common/ConfirmDialog';
 
 interface CommissionInvoice {
@@ -45,12 +48,34 @@ interface AssociatedInvoice {
   status: string;
 }
 
+interface PaymentPeriod {
+  id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+}
+
+interface PeriodGroup {
+  period: PaymentPeriod;
+  invoices: CommissionInvoice[];
+  stats: {
+    totalInvoices: number;
+    activeInvoices: number;
+    cancelledInvoices: number;
+    totalAmount: number;
+    totalCommissions: number;
+    uniquePartners: number;
+  };
+}
+
 interface CommissionInvoicesViewProps {
   onInvoiceCancelled?: () => void;
 }
 
 export function CommissionInvoicesView({ onInvoiceCancelled }: CommissionInvoicesViewProps) {
-  const [invoices, setInvoices] = useState<CommissionInvoice[]>([]);
+  const [periodGroups, setPeriodGroups] = useState<PeriodGroup[]>([]);
+  const [expandedPeriods, setExpandedPeriods] = useState<Set<string>>(new Set());
   const [selectedInvoice, setSelectedInvoice] = useState<CommissionInvoice | null>(null);
   const [associatedInvoices, setAssociatedInvoices] = useState<AssociatedInvoice[]>([]);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -65,31 +90,90 @@ export function CommissionInvoicesView({ onInvoiceCancelled }: CommissionInvoice
   const { user } = useAuth();
 
   useEffect(() => {
-    fetchCommissionInvoices();
+    fetchCommissionInvoicesByPeriod();
   }, [filter]);
 
-  const fetchCommissionInvoices = async () => {
-    let query = supabase
-      .from('invoices')
-      .select(`
-        *,
-        partners (name, company_name, rut),
-        payment_periods (name, start_date, end_date)
-      `)
-      .eq('is_commission_invoice', true)
-      .order('created_at', { ascending: false });
+  const fetchCommissionInvoicesByPeriod = async () => {
+    try {
+      // Fetch all payment periods
+      const { data: periods, error: periodsError } = await supabase
+        .from('payment_periods')
+        .select('*')
+        .order('start_date', { ascending: false });
 
-    if (filter === 'active') {
-      query = query.is('cancelled_at', null);
-    } else if (filter === 'cancelled') {
-      query = query.not('cancelled_at', 'is', null);
+      if (periodsError) throw periodsError;
+
+      if (!periods || periods.length === 0) {
+        setPeriodGroups([]);
+        return;
+      }
+
+      // Fetch all commission invoices
+      let invoicesQuery = supabase
+        .from('invoices')
+        .select(`
+          *,
+          partners (name, company_name, rut),
+          payment_periods (name, start_date, end_date)
+        `)
+        .eq('is_commission_invoice', true);
+
+      if (filter === 'active') {
+        invoicesQuery = invoicesQuery.is('cancelled_at', null);
+      } else if (filter === 'cancelled') {
+        invoicesQuery = invoicesQuery.not('cancelled_at', 'is', null);
+      }
+
+      const { data: invoices, error: invoicesError } = await invoicesQuery;
+
+      if (invoicesError) throw invoicesError;
+
+      // Group invoices by period
+      const groups: PeriodGroup[] = periods.map(period => {
+        const periodInvoices = (invoices || []).filter(
+          inv => inv.payment_period_id === period.id
+        );
+
+        const uniquePartners = new Set(periodInvoices.map(inv => inv.partner_id)).size;
+        const activeInvoices = periodInvoices.filter(inv => !inv.cancelled_at);
+        const cancelledInvoices = periodInvoices.filter(inv => inv.cancelled_at);
+        const totalAmount = activeInvoices.reduce((sum, inv) => sum + inv.total_amount, 0);
+        const totalCommissions = activeInvoices.reduce((sum, inv) => sum + inv.subtotal, 0);
+
+        return {
+          period,
+          invoices: periodInvoices as CommissionInvoice[],
+          stats: {
+            totalInvoices: periodInvoices.length,
+            activeInvoices: activeInvoices.length,
+            cancelledInvoices: cancelledInvoices.length,
+            totalAmount,
+            totalCommissions,
+            uniquePartners
+          }
+        };
+      });
+
+      // Filter out periods with no invoices if showing only active/cancelled
+      const filteredGroups = filter === 'all'
+        ? groups
+        : groups.filter(g => g.invoices.length > 0);
+
+      setPeriodGroups(filteredGroups);
+    } catch (error: any) {
+      console.error('Error fetching commission invoices:', error);
+      toast.error('Error al cargar facturas de comisión');
     }
+  };
 
-    const { data, error } = await query;
-
-    if (!error && data) {
-      setInvoices(data as any);
+  const togglePeriod = (periodId: string) => {
+    const newExpanded = new Set(expandedPeriods);
+    if (newExpanded.has(periodId)) {
+      newExpanded.delete(periodId);
+    } else {
+      newExpanded.add(periodId);
     }
+    setExpandedPeriods(newExpanded);
   };
 
   const fetchAssociatedInvoices = async (commissionInvoiceId: string) => {
@@ -127,9 +211,8 @@ export function CommissionInvoicesView({ onInvoiceCancelled }: CommissionInvoice
 
           toast.success(`Factura anulada. ${data.freed_invoices_count} facturas liberadas`);
           setShowDetailModal(false);
-          fetchCommissionInvoices();
+          fetchCommissionInvoicesByPeriod();
 
-          // Notificar al componente padre para refrescar la lista de facturas pendientes
           if (onInvoiceCancelled) {
             onInvoiceCancelled();
           }
@@ -157,7 +240,7 @@ export function CommissionInvoicesView({ onInvoiceCancelled }: CommissionInvoice
 
           toast.success('Factura regenerada exitosamente');
           setShowDetailModal(false);
-          fetchCommissionInvoices();
+          fetchCommissionInvoicesByPeriod();
         } catch (error: any) {
           toast.error('Error al regenerar factura: ' + error.message);
         }
@@ -187,19 +270,52 @@ export function CommissionInvoicesView({ onInvoiceCancelled }: CommissionInvoice
     return labels[status] || status;
   };
 
+  const getPeriodStatusInfo = (stats: PeriodGroup['stats']) => {
+    if (stats.totalInvoices === 0) {
+      return {
+        icon: Clock,
+        color: 'text-gray-500',
+        bgColor: 'bg-gray-100',
+        label: 'Sin facturas'
+      };
+    }
+    if (stats.cancelledInvoices > 0) {
+      return {
+        icon: AlertCircle,
+        color: 'text-yellow-600',
+        bgColor: 'bg-yellow-100',
+        label: `${stats.cancelledInvoices} anulada${stats.cancelledInvoices > 1 ? 's' : ''}`
+      };
+    }
+    if (stats.activeInvoices === stats.totalInvoices) {
+      return {
+        icon: CheckCircle,
+        color: 'text-green-600',
+        bgColor: 'bg-green-100',
+        label: 'Completo'
+      };
+    }
+    return {
+      icon: Clock,
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-100',
+      label: 'En progreso'
+    };
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Facturas de Comisión</h2>
-          <p className="text-gray-600 mt-1">Gestiona las facturas de comisiones generadas</p>
+          <p className="text-gray-600 mt-1">Gestiona las facturas de comisiones agrupadas por quincena</p>
         </div>
       </div>
 
       <div className="flex gap-2">
         <button
           onClick={() => setFilter('active')}
-          className={`px-4 py-2 rounded-lg font-medium ${
+          className={`px-4 py-2 rounded-lg font-medium transition ${
             filter === 'active'
               ? 'bg-blue-600 text-white'
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -209,7 +325,7 @@ export function CommissionInvoicesView({ onInvoiceCancelled }: CommissionInvoice
         </button>
         <button
           onClick={() => setFilter('cancelled')}
-          className={`px-4 py-2 rounded-lg font-medium ${
+          className={`px-4 py-2 rounded-lg font-medium transition ${
             filter === 'cancelled'
               ? 'bg-blue-600 text-white'
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -219,7 +335,7 @@ export function CommissionInvoicesView({ onInvoiceCancelled }: CommissionInvoice
         </button>
         <button
           onClick={() => setFilter('all')}
-          className={`px-4 py-2 rounded-lg font-medium ${
+          className={`px-4 py-2 rounded-lg font-medium transition ${
             filter === 'all'
               ? 'bg-blue-600 text-white'
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -229,8 +345,8 @@ export function CommissionInvoicesView({ onInvoiceCancelled }: CommissionInvoice
         </button>
       </div>
 
-      <div className="grid gap-4">
-        {invoices.length === 0 ? (
+      <div className="space-y-4">
+        {periodGroups.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
             <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500">
@@ -240,79 +356,155 @@ export function CommissionInvoicesView({ onInvoiceCancelled }: CommissionInvoice
             </p>
           </div>
         ) : (
-          invoices.map((invoice) => (
-            <div
-              key={invoice.id}
-              className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition ${
-                invoice.cancelled_at ? 'opacity-60' : ''
-              }`}
-            >
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-lg font-semibold text-gray-900">{invoice.invoice_number}</h3>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      invoice.cancelled_at
-                        ? 'bg-red-100 text-red-800'
-                        : getStatusColor(invoice.status)
-                    }`}>
-                      {invoice.cancelled_at ? 'Anulada' : getStatusLabel(invoice.status)}
-                    </span>
-                  </div>
+          periodGroups.map((group) => {
+            const isExpanded = expandedPeriods.has(group.period.id);
+            const statusInfo = getPeriodStatusInfo(group.stats);
+            const StatusIcon = statusInfo.icon;
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-500">Partner:</span>
-                      <p className="font-medium">{invoice.partners?.name}</p>
+            return (
+              <div
+                key={group.period.id}
+                className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"
+              >
+                {/* Period Header */}
+                <button
+                  onClick={() => togglePeriod(group.period.id)}
+                  className="w-full p-6 hover:bg-gray-50 transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className={`p-3 rounded-lg ${statusInfo.bgColor}`}>
+                        <StatusIcon className={`w-6 h-6 ${statusInfo.color}`} />
+                      </div>
+                      <div className="text-left">
+                        <div className="flex items-center gap-3">
+                          <h3 className="text-xl font-bold text-gray-900">{group.period.name}</h3>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusInfo.bgColor} ${statusInfo.color}`}>
+                            {statusInfo.label}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-500 mt-1">
+                          {new Date(group.period.start_date).toLocaleDateString()} - {new Date(group.period.end_date).toLocaleDateString()}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-gray-500">Total:</span>
-                      <p className="font-semibold text-lg text-green-600">
-                        ${invoice.total_amount.toFixed(2)}
-                      </p>
+
+                    <div className="flex items-center gap-8">
+                      {/* Stats Summary */}
+                      <div className="grid grid-cols-4 gap-6 text-center">
+                        <div>
+                          <p className="text-2xl font-bold text-gray-900">{group.stats.totalInvoices}</p>
+                          <p className="text-xs text-gray-500">Facturas</p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-green-600">${group.stats.totalAmount.toFixed(2)}</p>
+                          <p className="text-xs text-gray-500">Total</p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-blue-600">{group.stats.uniquePartners}</p>
+                          <p className="text-xs text-gray-500">Partners</p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-gray-700">
+                            {group.stats.activeInvoices}/{group.stats.totalInvoices}
+                          </p>
+                          <p className="text-xs text-gray-500">Activas</p>
+                        </div>
+                      </div>
+
+                      {/* Expand Icon */}
+                      <div className="text-gray-400">
+                        {isExpanded ? (
+                          <ChevronDown className="w-6 h-6" />
+                        ) : (
+                          <ChevronRight className="w-6 h-6" />
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-gray-500">Fecha:</span>
-                      <p className="font-medium">{new Date(invoice.issue_date).toLocaleDateString()}</p>
-                    </div>
-                    {invoice.payment_periods && (
-                      <div>
-                        <span className="text-gray-500">Período:</span>
-                        <p className="font-medium">{invoice.payment_periods.name}</p>
+                  </div>
+                </button>
+
+                {/* Expanded Invoice List */}
+                {isExpanded && (
+                  <div className="border-t border-gray-200 bg-gray-50">
+                    {group.invoices.length === 0 ? (
+                      <div className="p-8 text-center text-gray-500">
+                        No hay facturas en este período
+                      </div>
+                    ) : (
+                      <div className="p-4 space-y-3">
+                        {group.invoices.map((invoice) => (
+                          <div
+                            key={invoice.id}
+                            className={`bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition ${
+                              invoice.cancelled_at ? 'opacity-60' : ''
+                            }`}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-2">
+                                  <h4 className="text-lg font-semibold text-gray-900">{invoice.invoice_number}</h4>
+                                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                    invoice.cancelled_at
+                                      ? 'bg-red-100 text-red-800'
+                                      : getStatusColor(invoice.status)
+                                  }`}>
+                                    {invoice.cancelled_at ? 'Anulada' : getStatusLabel(invoice.status)}
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-4 text-sm">
+                                  <div>
+                                    <span className="text-gray-500">Partner:</span>
+                                    <p className="font-medium">{invoice.partners?.name}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-500">Total:</span>
+                                    <p className="font-semibold text-lg text-green-600">
+                                      ${invoice.total_amount.toFixed(2)}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-500">Fecha:</span>
+                                    <p className="font-medium">{new Date(invoice.issue_date).toLocaleDateString()}</p>
+                                  </div>
+                                </div>
+
+                                {invoice.cancelled_at && (
+                                  <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                    <div className="flex items-start gap-2">
+                                      <AlertCircle className="w-4 h-4 text-red-600 mt-0.5" />
+                                      <div className="text-sm">
+                                        <p className="font-medium text-red-800">Factura anulada</p>
+                                        <p className="text-red-600">
+                                          {new Date(invoice.cancelled_at).toLocaleDateString()} por {invoice.cancelled_by}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              <button
+                                onClick={() => handleViewDetails(invoice)}
+                                className="ml-4 p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                              >
+                                <Eye className="w-5 h-5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
-
-                  {invoice.cancelled_at && (
-                    <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                      <div className="flex items-start gap-2">
-                        <AlertCircle className="w-4 h-4 text-red-600 mt-0.5" />
-                        <div className="text-sm">
-                          <p className="font-medium text-red-800">Factura anulada</p>
-                          <p className="text-red-600">
-                            {new Date(invoice.cancelled_at).toLocaleDateString()} por {invoice.cancelled_by}
-                          </p>
-                          {invoice.cancellation_reason && (
-                            <p className="text-red-600 mt-1">{invoice.cancellation_reason}</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  onClick={() => handleViewDetails(invoice)}
-                  className="ml-4 p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
-                >
-                  <Eye className="w-5 h-5" />
-                </button>
+                )}
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
+      {/* Detail Modal */}
       {showDetailModal && selectedInvoice && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -382,7 +574,7 @@ export function CommissionInvoicesView({ onInvoiceCancelled }: CommissionInvoice
                 <div className="flex gap-3 pt-4 border-t">
                   <button
                     onClick={() => handleCancelInvoice(selectedInvoice)}
-                    className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center gap-2"
+                    className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center gap-2 transition"
                   >
                     <X className="w-5 h-5" />
                     Anular Factura
@@ -394,7 +586,7 @@ export function CommissionInvoicesView({ onInvoiceCancelled }: CommissionInvoice
                 <div className="flex gap-3 pt-4 border-t">
                   <button
                     onClick={() => handleRegenerateInvoice(selectedInvoice)}
-                    className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
+                    className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 transition"
                   >
                     <RefreshCw className="w-5 h-5" />
                     Regenerar Factura
@@ -410,6 +602,7 @@ export function CommissionInvoicesView({ onInvoiceCancelled }: CommissionInvoice
         isOpen={confirmDialog.isOpen}
         title={confirmDialog.title}
         message={confirmDialog.message}
+        type="danger"
         onConfirm={confirmDialog.onConfirm}
         onCancel={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
       />
