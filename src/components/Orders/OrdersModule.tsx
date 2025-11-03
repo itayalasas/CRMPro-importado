@@ -93,6 +93,8 @@ export function OrdersModule() {
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [loading, setLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
 
@@ -178,6 +180,21 @@ export function OrdersModule() {
     };
   }, []);
 
+  // Reload orders when page changes
+  useEffect(() => {
+    loadOrders();
+  }, [currentPage]);
+
+  // Reload orders when search term changes (with debounce)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCurrentPage(1);
+      loadOrders();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   const loadParameters = async () => {
     try {
       const [currData, orderStatusData, payStatusData, itemTypeData, payMethodData] = await Promise.all([
@@ -222,25 +239,57 @@ export function OrdersModule() {
   }, [selectedClient]);
 
   const loadOrders = async () => {
-    const { data, error } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        clients (
-          id,
-          company_name,
-          contact_name,
-          email,
-          address,
-          city,
-          country
-        )
-      `)
-      .order('created_at', { ascending: false });
+    setLoading(true);
+    try {
+      // Get total count
+      const { count } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true });
 
-    if (!error && data) {
-      setOrders(data);
-      calculateStats(data);
+      setTotalOrders(count || 0);
+
+      // Load paginated data
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+
+      let query = supabase
+        .from('orders')
+        .select(`
+          *,
+          clients (
+            id,
+            company_name,
+            contact_name,
+            email,
+            address,
+            city,
+            country
+          )
+        `);
+
+      // Apply search filter if present
+      if (searchTerm) {
+        query = query.or(`order_number.ilike.%${searchTerm}%,clients.company_name.ilike.%${searchTerm}%`);
+      }
+
+      const { data, error } = await query
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (!error && data) {
+        setOrders(data);
+
+        // Load minimal data for stats
+        const { data: allData } = await supabase
+          .from('orders')
+          .select('status, payment_status, total_amount, created_at');
+
+        if (allData) {
+          calculateStats(allData);
+        }
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -653,16 +702,9 @@ export function OrdersModule() {
     }
   };
 
-  const filteredOrders = orders.filter(order =>
-    order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (order.clients?.company_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (order.clients?.contact_name || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
+  // Pagination is now handled in the query
+  const paginatedOrders = orders;
+  const totalPages = Math.ceil(totalOrders / itemsPerPage);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -917,7 +959,25 @@ export function OrdersModule() {
               </tr>
             </thead>
             <tbody>
-              {paginatedOrders.map((order) => (
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-12 h-12 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin"></div>
+                      <p className="text-slate-500">Cargando órdenes...</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : paginatedOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center">
+                    <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                    <p className="text-slate-500 text-lg">No hay órdenes registradas</p>
+                    <p className="text-slate-400 text-sm mt-2">Crea tu primera orden para comenzar</p>
+                  </td>
+                </tr>
+              ) : (
+                paginatedOrders.map((order) => (
                 <tr key={order.id} className="border-b border-slate-100 hover:bg-slate-50 transition">
                   <td className="py-4 px-4">
                     <div className="flex items-center space-x-2">
@@ -1020,14 +1080,15 @@ export function OrdersModule() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                ))
+              )}
             </tbody>
           </table>
 
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200">
               <div className="text-sm text-slate-600">
-                Mostrando {startIndex + 1} a {Math.min(endIndex, filteredOrders.length)} de {filteredOrders.length} órdenes
+                Página {currentPage} de {totalPages} ({totalOrders} órdenes en total)
               </div>
               <div className="flex gap-2">
                 <button

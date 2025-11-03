@@ -170,6 +170,21 @@ export function InvoicesModule() {
     };
   }, []);
 
+  // Reload invoices when page changes
+  useEffect(() => {
+    loadInvoices();
+  }, [currentPage]);
+
+  // Reload invoices when search term changes (with debounce)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCurrentPage(1); // Reset to first page
+      loadInvoices();
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   const loadInvoiceStatuses = async () => {
     const { data, error } = await supabase
       .from('invoice_statuses')
@@ -227,19 +242,53 @@ export function InvoicesModule() {
     }
   };
 
+  const [totalInvoices, setTotalInvoices] = useState(0);
+  const [loading, setLoading] = useState(false);
+
   const loadInvoices = async () => {
-    const { data, error } = await supabase
-      .from('invoices')
-      .select(`
+    setLoading(true);
+    try {
+      // Build query with optional search filter
+      let query = supabase.from('invoices').select(`
         *,
         clients(contact_name, company_name, email, address, city, country, phone),
         orders(id, order_number, status, shipping_cost, metadata)
-      `)
-      .order('created_at', { ascending: false });
+      `, { count: 'exact' });
 
-    if (!error && data) {
-      setInvoices(data);
-      calculateStats(data);
+      // Apply search filter if present
+      if (searchTerm) {
+        query = query.or(`invoice_number.ilike.%${searchTerm}%,clients.company_name.ilike.%${searchTerm}%,clients.contact_name.ilike.%${searchTerm}%`);
+      }
+
+      // Get count for pagination
+      const { count } = await supabase
+        .from('invoices')
+        .select('*', { count: 'exact', head: true });
+
+      setTotalInvoices(count || 0);
+
+      // Load paginated data
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+
+      const { data, error } = await query
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (!error && data) {
+        setInvoices(data);
+
+        // Load all invoices for stats (minimal data)
+        const { data: allData } = await supabase
+          .from('invoices')
+          .select('status, total_amount, created_at');
+
+        if (allData) {
+          calculateStats(allData);
+        }
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -726,16 +775,9 @@ export function InvoicesModule() {
     });
   };
 
-  const filteredInvoices = invoices.filter(invoice =>
-    invoice.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    invoice.clients?.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    invoice.clients?.contact_name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedInvoices = filteredInvoices.slice(startIndex, endIndex);
+  // Pagination is now handled in the query, so we use invoices directly
+  const paginatedInvoices = invoices;
+  const totalPages = Math.ceil(totalInvoices / itemsPerPage);
 
   const getStatusStyle = (status: string) => {
     const statusConfig = invoiceStatuses.find(s => s.code === status);
@@ -857,7 +899,16 @@ export function InvoicesModule() {
               </tr>
             </thead>
             <tbody>
-              {paginatedInvoices.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-12 h-12 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin"></div>
+                      <p className="text-slate-500">Cargando facturas...</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : paginatedInvoices.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center">
                     <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />

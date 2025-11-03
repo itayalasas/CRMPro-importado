@@ -310,7 +310,13 @@ export function CommissionBillingModule() {
         }
       }
 
-      // PASO 3: Crear la factura con el client_id y order_id
+      // PASO 3: Generar notas con enlaces a facturas
+      const invoiceLinks = selectedGroup.invoices
+        .map(inv => inv.invoice_number)
+        .join(', ');
+      const notesText = `Factura de comisiones - ${selectedGroup.invoices.length} facturas procesadas: ${invoiceLinks}`;
+
+      // PASO 4: Crear la factura con el client_id y order_id
       const { data: commissionInvoice, error: invoiceError} = await supabase
         .from('invoices')
         .insert({
@@ -327,7 +333,7 @@ export function CommissionBillingModule() {
           status: 'draft',
           is_commission_invoice: true,
           commission_iva_rate: ivaRate,
-          notes: `Factura de comisiones - ${selectedGroup.invoices.length} facturas procesadas`
+          notes: notesText
         })
         .select()
         .single();
@@ -336,7 +342,7 @@ export function CommissionBillingModule() {
         throw new Error('Error creando factura: ' + invoiceError.message);
       }
 
-      // PASO 4: Crear el item de orden
+      // PASO 5: Crear el item de orden
       await supabase
         .from('order_items')
         .insert({
@@ -351,7 +357,7 @@ export function CommissionBillingModule() {
           currency: 'UYU'
         });
 
-      // PASO 5: Crear item detallado de la factura
+      // PASO 6: Crear item detallado de la factura
       await supabase
         .from('invoice_items')
         .insert({
