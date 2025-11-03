@@ -76,9 +76,11 @@ export function Sidebar({ activeModule, onModuleChange }: SidebarProps) {
       `}>
       <div className="p-6 border-b border-slate-700/50">
         <div className="flex items-center space-x-3">
-          <div className="bg-gradient-to-br from-blue-500 to-blue-700 p-2.5 rounded-xl shadow-lg">
-            <LayoutDashboard className="w-7 h-7" />
-          </div>
+          <img
+            src="/logo.svg"
+            alt="CRM Pro Logo"
+            className="w-12 h-12 rounded-xl shadow-lg"
+          />
           <div>
             <h1 className="text-xl font-bold bg-gradient-to-r from-white to-blue-200 bg-clip-text text-transparent">CRM Pro</h1>
             <p className="text-xs text-slate-400">Sistema Integral</p>
