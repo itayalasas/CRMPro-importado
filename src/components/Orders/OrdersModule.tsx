@@ -180,19 +180,20 @@ export function OrdersModule() {
     };
   }, []);
 
-  // Reload orders when page changes
-  useEffect(() => {
-    loadOrders();
-  }, [currentPage]);
-
-  // Reload orders when search term changes (with debounce)
+  // Reload orders when page or search changes
   useEffect(() => {
     const timer = setTimeout(() => {
-      setCurrentPage(1);
       loadOrders();
-    }, 500);
+    }, searchTerm ? 500 : 0); // Debounce only if searching
 
     return () => clearTimeout(timer);
+  }, [currentPage, searchTerm]);
+
+  // Reset to page 1 when search term changes
+  useEffect(() => {
+    if (searchTerm) {
+      setCurrentPage(1);
+    }
   }, [searchTerm]);
 
   const loadParameters = async () => {

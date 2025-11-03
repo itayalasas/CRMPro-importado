@@ -170,19 +170,20 @@ export function InvoicesModule() {
     };
   }, []);
 
-  // Reload invoices when page changes
-  useEffect(() => {
-    loadInvoices();
-  }, [currentPage]);
-
-  // Reload invoices when search term changes (with debounce)
+  // Reload invoices when page or search changes
   useEffect(() => {
     const timer = setTimeout(() => {
-      setCurrentPage(1); // Reset to first page
       loadInvoices();
-    }, 500); // 500ms debounce
+    }, searchTerm ? 500 : 0); // Debounce only if searching
 
     return () => clearTimeout(timer);
+  }, [currentPage, searchTerm]);
+
+  // Reset to page 1 when search term changes
+  useEffect(() => {
+    if (searchTerm) {
+      setCurrentPage(1);
+    }
   }, [searchTerm]);
 
   const loadInvoiceStatuses = async () => {
@@ -278,13 +279,20 @@ export function InvoicesModule() {
       if (!error && data) {
         setInvoices(data);
 
-        // Load all invoices for stats (minimal data)
+        // Load all invoices for stats with necessary fields
         const { data: allData } = await supabase
           .from('invoices')
-          .select('status, total_amount, created_at');
+          .select(`
+            status,
+            subtotal,
+            discount_amount,
+            tax_amount,
+            created_at,
+            orders(shipping_cost)
+          `);
 
         if (allData) {
-          calculateStats(allData);
+          calculateStats(allData as Invoice[]);
         }
       }
     } finally {
@@ -1636,8 +1644,8 @@ export function InvoicesModule() {
                           const parts = selectedInvoice.notes.split(invoiceNumberRegex);
 
                           return parts.map((part, index) => {
-                            // Si coincide con el patrón de número de factura
-                            if (invoiceNumberRegex.test(part)) {
+                            // Si coincide con el patrón de número de factura (recrear regex para cada test)
+                            if (/^[A-Z]+-\d+$/.test(part)) {
                               return (
                                 <button
                                   key={index}
