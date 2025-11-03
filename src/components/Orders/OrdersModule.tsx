@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
+import { ConfirmDialog } from '../Common/ConfirmDialog';
 
 interface Client {
   id: string;
@@ -92,6 +93,8 @@ export function OrdersModule() {
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
 
   const { user } = useAuth();
   const toast = useToast();
@@ -501,7 +504,7 @@ export function OrdersModule() {
     return { canDelete: true };
   };
 
-  const handleDeleteOrder = async (order: Order) => {
+  const handleDeleteOrder = (order: Order) => {
     const validation = canDeleteOrder(order);
 
     if (!validation.canDelete) {
@@ -509,33 +512,42 @@ export function OrdersModule() {
       return;
     }
 
-    if (!confirm(`¿Estás seguro de que deseas eliminar la orden ${order.order_number}? Esta acción no se puede deshacer.`)) {
-      return;
-    }
+    setOrderToDelete(order);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteOrder = async () => {
+    if (!orderToDelete) return;
 
     try {
       const { data: invoices } = await supabase
         .from('invoices')
         .select('id')
-        .eq('order_id', order.id);
+        .eq('order_id', orderToDelete.id);
 
       if (invoices && invoices.length > 0) {
         toast.error('No se puede eliminar: esta orden tiene facturas asociadas');
+        setShowDeleteConfirm(false);
+        setOrderToDelete(null);
         return;
       }
 
       const { error } = await supabase
         .from('orders')
         .delete()
-        .eq('id', order.id);
+        .eq('id', orderToDelete.id);
 
       if (error) throw error;
 
       toast.success('Orden eliminada exitosamente');
+      setShowDeleteConfirm(false);
+      setOrderToDelete(null);
       fetchOrders();
     } catch (error: any) {
       console.error('Error deleting order:', error);
       toast.error(error.message || 'Error al eliminar la orden');
+      setShowDeleteConfirm(false);
+      setOrderToDelete(null);
     }
   };
 
@@ -2458,6 +2470,20 @@ export function OrdersModule() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        title="Eliminar Orden"
+        message={`¿Estás seguro de que deseas eliminar la orden ${orderToDelete?.order_number}? Esta acción no se puede deshacer.`}
+        type="danger"
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        onConfirm={confirmDeleteOrder}
+        onCancel={() => {
+          setShowDeleteConfirm(false);
+          setOrderToDelete(null);
+        }}
+      />
     </div>
   );
 }
