@@ -1560,7 +1560,12 @@ export function InvoicesModule() {
                     <span>IVA:</span>
                     <span className="font-semibold">${selectedInvoice.tax_amount.toFixed(2)}</span>
                   </div>
-                 
+                  {(selectedInvoice.orders?.shipping_cost || 0) > 0 && (
+                    <div className="flex justify-between text-slate-700">
+                      <span>Envío:</span>
+                      <span className="font-semibold">${Number(selectedInvoice.orders.shipping_cost).toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-2xl font-bold text-emerald-600 pt-3 border-t-2 border-emerald-200">
                     <span>TOTAL:</span>
                     <span>${Number(selectedInvoice.total_amount).toFixed(2)}</span>
