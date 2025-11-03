@@ -139,23 +139,51 @@ Deno.serve(async (req: Request) => {
       });
     } else {
       // Procesar order_items normales
-      items = (orderItems || []).map((item: any) => {
-      const cantidad = parseFloat(String(item.quantity || 1));
-      const precioUnitario = parseFloat(String(item.unit_price || 0));
-      const ivaPorcentaje = parseFloat(String(item.tax_rate || defaultTaxRate));
-      const subtotalItem = cantidad * precioUnitario;
-      const ivaItem = subtotalItem * (ivaPorcentaje / 100);
-      const totalItem = subtotalItem + ivaItem;
+      items = (orderItems || []).map((item: any, index: number) => {
+        const cantidad = parseFloat(String(item.quantity || 1));
+        const precioUnitario = parseFloat(String(item.unit_price || 0));
+        const ivaPorcentaje = parseFloat(String(item.tax_rate || defaultTaxRate));
 
-      return {
-        descripcion: item.product_name || item.description || "",
-        cantidad: cantidad,
-        precio_unitario: precioUnitario,
-        iva_porcentaje: ivaPorcentaje,
-        subtotal: Math.round(subtotalItem * 100) / 100,
-        iva: Math.round(ivaItem * 100) / 100,
-        total: Math.round(totalItem * 100) / 100
-      };
+        // Buscar metadata del item en invoice.orders.metadata
+        let metaItem: any = null;
+        let originalPrice = precioUnitario;
+        let discountAmount = 0;
+        let discountPercentage = 0;
+
+        if (invoice.orders?.metadata?.partners) {
+          for (const partner of invoice.orders.metadata.partners) {
+            if (partner.items) {
+              const foundMetaItem = partner.items.find((mi: any) =>
+                mi.name === (item.product_name || item.description)
+              );
+              if (foundMetaItem) {
+                metaItem = foundMetaItem;
+                originalPrice = parseFloat(String(metaItem.original_price || metaItem.price_original || precioUnitario));
+                discountAmount = parseFloat(String(metaItem.discount_amount || 0));
+                discountPercentage = parseFloat(String(metaItem.discount_percentage || 0));
+                break;
+              }
+            }
+          }
+        }
+
+        const subtotalItem = cantidad * precioUnitario;
+        const ivaItem = subtotalItem * (ivaPorcentaje / 100);
+        const totalItem = subtotalItem + ivaItem;
+
+        return {
+          numero: index + 1,
+          descripcion: item.product_name || item.description || "",
+          cantidad: cantidad,
+          precio_unitario: Math.round(precioUnitario * 100) / 100,
+          original_price: Math.round(originalPrice * 100) / 100,
+          descuento_porcentaje: discountPercentage,
+          descuento: Math.round(discountAmount * 100) / 100,
+          iva_porcentaje: ivaPorcentaje,
+          line_subtotal: Math.round(subtotalItem * 100) / 100,
+          iva: Math.round(ivaItem * 100) / 100,
+          total: Math.round(totalItem * 100) / 100
+        };
       });
     }
 
@@ -168,18 +196,22 @@ Deno.serve(async (req: Request) => {
       const shippingTotal = shippingSubtotal + shippingIva;
 
       items.push({
+        numero: items.length + 1,
         descripcion: "Costo de Envío",
         cantidad: 1,
         precio_unitario: Math.round(shippingSubtotal * 100) / 100,
+        original_price: Math.round(shippingSubtotal * 100) / 100,
+        descuento_porcentaje: 0,
+        descuento: 0,
         iva_porcentaje: shippingTaxRate,
-        subtotal: Math.round(shippingSubtotal * 100) / 100,
+        line_subtotal: Math.round(shippingSubtotal * 100) / 100,
         iva: Math.round(shippingIva * 100) / 100,
         total: Math.round(shippingTotal * 100) / 100
       });
     }
 
     // Calcular totales basados en la suma de los items
-    const calculatedSubtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
+    const calculatedSubtotal = items.reduce((sum, item) => sum + item.line_subtotal, 0);
     const calculatedIva = items.reduce((sum, item) => sum + item.iva, 0);
     const calculatedTotal = items.reduce((sum, item) => sum + item.total, 0);
 
