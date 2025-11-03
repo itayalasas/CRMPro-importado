@@ -51,8 +51,11 @@ interface Invoice {
     phone?: string;
   };
   orders?: {
+    id?: string;
     order_number: string;
     status: string;
+    shipping_cost?: number;
+    metadata?: any;
   };
 }
 
@@ -80,11 +83,10 @@ export function InvoicesModule() {
   const { user } = useAuth();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
 
-  const getItemMetadataFromOrder = (orderId: string, itemDescription: string) => {
-    const order = orders.find(o => o.id === orderId);
-    if (!order?.metadata?.partners) return null;
+  const getItemMetadataFromInvoice = (invoice: Invoice | null, itemDescription: string) => {
+    if (!invoice?.orders?.metadata?.partners) return null;
 
-    for (const partner of order.metadata.partners) {
+    for (const partner of invoice.orders.metadata.partners) {
       if (partner.items) {
         const metaItem = partner.items.find((item: any) => item.name === itemDescription);
         if (metaItem) return metaItem;
@@ -231,7 +233,7 @@ export function InvoicesModule() {
       .select(`
         *,
         clients(contact_name, company_name, email, address, city, country, phone),
-        orders(order_number, status, shipping_cost)
+        orders(id, order_number, status, shipping_cost, metadata)
       `)
       .order('created_at', { ascending: false });
 
@@ -1470,7 +1472,7 @@ export function InvoicesModule() {
                   </thead>
                   <tbody>
                     {selectedInvoiceItems.map((item) => {
-                      const metaItem = selectedInvoice?.order_id ? getItemMetadataFromOrder(selectedInvoice.order_id, item.description) : null;
+                      const metaItem = getItemMetadataFromInvoice(selectedInvoice, item.description);
                       const originalPrice = metaItem?.original_price || metaItem?.price_original || item.unit_price;
                       const discountAmount = metaItem?.discount_amount || 0;
 
@@ -1519,7 +1521,7 @@ export function InvoicesModule() {
                   </div>
                   {(() => {
                     const totalDiscount = selectedInvoiceItems.reduce((sum, item) => {
-                      const metaItem = selectedInvoice?.order_id ? getItemMetadataFromOrder(selectedInvoice.order_id, item.description) : null;
+                      const metaItem = getItemMetadataFromInvoice(selectedInvoice, item.description);
                       const discountAmount = metaItem?.discount_amount || (item.quantity * item.unit_price * (item.discount / 100));
                       return sum + discountAmount;
                     }, 0);
