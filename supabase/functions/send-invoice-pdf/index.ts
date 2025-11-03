@@ -82,12 +82,12 @@ Deno.serve(async (req: Request) => {
 
       const itemKey = item.product_name || item.external_product_id;
       const metaItem = itemsMetadataMap.get(itemKey);
-      const precioOriginal = metaItem?.original_price || metaItem?.price_original || precioUnitario;
 
-      const lineSubtotal = Math.round(precioUnitario * cantidad * 100) / 100;
-      const descuentoValor = Math.round(lineSubtotal * (descuentoPorcentaje / 100) * 100) / 100;
-      const ivaItem = Math.round(lineSubtotal * (ivaPorcentaje / 100) * 100) / 100;
-      const totalItem = Math.round((lineSubtotal + ivaItem) * 100) / 100;
+      const precioOriginal = metaItem?.original_price || metaItem?.price_original || precioUnitario;
+      const descuentoValor = metaItem?.discount_amount || (Math.round(precioUnitario * cantidad * (descuentoPorcentaje / 100) * 100) / 100);
+      const lineSubtotal = metaItem?.subtotal || (Math.round(precioUnitario * cantidad * 100) / 100);
+      const ivaItem = metaItem?.iva_amount || (Math.round(lineSubtotal * (ivaPorcentaje / 100) * 100) / 100);
+      const totalItem = metaItem?.price || (Math.round((lineSubtotal + ivaItem) * 100) / 100);
 
       return {
         numero: index + 1,
@@ -96,11 +96,11 @@ Deno.serve(async (req: Request) => {
         original_price: Math.round(parseFloat(String(precioOriginal)) * 100) / 100,
         precio_unitario: Math.round(precioUnitario * 100) / 100,
         descuento_porcentaje: descuentoPorcentaje,
-        descuento: descuentoValor,
-        line_subtotal: lineSubtotal,
+        descuento: Math.round(descuentoValor * 100) / 100,
+        line_subtotal: Math.round(lineSubtotal * 100) / 100,
         iva_porcentaje: ivaPorcentaje,
-        iva: ivaItem,
-        total: totalItem
+        iva: Math.round(ivaItem * 100) / 100,
+        total: Math.round(totalItem * 100) / 100
       };
     });
 
