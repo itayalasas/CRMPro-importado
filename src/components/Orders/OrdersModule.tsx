@@ -96,6 +96,18 @@ export function OrdersModule() {
   const { user } = useAuth();
   const toast = useToast();
 
+  const getItemMetadata = (order: Order, itemDescription: string) => {
+    if (!order.metadata?.partners) return null;
+
+    for (const partner of order.metadata.partners) {
+      if (partner.items) {
+        const metaItem = partner.items.find((item: any) => item.name === itemDescription);
+        if (metaItem) return metaItem;
+      }
+    }
+    return null;
+  };
+
   const convertCurrencyCode = (code: string | undefined): string => {
     if (!code) return 'UYU';
     const currencyMap: { [key: string]: string } = {
@@ -1804,6 +1816,10 @@ export function OrdersModule() {
                             ? item.notes.replace('Imagen: ', '').trim()
                             : null;
 
+                          const metaItem = selectedOrder ? getItemMetadata(selectedOrder, item.description) : null;
+                          const originalPrice = metaItem?.original_price || metaItem?.price_original || item.unit_price;
+                          const discountAmount = metaItem?.discount_amount || 0;
+
                           return (
                             <tr key={item.id || index} className="hover:bg-slate-100 transition">
                               <td className="px-4 py-3">
@@ -1832,10 +1848,28 @@ export function OrdersModule() {
                               </td>
                               <td className="px-4 py-3 text-center text-slate-900">{item.quantity}</td>
                               <td className="px-4 py-3 text-right text-slate-900">
-                                ${item.unit_price.toFixed(2)} {convertCurrencyCode(item.currency)}
+                                {metaItem && discountAmount > 0 ? (
+                                  <div className="flex flex-col items-end">
+                                    <span className="line-through text-slate-400 text-sm">
+                                      ${originalPrice.toFixed(2)}
+                                    </span>
+                                    <span className="font-semibold text-emerald-600">
+                                      ${item.unit_price.toFixed(2)} {convertCurrencyCode(item.currency)}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span>${item.unit_price.toFixed(2)} {convertCurrencyCode(item.currency)}</span>
+                                )}
                               </td>
                               <td className="px-4 py-3 text-center text-slate-900">
-                                {item.discount_percent > 0 ? `${item.discount_percent}%` : '-'}
+                                {metaItem && discountAmount > 0 ? (
+                                  <div className="flex flex-col items-center">
+                                    <span className="text-amber-600 font-semibold">{item.discount_percent}%</span>
+                                    <span className="text-xs text-red-600">-${discountAmount.toFixed(2)}</span>
+                                  </div>
+                                ) : (
+                                  <span>{item.discount_percent > 0 ? `${item.discount_percent}%` : '-'}</span>
+                                )}
                               </td>
                               <td className="px-4 py-3 text-right font-semibold text-slate-900">
                                 ${item.line_total.toFixed(2)} {convertCurrencyCode(item.currency)}
@@ -1865,14 +1899,15 @@ export function OrdersModule() {
                   </div>
                   {(() => {
                     const totalItemsDiscount = selectedOrderItems.reduce((sum, item) => {
-                      const discountAmount = item.quantity * item.unit_price * (item.discount_percent / 100);
+                      const metaItem = selectedOrder ? getItemMetadata(selectedOrder, item.description) : null;
+                      const discountAmount = metaItem?.discount_amount || (item.quantity * item.unit_price * (item.discount_percent / 100));
                       return sum + discountAmount;
                     }, 0);
                     const totalDiscount = totalItemsDiscount + (selectedOrder.discount_amount || 0);
 
                     return totalDiscount > 0 && (
                       <div className="flex justify-between items-center">
-                        <span className="text-slate-700">Descuento:</span>
+                        <span className="text-slate-700">Descuento Total:</span>
                         <span className="font-semibold text-red-600">
                           -${totalDiscount.toFixed(2)} {selectedOrder.currency}
                         </span>

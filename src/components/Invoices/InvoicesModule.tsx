@@ -79,6 +79,19 @@ export function InvoicesModule() {
   const toast = useToast();
   const { user } = useAuth();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+
+  const getItemMetadataFromOrder = (orderId: string, itemDescription: string) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order?.metadata?.partners) return null;
+
+    for (const partner of order.metadata.partners) {
+      if (partner.items) {
+        const metaItem = partner.items.find((item: any) => item.name === itemDescription);
+        if (metaItem) return metaItem;
+      }
+    }
+    return null;
+  };
   const [invoiceStatuses, setInvoiceStatuses] = useState<InvoiceStatus[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -1456,16 +1469,44 @@ export function InvoicesModule() {
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedInvoiceItems.map((item) => (
-                      <tr key={item.id} className="border-b border-slate-100">
-                        <td className="py-3 text-slate-900">{item.description}</td>
-                        <td className="py-3 text-center text-slate-700">{item.quantity}</td>
-                        <td className="py-3 text-right text-slate-700">${item.unit_price.toFixed(2)}</td>
-                        <td className="py-3 text-right text-slate-700">{item.discount}%</td>
-                        <td className="py-3 text-right text-slate-700">{item.tax_rate}%</td>
-                        <td className="py-3 text-right font-semibold text-slate-900">${item.subtotal.toFixed(2)}</td>
-                      </tr>
-                    ))}
+                    {selectedInvoiceItems.map((item) => {
+                      const metaItem = selectedInvoice?.order_id ? getItemMetadataFromOrder(selectedInvoice.order_id, item.description) : null;
+                      const originalPrice = metaItem?.original_price || metaItem?.price_original || item.unit_price;
+                      const discountAmount = metaItem?.discount_amount || 0;
+
+                      return (
+                        <tr key={item.id} className="border-b border-slate-100">
+                          <td className="py-3 text-slate-900">{item.description}</td>
+                          <td className="py-3 text-center text-slate-700">{item.quantity}</td>
+                          <td className="py-3 text-right text-slate-700">
+                            {metaItem && discountAmount > 0 ? (
+                              <div className="flex flex-col items-end">
+                                <span className="line-through text-slate-400 text-sm">
+                                  ${originalPrice.toFixed(2)}
+                                </span>
+                                <span className="font-semibold text-emerald-600">
+                                  ${item.unit_price.toFixed(2)}
+                                </span>
+                              </div>
+                            ) : (
+                              <span>${item.unit_price.toFixed(2)}</span>
+                            )}
+                          </td>
+                          <td className="py-3 text-right text-slate-700">
+                            {metaItem && discountAmount > 0 ? (
+                              <div className="flex flex-col items-end">
+                                <span className="text-amber-600 font-semibold">{item.discount}%</span>
+                                <span className="text-xs text-red-600">-${discountAmount.toFixed(2)}</span>
+                              </div>
+                            ) : (
+                              <span>{item.discount}%</span>
+                            )}
+                          </td>
+                          <td className="py-3 text-right text-slate-700">{item.tax_rate}%</td>
+                          <td className="py-3 text-right font-semibold text-slate-900">${item.subtotal.toFixed(2)}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1478,14 +1519,14 @@ export function InvoicesModule() {
                   </div>
                   {(() => {
                     const totalDiscount = selectedInvoiceItems.reduce((sum, item) => {
-                      const itemSubtotal = item.quantity * item.unit_price;
-                      const discountAmount = itemSubtotal * (item.discount / 100);
+                      const metaItem = selectedInvoice?.order_id ? getItemMetadataFromOrder(selectedInvoice.order_id, item.description) : null;
+                      const discountAmount = metaItem?.discount_amount || (item.quantity * item.unit_price * (item.discount / 100));
                       return sum + discountAmount;
                     }, 0);
 
                     return totalDiscount > 0 && (
                       <div className="flex justify-between text-slate-700">
-                        <span>Descuento:</span>
+                        <span>Descuento Total:</span>
                         <span className="font-semibold text-red-600">-${totalDiscount.toFixed(2)}</span>
                       </div>
                     );
