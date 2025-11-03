@@ -542,7 +542,7 @@ export function OrdersModule() {
       toast.success('Orden eliminada exitosamente');
       setShowDeleteConfirm(false);
       setOrderToDelete(null);
-      fetchOrders();
+      loadOrders();
     } catch (error: any) {
       console.error('Error deleting order:', error);
       toast.error(error.message || 'Error al eliminar la orden');
