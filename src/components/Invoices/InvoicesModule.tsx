@@ -1028,7 +1028,7 @@ export function InvoicesModule() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200">
               <div className="text-sm text-slate-600">
-                Mostrando {startIndex + 1} a {Math.min(endIndex, filteredInvoices.length)} de {filteredInvoices.length} facturas
+                Página {currentPage} de {totalPages} ({totalInvoices} facturas en total)
               </div>
               <div className="flex gap-2">
                 <button
