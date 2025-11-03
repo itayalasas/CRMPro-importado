@@ -272,12 +272,50 @@ export function CommissionBillingModule() {
         throw new Error('Error creando orden: ' + orderError.message);
       }
 
-      // PASO 2: Crear la factura con el order_id correcto
+      // PASO 2: Obtener o crear el cliente basado en el partner
+      let clientId = null;
+
+      // Intentar encontrar cliente existente con el mismo RUT del partner
+      const { data: existingClient } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('rut', partner.rut)
+        .maybeSingle();
+
+      if (existingClient) {
+        clientId = existingClient.id;
+      } else {
+        // Crear cliente basado en datos del partner
+        const { data: newClient, error: clientError } = await supabase
+          .from('clients')
+          .insert({
+            name: partner.name,
+            company_name: partner.company_name || partner.name,
+            rut: partner.rut,
+            email: partner.email,
+            phone: partner.phone,
+            address: partner.address,
+            city: partner.city,
+            postal_code: partner.postal_code,
+            country: partner.country || 'Uruguay',
+            is_active: true
+          })
+          .select('id')
+          .single();
+
+        if (clientError) {
+          console.warn('No se pudo crear cliente automáticamente:', clientError);
+        } else {
+          clientId = newClient.id;
+        }
+      }
+
+      // PASO 3: Crear la factura con el client_id y order_id
       const { data: commissionInvoice, error: invoiceError} = await supabase
         .from('invoices')
         .insert({
           invoice_number: invoiceNumber,
-          client_id: null,
+          client_id: clientId,
           order_id: order.id,
           partner_id: partner.id,
           payment_period_id: selectedPeriod,
@@ -298,7 +336,7 @@ export function CommissionBillingModule() {
         throw new Error('Error creando factura: ' + invoiceError.message);
       }
 
-      // PASO 3: Crear el item de orden
+      // PASO 4: Crear el item de orden
       await supabase
         .from('order_items')
         .insert({
@@ -311,6 +349,19 @@ export function CommissionBillingModule() {
           total_price: subtotal,
           item_type: 'service',
           currency: 'UYU'
+        });
+
+      // PASO 5: Crear item detallado de la factura
+      await supabase
+        .from('invoice_items')
+        .insert({
+          invoice_id: commissionInvoice.id,
+          description: 'Comisión por ventas',
+          quantity: 1,
+          unit_price: subtotal,
+          tax_rate: ivaRate,
+          discount: 0,
+          subtotal: subtotal
         });
 
       const invoiceIds = selectedGroup.invoices.map(inv => inv.id);
