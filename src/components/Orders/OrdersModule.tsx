@@ -489,6 +489,56 @@ export function OrdersModule() {
     }
   };
 
+  const canDeleteOrder = (order: Order): { canDelete: boolean; reason?: string } => {
+    if (order.status === 'confirmed' || order.status === 'in_progress' || order.status === 'processing' || order.status === 'shipped' || order.status === 'delivered' || order.status === 'completed') {
+      return { canDelete: false, reason: 'No se puede eliminar una orden confirmada o en proceso' };
+    }
+
+    if (order.payment_status === 'paid' || order.payment_status === 'partial') {
+      return { canDelete: false, reason: 'No se puede eliminar una orden con pagos registrados' };
+    }
+
+    return { canDelete: true };
+  };
+
+  const handleDeleteOrder = async (order: Order) => {
+    const validation = canDeleteOrder(order);
+
+    if (!validation.canDelete) {
+      toast.error(validation.reason || 'No se puede eliminar esta orden');
+      return;
+    }
+
+    if (!confirm(`¿Estás seguro de que deseas eliminar la orden ${order.order_number}? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+
+    try {
+      const { data: invoices } = await supabase
+        .from('invoices')
+        .select('id')
+        .eq('order_id', order.id);
+
+      if (invoices && invoices.length > 0) {
+        toast.error('No se puede eliminar: esta orden tiene facturas asociadas');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', order.id);
+
+      if (error) throw error;
+
+      toast.success('Orden eliminada exitosamente');
+      fetchOrders();
+    } catch (error: any) {
+      console.error('Error deleting order:', error);
+      toast.error(error.message || 'Error al eliminar la orden');
+    }
+  };
+
   const openEditModal = async (order: Order) => {
     setSelectedOrder(order);
 
@@ -946,6 +996,15 @@ export function OrdersModule() {
                       >
                         <CreditCard className="w-5 h-5" />
                       </button>
+                      {canDeleteOrder(order).canDelete && (
+                        <button
+                          onClick={() => handleDeleteOrder(order)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                          title="Eliminar orden"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
