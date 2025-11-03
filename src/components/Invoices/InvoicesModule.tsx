@@ -1557,7 +1557,7 @@ export function InvoicesModule() {
                     );
                   })()}
                   <div className="flex justify-between text-slate-700">
-                    <span>IVA:</span>
+                    <span>IVA:12</span>
                     <span className="font-semibold">${selectedInvoice.tax_amount.toFixed(2)}</span>
                   </div>
                   {selectedInvoice.orders?.shipping_cost && selectedInvoice.orders.shipping_cost > 0 && (
