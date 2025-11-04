@@ -17,6 +17,7 @@ import {
   Shield
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { usePermissions, ModuleKey } from '../../hooks/usePermissions';
 
 interface SidebarProps {
   activeModule: string;
@@ -24,23 +25,26 @@ interface SidebarProps {
 }
 
 const menuItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'clients', label: 'Clientes', icon: Users },
-  { id: 'campaigns', label: 'Campañas', icon: Mail },
-  { id: 'orders', label: 'Órdenes', icon: ShoppingCart },
-  { id: 'invoices', label: 'Facturas', icon: FileText },
-  { id: 'accounting', label: 'Contabilidad', icon: DollarSign },
-  { id: 'calls', label: 'Llamadas', icon: Phone },
-  { id: 'tickets', label: 'Tickets', icon: Ticket },
-  { id: 'inbox', label: 'Buzón', icon: Inbox },
-  { id: 'validation', label: 'Validación Ext.', icon: Shield },
-  { id: 'parameters', label: 'Parámetros', icon: Settings },
-  { id: 'settings', label: 'Configuración', icon: Settings },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, moduleKey: 'dashboard' as ModuleKey },
+  { id: 'clients', label: 'Clientes', icon: Users, moduleKey: 'clientes' as ModuleKey },
+  { id: 'campaigns', label: 'Campañas', icon: Mail, moduleKey: 'campanas' as ModuleKey },
+  { id: 'orders', label: 'Órdenes', icon: ShoppingCart, moduleKey: 'ordenes' as ModuleKey },
+  { id: 'invoices', label: 'Facturas', icon: FileText, moduleKey: 'facturas' as ModuleKey },
+  { id: 'accounting', label: 'Contabilidad', icon: DollarSign, moduleKey: 'contabilidad' as ModuleKey },
+  { id: 'calls', label: 'Llamadas', icon: Phone, moduleKey: 'llamadas' as ModuleKey },
+  { id: 'tickets', label: 'Tickets', icon: Ticket, moduleKey: 'tickets' as ModuleKey },
+  { id: 'inbox', label: 'Buzón', icon: Inbox, moduleKey: 'buzon' as ModuleKey },
+  { id: 'validation', label: 'Validación Ext.', icon: Shield, moduleKey: 'validacion_ext' as ModuleKey },
+  { id: 'parameters', label: 'Parámetros', icon: Settings, moduleKey: 'parametros' as ModuleKey },
+  { id: 'settings', label: 'Configuración', icon: Settings, moduleKey: 'configuracion' as ModuleKey },
 ];
 
 export function Sidebar({ activeModule, onModuleChange }: SidebarProps) {
   const { signOut, user } = useAuth();
+  const { hasModuleAccess } = usePermissions();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const accessibleMenuItems = menuItems.filter(item => hasModuleAccess(item.moduleKey));
 
   const handleModuleChange = (module: string) => {
     onModuleChange(module);
@@ -89,7 +93,7 @@ export function Sidebar({ activeModule, onModuleChange }: SidebarProps) {
       </div>
 
       <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
-        {menuItems.map((item) => {
+        {accessibleMenuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeModule === item.id;
 

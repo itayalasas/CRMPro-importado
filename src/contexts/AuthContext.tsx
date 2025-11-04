@@ -1,12 +1,12 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { externalAuth } from '../lib/externalAuth';
+import { externalAuth, ModulePermissions } from '../lib/externalAuth';
 
-interface AuthUser {
+export interface AuthUser {
   id: string;
   email: string;
   name: string;
-  roles: string[];
-  permissions: string[];
+  role: string;
+  permissions: ModulePermissions;
 }
 
 interface AuthContextType {

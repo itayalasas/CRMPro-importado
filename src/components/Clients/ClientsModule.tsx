@@ -11,6 +11,8 @@ import { useToast } from '../../contexts/ToastContext';
 import { useDialer } from '../../contexts/DialerContext';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { ConfirmDialog } from '../Common/ConfirmDialog';
+import { PermissionGate } from '../Common/PermissionGate';
+import { usePermissions } from '../../hooks/usePermissions';
 
 interface Client {
   id: string;
@@ -51,6 +53,7 @@ export function ClientsModule() {
   const toast = useToast();
   const { initiateCall } = useDialer();
   const { navigateToInbox } = useNavigation();
+  const { canCreate, canUpdate, canDelete } = usePermissions();
 
   const [formData, setFormData] = useState({
     company_name: '',
@@ -414,13 +417,15 @@ export function ClientsModule() {
               className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
             />
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
-          >
-            <Plus className="w-5 h-5" />
-            <span className="font-semibold">Nuevo Cliente</span>
-          </button>
+          <PermissionGate module="clientes" permission="create">
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
+            >
+              <Plus className="w-5 h-5" />
+              <span className="font-semibold">Nuevo Cliente</span>
+            </button>
+          </PermissionGate>
         </div>
       </div>
 
@@ -512,20 +517,24 @@ export function ClientsModule() {
               )}
 
               <div className="flex space-x-2">
-                <button
-                  onClick={() => handleEdit(client)}
-                  className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-100 transition-colors border border-blue-200"
-                >
-                  <Edit2 className="w-4 h-4" />
-                  <span className="text-sm font-medium">Editar</span>
-                </button>
-                <button
-                  onClick={() => handleDelete(client.id)}
-                  className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-red-50 text-red-700 rounded-xl hover:bg-red-100 transition-colors border border-red-200"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span className="text-sm font-medium">Eliminar</span>
-                </button>
+                <PermissionGate module="clientes" permission="update">
+                  <button
+                    onClick={() => handleEdit(client)}
+                    className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-100 transition-colors border border-blue-200"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    <span className="text-sm font-medium">Editar</span>
+                  </button>
+                </PermissionGate>
+                <PermissionGate module="clientes" permission="delete">
+                  <button
+                    onClick={() => handleDelete(client.id)}
+                    className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-red-50 text-red-700 rounded-xl hover:bg-red-100 transition-colors border border-red-200"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span className="text-sm font-medium">Eliminar</span>
+                  </button>
+                </PermissionGate>
               </div>
             </div>
           </div>
@@ -730,12 +739,17 @@ export function ClientsModule() {
                 >
                   Cancelar
                 </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl font-medium"
+                <PermissionGate
+                  module="clientes"
+                  permission={editingClient ? 'update' : 'create'}
                 >
-                  {editingClient ? 'Actualizar Cliente' : 'Crear Cliente'}
-                </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl font-medium"
+                  >
+                    {editingClient ? 'Actualizar Cliente' : 'Crear Cliente'}
+                  </button>
+                </PermissionGate>
               </div>
             </form>
           </div>

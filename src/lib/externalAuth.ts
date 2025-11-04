@@ -1,9 +1,13 @@
+export interface ModulePermissions {
+  [key: string]: string[];
+}
+
 interface AuthUser {
   id: string;
   email: string;
   name: string;
-  roles: string[];
-  permissions: string[];
+  role: string;
+  permissions: ModulePermissions;
   metadata?: Record<string, any>;
   last_login?: string;
 }
@@ -29,8 +33,8 @@ interface TokenPayload {
   email: string;
   name: string;
   app_id: string;
-  roles: string[];
-  permissions: string[];
+  role: string;
+  permissions: ModulePermissions;
   iat: number;
   exp: number;
   iss: string;
@@ -106,8 +110,8 @@ export const externalAuth = {
       id: payload.sub,
       email: payload.email,
       name: payload.name,
-      roles: payload.roles || [],
-      permissions: payload.permissions || []
+      role: payload.role || 'agent',
+      permissions: payload.permissions || {}
     };
   },
 
@@ -231,22 +235,10 @@ export const externalAuth = {
 
   getUserRole(): string {
     const user = this.getStoredUser();
-    if (!user || !user.roles || user.roles.length === 0) {
+    if (!user || !user.role) {
       return 'agent';
     }
 
-    const roleMap: Record<string, number> = {
-      admin: 3,
-      manager: 2,
-      agent: 1
-    };
-
-    const highestRole = user.roles.reduce((highest, role) => {
-      const currentLevel = roleMap[role.toLowerCase()] || 0;
-      const highestLevel = roleMap[highest.toLowerCase()] || 0;
-      return currentLevel > highestLevel ? role : highest;
-    }, 'agent');
-
-    return highestRole.toLowerCase();
+    return user.role.toLowerCase();
   }
 };
