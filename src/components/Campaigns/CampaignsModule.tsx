@@ -12,6 +12,8 @@ import { HTMLTemplateEditor } from './HTMLTemplateEditor';
 import { ContactsManager } from './ContactsManager';
 import { ConfirmDialog } from '../Common/ConfirmDialog';
 import { CampaignMonitorModal } from './CampaignMonitorModal';
+import { PermissionGate } from '../Common/PermissionGate';
+import { usePermissions } from '../../hooks/usePermissions';
 
 interface Campaign {
   id: string;
@@ -78,6 +80,7 @@ export function CampaignsModule() {
 
   const { user } = useAuth();
   const toast = useToast();
+  const { canCreate, canUpdate, canDelete } = usePermissions();
 
   const [campaignForm, setCampaignForm] = useState({
     name: '',
@@ -533,13 +536,15 @@ export function CampaignsModule() {
           <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-slate-200">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-slate-900">Mis Campañas</h2>
-              <button
-                onClick={() => setShowCampaignModal(true)}
-                className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl"
-              >
-                <Plus className="w-5 h-5" />
-                <span className="font-semibold">Nueva Campaña</span>
-              </button>
+              <PermissionGate module="campanas" permission="create">
+                <button
+                  onClick={() => setShowCampaignModal(true)}
+                  className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl"
+                >
+                  <Plus className="w-5 h-5" />
+                  <span className="font-semibold">Nueva Campaña</span>
+                </button>
+              </PermissionGate>
             </div>
           </div>
 
@@ -590,13 +595,15 @@ export function CampaignsModule() {
 
                   <div className="space-y-2">
                     {(campaign.status === 'draft' || campaign.status === 'scheduled') && (
-                      <button
-                        onClick={() => handleSendCampaign(campaign.id)}
-                        className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-md hover:shadow-lg"
-                      >
-                        <Send className="w-5 h-5" />
-                        <span className="font-semibold">Enviar Campaña</span>
-                      </button>
+                      <PermissionGate module="campanas" permission="update">
+                        <button
+                          onClick={() => handleSendCampaign(campaign.id)}
+                          className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-md hover:shadow-lg"
+                        >
+                          <Send className="w-5 h-5" />
+                          <span className="font-semibold">Enviar Campaña</span>
+                        </button>
+                      </PermissionGate>
                     )}
 
                     {(campaign.status === 'sending' || campaign.status === 'sent') && (
@@ -613,32 +620,38 @@ export function CampaignsModule() {
                         </button>
 
                         {campaign.failed_count > 0 && (
-                          <button
-                            onClick={() => handleRetryFailedEmails(campaign.id)}
-                            className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all shadow-md hover:shadow-lg"
-                          >
-                            <Send className="w-5 h-5" />
-                            <span className="font-semibold">Reintentar Fallidos ({campaign.failed_count})</span>
-                          </button>
+                          <PermissionGate module="campanas" permission="update">
+                            <button
+                              onClick={() => handleRetryFailedEmails(campaign.id)}
+                              className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all shadow-md hover:shadow-lg"
+                            >
+                              <Send className="w-5 h-5" />
+                              <span className="font-semibold">Reintentar Fallidos ({campaign.failed_count})</span>
+                            </button>
+                          </PermissionGate>
                         )}
                       </>
                     )}
 
                     <div className="flex space-x-2">
-                      <button
-                        onClick={() => handleEditCampaign(campaign)}
-                        className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-purple-50 text-purple-700 rounded-xl hover:bg-purple-100 transition-colors border border-purple-200"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                        <span className="text-sm font-medium">Editar</span>
-                      </button>
-                      <button
-                        onClick={() => handleDeleteCampaign(campaign.id)}
-                        className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-red-50 text-red-700 rounded-xl hover:bg-red-100 transition-colors border border-red-200"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        <span className="text-sm font-medium">Eliminar</span>
-                      </button>
+                      <PermissionGate module="campanas" permission="update">
+                        <button
+                          onClick={() => handleEditCampaign(campaign)}
+                          className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-purple-50 text-purple-700 rounded-xl hover:bg-purple-100 transition-colors border border-purple-200"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                          <span className="text-sm font-medium">Editar</span>
+                        </button>
+                      </PermissionGate>
+                      <PermissionGate module="campanas" permission="delete">
+                        <button
+                          onClick={() => handleDeleteCampaign(campaign.id)}
+                          className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-red-50 text-red-700 rounded-xl hover:bg-red-100 transition-colors border border-red-200"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span className="text-sm font-medium">Eliminar</span>
+                        </button>
+                      </PermissionGate>
                     </div>
                   </div>
                 </div>
@@ -653,16 +666,18 @@ export function CampaignsModule() {
           <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-slate-200">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-slate-900">Plantillas de Email</h2>
-              <button
-                onClick={() => {
-                  setEditingTemplate(null);
-                  setShowHTMLEditor(true);
-                }}
-                className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl"
-              >
-                <Plus className="w-5 h-5" />
-                <span className="font-semibold">Nueva Plantilla</span>
-              </button>
+              <PermissionGate module="campanas" permission="create">
+                <button
+                  onClick={() => {
+                    setEditingTemplate(null);
+                    setShowHTMLEditor(true);
+                  }}
+                  className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl"
+                >
+                  <Plus className="w-5 h-5" />
+                  <span className="font-semibold">Nueva Plantilla</span>
+                </button>
+              </PermissionGate>
             </div>
           </div>
 
@@ -682,23 +697,27 @@ export function CampaignsModule() {
                   </div>
 
                   <div className="flex space-x-2">
-                    <button
-                      onClick={() => {
-                        setEditingTemplate(template);
-                        setShowHTMLEditor(true);
-                      }}
-                      className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-100 transition-colors border border-blue-200"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                      <span className="text-sm font-medium">Editar</span>
-                    </button>
-                    <button
-                      onClick={() => handleDeleteTemplate(template.id)}
-                      className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-red-50 text-red-700 rounded-xl hover:bg-red-100 transition-colors border border-red-200"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      <span className="text-sm font-medium">Eliminar</span>
-                    </button>
+                    <PermissionGate module="campanas" permission="update">
+                      <button
+                        onClick={() => {
+                          setEditingTemplate(template);
+                          setShowHTMLEditor(true);
+                        }}
+                        className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-100 transition-colors border border-blue-200"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        <span className="text-sm font-medium">Editar</span>
+                      </button>
+                    </PermissionGate>
+                    <PermissionGate module="campanas" permission="delete">
+                      <button
+                        onClick={() => handleDeleteTemplate(template.id)}
+                        className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-red-50 text-red-700 rounded-xl hover:bg-red-100 transition-colors border border-red-200"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span className="text-sm font-medium">Eliminar</span>
+                      </button>
+                    </PermissionGate>
                   </div>
                 </div>
               </div>
@@ -712,13 +731,15 @@ export function CampaignsModule() {
           <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-slate-200">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-slate-900">Grupos de Contactos</h2>
-              <button
-                onClick={() => setShowGroupModal(true)}
-                className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all shadow-lg hover:shadow-xl"
-              >
-                <Plus className="w-5 h-5" />
-                <span className="font-semibold">Nuevo Grupo</span>
-              </button>
+              <PermissionGate module="campanas" permission="create">
+                <button
+                  onClick={() => setShowGroupModal(true)}
+                  className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all shadow-lg hover:shadow-xl"
+                >
+                  <Plus className="w-5 h-5" />
+                  <span className="font-semibold">Nuevo Grupo</span>
+                </button>
+              </PermissionGate>
             </div>
           </div>
 
@@ -738,23 +759,27 @@ export function CampaignsModule() {
                   </div>
 
                   <div className="flex space-x-2">
-                    <button
-                      onClick={() => {
-                        setSelectedGroupId(group.id);
-                        setShowContactsManager(true);
-                      }}
-                      className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-emerald-50 text-emerald-700 rounded-xl hover:bg-emerald-100 transition-colors border border-emerald-200"
-                    >
-                      <UserPlus className="w-4 h-4" />
-                      <span className="text-sm font-medium">Contactos</span>
-                    </button>
-                    <button
-                      onClick={() => handleDeleteGroup(group.id)}
-                      className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-red-50 text-red-700 rounded-xl hover:bg-red-100 transition-colors border border-red-200"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      <span className="text-sm font-medium">Eliminar</span>
-                    </button>
+                    <PermissionGate module="campanas" permission="update">
+                      <button
+                        onClick={() => {
+                          setSelectedGroupId(group.id);
+                          setShowContactsManager(true);
+                        }}
+                        className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-emerald-50 text-emerald-700 rounded-xl hover:bg-emerald-100 transition-colors border border-emerald-200"
+                      >
+                        <UserPlus className="w-4 h-4" />
+                        <span className="text-sm font-medium">Contactos</span>
+                      </button>
+                    </PermissionGate>
+                    <PermissionGate module="campanas" permission="delete">
+                      <button
+                        onClick={() => handleDeleteGroup(group.id)}
+                        className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-red-50 text-red-700 rounded-xl hover:bg-red-100 transition-colors border border-red-200"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span className="text-sm font-medium">Eliminar</span>
+                      </button>
+                    </PermissionGate>
                   </div>
                 </div>
               </div>
@@ -926,12 +951,17 @@ export function CampaignsModule() {
                 >
                   Cancelar
                 </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl font-medium"
+                <PermissionGate
+                  module="campanas"
+                  permission={editingCampaign ? 'update' : 'create'}
                 >
-                  {editingCampaign ? 'Actualizar' : 'Crear Campaña'}
-                </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl font-medium"
+                  >
+                    {editingCampaign ? 'Actualizar' : 'Crear Campaña'}
+                  </button>
+                </PermissionGate>
               </div>
             </form>
           </div>
@@ -992,12 +1022,14 @@ export function CampaignsModule() {
                 >
                   Cancelar
                 </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all shadow-lg hover:shadow-xl font-medium"
-                >
-                  Crear Grupo
-                </button>
+                <PermissionGate module="campanas" permission="create">
+                  <button
+                    type="submit"
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all shadow-lg hover:shadow-xl font-medium"
+                  >
+                    Crear Grupo
+                  </button>
+                </PermissionGate>
               </div>
             </form>
           </div>
