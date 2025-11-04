@@ -8,6 +8,8 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { ConfirmDialog } from '../Common/ConfirmDialog';
+import { PermissionGate } from '../Common/PermissionGate';
+import { usePermissions } from '../../hooks/usePermissions';
 
 interface Client {
   id: string;
@@ -100,6 +102,7 @@ export function OrdersModule() {
 
   const { user } = useAuth();
   const toast = useToast();
+  const { canCreate, canUpdate, canDelete } = usePermissions();
 
   const getItemMetadata = (order: Order, itemDescription: string) => {
     if (!order.metadata?.partners) return null;
@@ -937,13 +940,15 @@ export function OrdersModule() {
               className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
             />
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center space-x-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-3 rounded-xl hover:from-emerald-700 hover:to-teal-700 transition shadow-lg ml-4"
-          >
-            <Plus className="w-5 h-5" />
-            <span className="font-semibold">Nueva Orden</span>
-          </button>
+          <PermissionGate module="ordenes" permission="create">
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center space-x-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-3 rounded-xl hover:from-emerald-700 hover:to-teal-700 transition shadow-lg ml-4"
+            >
+              <Plus className="w-5 h-5" />
+              <span className="font-semibold">Nueva Orden</span>
+            </button>
+          </PermissionGate>
         </div>
 
         <div className="overflow-x-auto">
@@ -1062,22 +1067,26 @@ export function OrdersModule() {
                       >
                         <Eye className="w-5 h-5" />
                       </button>
-                      <button
-                        onClick={() => generatePaymentLink(order)}
-                        className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
-                        title="Generar link de pago"
-                      >
-                        <CreditCard className="w-5 h-5" />
-                      </button>
-                      {canDeleteOrder(order).canDelete && (
+                      <PermissionGate module="ordenes" permission="update">
                         <button
-                          onClick={() => handleDeleteOrder(order)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                          title="Eliminar orden"
+                          onClick={() => generatePaymentLink(order)}
+                          className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                          title="Generar link de pago"
                         >
-                          <Trash2 className="w-5 h-5" />
+                          <CreditCard className="w-5 h-5" />
                         </button>
-                      )}
+                      </PermissionGate>
+                      <PermissionGate module="ordenes" permission="delete">
+                        {canDeleteOrder(order).canDelete && (
+                          <button
+                            onClick={() => handleDeleteOrder(order)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                            title="Eliminar orden"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        )}
+                      </PermissionGate>
                     </div>
                   </td>
                 </tr>

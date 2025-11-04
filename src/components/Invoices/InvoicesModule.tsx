@@ -5,6 +5,8 @@ import { useToast } from '../../contexts/ToastContext';
 import { Plus, FileText, DollarSign, TrendingUp, AlertTriangle, CheckCircle, Clock, Search, Calendar, Building2, Download, Send, X, Trash2, Eye, CreditCard as Edit, ShoppingCart, Percent, Hash, Package } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ConfirmDialog } from '../Common/ConfirmDialog';
+import { PermissionGate } from '../Common/PermissionGate';
+import { usePermissions } from '../../hooks/usePermissions';
 
 interface InvoiceItem {
   id?: string;
@@ -81,6 +83,7 @@ interface InvoiceStatus {
 export function InvoicesModule() {
   const toast = useToast();
   const { user } = useAuth();
+  const { canCreate, canUpdate, canDelete } = usePermissions();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
 
   const getItemMetadataFromInvoice = (invoice: Invoice | null, itemDescription: string) => {
@@ -885,13 +888,15 @@ export function InvoicesModule() {
               className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             />
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center space-x-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-3 rounded-xl hover:from-emerald-700 hover:to-teal-700 transition shadow-lg ml-4"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Nueva Factura</span>
-          </button>
+          <PermissionGate module="facturas" permission="create">
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center space-x-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-3 rounded-xl hover:from-emerald-700 hover:to-teal-700 transition shadow-lg ml-4"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Nueva Factura</span>
+            </button>
+          </PermissionGate>
         </div>
 
         <div className="overflow-x-auto">
@@ -1008,20 +1013,24 @@ export function InvoicesModule() {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => handleEdit(invoice)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                          title="Editar"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(invoice.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <PermissionGate module="facturas" permission="update">
+                          <button
+                            onClick={() => handleEdit(invoice)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                            title="Editar"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                        </PermissionGate>
+                        <PermissionGate module="facturas" permission="delete">
+                          <button
+                            onClick={() => handleDelete(invoice.id)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </PermissionGate>
                         <button className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition" title="Descargar">
                           <Download className="w-4 h-4" />
                         </button>
