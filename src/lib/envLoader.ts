@@ -9,6 +9,7 @@ interface EnvConfig {
     VITE_AUTH_APP_ID: string;
     VITE_AUTH_API_KEY: string;
     VITE_APP_URL: string;
+    VITE_AUTH_CODE_EXCHANGE_URL: string;
   };
   updated_at: string;
 }
@@ -83,6 +84,7 @@ class EnvironmentLoader {
         VITE_AUTH_APP_ID: import.meta.env.VITE_AUTH_APP_ID || '',
         VITE_AUTH_API_KEY: import.meta.env.VITE_AUTH_API_KEY || '',
         VITE_APP_URL: import.meta.env.VITE_APP_URL || '',
+        VITE_AUTH_CODE_EXCHANGE_URL: import.meta.env.VITE_AUTH_CODE_EXCHANGE_URL || '',
       };
 
       this.injectIntoImportMeta();

@@ -49,36 +49,73 @@ function getAuthConfig() {
     APP_ID: getEnvVar('VITE_AUTH_APP_ID'),
     API_KEY: getEnvVar('VITE_AUTH_API_KEY'),
     APP_URL: getEnvVar('VITE_APP_URL') || window.location.origin,
+    CODE_EXCHANGE_URL: getEnvVar('VITE_AUTH_CODE_EXCHANGE_URL'),
   };
 }
 
 export const externalAuth = {
   redirectToLogin() {
-    const { AUTH_URL, APP_ID, API_KEY, APP_URL } = getAuthConfig();
+    const { AUTH_URL, APP_ID, APP_URL } = getAuthConfig();
     const redirectUri = `${APP_URL}/callback`;
-    const loginUrl = `${AUTH_URL}/login?app_id=${encodeURIComponent(APP_ID)}&redirect_uri=${encodeURIComponent(redirectUri)}&api_key=${encodeURIComponent(API_KEY)}`;
+    const loginUrl = `${AUTH_URL}/login?app_id=${encodeURIComponent(APP_ID)}&redirect_uri=${encodeURIComponent(redirectUri)}`;
     window.location.href = loginUrl;
   },
 
-  parseCallbackUrl(url: string): { token: string; refreshToken: string; userId: string; state: string } | null {
+  parseCallbackUrl(url: string): { code: string } | null {
     try {
       const urlObj = new URL(url);
-      const token = urlObj.searchParams.get('token');
-      const refreshToken = urlObj.searchParams.get('refresh_token');
-      const userId = urlObj.searchParams.get('user_id');
-      const state = urlObj.searchParams.get('state');
+      const code = urlObj.searchParams.get('code');
 
-      if (!token || !userId) {
+      if (!code) {
         return null;
       }
 
       return {
-        token: decodeURIComponent(token),
-        refreshToken: refreshToken ? decodeURIComponent(refreshToken) : '',
-        userId,
-        state: state || 'authenticated'
+        code: decodeURIComponent(code)
       };
     } catch (error) {
+      return null;
+    }
+  },
+
+  async exchangeCodeForToken(code: string): Promise<{ token: string; refreshToken: string; userId: string } | null> {
+    try {
+      const { CODE_EXCHANGE_URL, APP_ID } = getAuthConfig();
+
+      if (!CODE_EXCHANGE_URL) {
+        console.error('CODE_EXCHANGE_URL no está configurado');
+        return null;
+      }
+
+      const response = await fetch(CODE_EXCHANGE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code: code,
+          application_id: APP_ID
+        })
+      });
+
+      if (!response.ok) {
+        console.error('Error al intercambiar código:', response.status);
+        return null;
+      }
+
+      const data: AuthResponse = await response.json();
+
+      if (data.success && data.data.access_token) {
+        return {
+          token: data.data.access_token,
+          refreshToken: data.data.refresh_token || '',
+          userId: data.data.user.id
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error en exchangeCodeForToken:', error);
       return null;
     }
   },

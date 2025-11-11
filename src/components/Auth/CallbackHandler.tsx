@@ -23,14 +23,23 @@ export function CallbackHandler() {
         return;
       }
 
+      setStatus('Intercambiando código por token...');
+
+      const authData = await externalAuth.exchangeCodeForToken(callbackData.code);
+
+      if (!authData) {
+        setError('No se pudo intercambiar el código de autenticación');
+        return;
+      }
+
       setStatus('Validando token...');
 
-      if (externalAuth.isTokenExpired(callbackData.token)) {
+      if (externalAuth.isTokenExpired(authData.token)) {
         setError('El token ha expirado');
         return;
       }
 
-      const user = externalAuth.getUserFromToken(callbackData.token);
+      const user = externalAuth.getUserFromToken(authData.token);
       if (!user) {
         setError('No se pudo obtener información del usuario');
         return;
@@ -38,9 +47,9 @@ export function CallbackHandler() {
 
       setStatus('Almacenando credenciales...');
       externalAuth.storeAuthData(
-        callbackData.token,
-        callbackData.refreshToken,
-        callbackData.userId
+        authData.token,
+        authData.refreshToken,
+        authData.userId
       );
 
       setStatus('Sincronizando con base de datos...');
