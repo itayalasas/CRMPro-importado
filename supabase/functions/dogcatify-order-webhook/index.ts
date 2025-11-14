@@ -248,6 +248,43 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      case "order.confirmed": {
+        console.log("✅ Procesando order.confirmed...");
+
+        const { data: existingOrder } = await supabase
+          .from("orders")
+          .select("id")
+          .eq("external_order_id", orderData.id)
+          .maybeSingle();
+
+        if (!existingOrder) {
+          throw new Error(`Orden no encontrada: ${orderData.id}`);
+        }
+
+        await supabase
+          .from("orders")
+          .update({
+            status: "confirmed",
+            payment_status: orderData.payment_info?.payment_status || "approved",
+            payment_id: orderData.payment_info?.payment_id,
+            metadata: orderData,
+          })
+          .eq("id", existingOrder.id);
+
+        console.log("✓ Orden confirmada - se generarán facturas automáticamente");
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Orden confirmada exitosamente",
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
       case "order.cancelled": {
         console.log("❌ Procesando order.cancelled...");
 
