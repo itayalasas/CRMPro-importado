@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import {
-  Settings, Mail, Server, Globe, Shield, Save, CheckCircle, AlertCircle, Phone, TestTube, Inbox, Eye, EyeOff
+  Settings, Mail, Server, Globe, Shield, Save, CheckCircle, AlertCircle, Phone, TestTube, Inbox, Eye, EyeOff, Building2
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { twilioService } from '../../lib/twilioService';
+import { BranchesModule } from './BranchesModule';
 
 export function SettingsModule() {
   const toast = useToast();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'smtp' | 'email' | 'general' | 'twilio' | 'inbox'>('smtp');
+  const [activeTab, setActiveTab] = useState<'smtp' | 'email' | 'general' | 'twilio' | 'inbox' | 'branches'>('smtp');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
 
   const [smtpConfig, setSmtpConfig] = useState({
@@ -455,6 +456,17 @@ export function SettingsModule() {
         >
           <Settings className="w-5 h-5" />
           <span>General</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('branches')}
+          className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition ${
+            activeTab === 'branches'
+              ? 'bg-gradient-to-r from-cyan-600 to-cyan-500 text-white shadow-lg'
+              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+          }`}
+        >
+          <Building2 className="w-5 h-5" />
+          <span>Sucursales</span>
         </button>
       </div>
 
@@ -1310,6 +1322,12 @@ export function SettingsModule() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'branches' && (
+        <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8">
+          <BranchesModule />
         </div>
       )}
     </div>
