@@ -23,10 +23,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    checkAuth();
-  }, []);
+    if (!isInitialized) {
+      checkAuth();
+    }
+  }, [isInitialized]);
 
   const checkAuth = async () => {
     try {
@@ -60,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
     } finally {
       setLoading(false);
+      setIsInitialized(true);
     }
   };
 

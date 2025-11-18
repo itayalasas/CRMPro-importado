@@ -161,6 +161,8 @@ export const externalAuth = {
   },
 
   storeAuthData(token: string, refreshToken: string, userId: string) {
+    this.clearSupabaseStorage();
+
     localStorage.setItem('auth_token', token);
     localStorage.setItem('refresh_token', refreshToken);
     localStorage.setItem('user_id', userId);
@@ -169,6 +171,17 @@ export const externalAuth = {
     if (user) {
       localStorage.setItem('auth_user', JSON.stringify(user));
     }
+  },
+
+  clearSupabaseStorage() {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('sb-')) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
   },
 
   getStoredToken(): string | null {
@@ -195,6 +208,7 @@ export const externalAuth = {
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user_id');
     localStorage.removeItem('auth_user');
+    this.clearSupabaseStorage();
   },
 
   async refreshAccessToken(refreshToken: string): Promise<string | null> {

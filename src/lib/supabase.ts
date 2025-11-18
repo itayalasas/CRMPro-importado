@@ -19,7 +19,14 @@ function getSupabaseCredentials() {
 function getBaseClient(): SupabaseClient {
   if (!baseClient) {
     const { supabaseUrl, supabaseAnonKey } = getSupabaseCredentials();
-    baseClient = createClient(supabaseUrl, supabaseAnonKey);
+    baseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+        storageKey: 'external-auth'
+      }
+    });
   }
   return baseClient;
 }
@@ -27,7 +34,14 @@ function getBaseClient(): SupabaseClient {
 function getAuthenticatedClient(): SupabaseClient {
   if (!authenticatedClient) {
     const { supabaseUrl, supabaseAnonKey } = getSupabaseCredentials();
-    authenticatedClient = createClient(supabaseUrl, supabaseAnonKey);
+    authenticatedClient = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+        storageKey: 'external-auth-authenticated'
+      }
+    });
   }
 
   const token = externalAuth.getStoredToken();

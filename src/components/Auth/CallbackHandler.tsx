@@ -71,9 +71,9 @@ export function CallbackHandler() {
 
       setStatus('Autenticación exitosa, redirigiendo...');
 
-      setTimeout(() => {
-        navigate('/', { replace: true });
-      }, 500);
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      window.location.href = '/';
 
     } catch (err) {
       setError('Error procesando la autenticación');
