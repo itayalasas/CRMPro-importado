@@ -3,9 +3,10 @@ import { supabase } from '../../lib/supabase';
 import {
   Package, TrendingUp, Clock, CheckCircle, XCircle, AlertCircle,
   DollarSign, Calendar, Building2, Search, Eye, X, ShoppingCart,
-  FileText, Truck, MapPin, CreditCard
+  FileText, Truck, MapPin, CreditCard, LifeBuoy, Send
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface Client {
   id: string;
@@ -80,10 +81,18 @@ interface Order {
 export function OrdersModule() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showTicketModal, setShowTicketModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [selectedOrderItems, setSelectedOrderItems] = useState<OrderItem[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [ticketCategories, setTicketCategories] = useState<any[]>([]);
+  const [ticketFormData, setTicketFormData] = useState({
+    subject: '',
+    description: '',
+    priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
+    category_id: ''
+  });
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
@@ -102,6 +111,7 @@ export function OrdersModule() {
   const [loading, setLoading] = useState(false);
 
   const toast = useToast();
+  const { user } = useAuth();
 
   const convertCurrencyCode = (code: string | undefined): string => {
     if (!code) return 'UYU';
@@ -120,6 +130,7 @@ export function OrdersModule() {
 
   useEffect(() => {
     loadOrders();
+    loadTicketCategories();
 
     const ordersChannel = supabase
       .channel('orders-realtime')
@@ -229,6 +240,71 @@ export function OrdersModule() {
         : 0,
       thisMonth: ordersData.filter(o => new Date(o.created_at) >= firstDayThisMonth).length
     });
+  };
+
+  const loadTicketCategories = async () => {
+    const { data } = await supabase
+      .from('ticket_categories')
+      .select('*')
+      .order('name');
+
+    if (data) {
+      setTicketCategories(data);
+    }
+  };
+
+  const handleCreateTicket = (order: Order) => {
+    setSelectedOrder(order);
+    setTicketFormData({
+      subject: `Soporte para Orden ${order.order_number}`,
+      description: `Cliente: ${order.clients?.company_name || order.clients?.contact_name}\nOrden: ${order.order_number}\nMonto: $${order.total_amount}\n\nDescripción del problema:\n`,
+      priority: 'medium',
+      category_id: ''
+    });
+    setShowTicketModal(true);
+  };
+
+  const handleSubmitTicket = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!selectedOrder || !user) {
+      toast.error('Error al crear el ticket');
+      return;
+    }
+
+    try {
+      const ticketNumber = `TKT-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+
+      const { data: newTicket, error } = await supabase
+        .from('tickets')
+        .insert({
+          ticket_number: ticketNumber,
+          client_id: selectedOrder.client_id,
+          order_id: selectedOrder.id,
+          subject: ticketFormData.subject,
+          description: ticketFormData.description,
+          priority: ticketFormData.priority,
+          category_id: ticketFormData.category_id || null,
+          status: 'open',
+          created_by: user.id
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast.success(`Ticket ${ticketNumber} creado exitosamente`);
+      setShowTicketModal(false);
+      setTicketFormData({
+        subject: '',
+        description: '',
+        priority: 'medium',
+        category_id: ''
+      });
+    } catch (error: any) {
+      console.error('Error creating ticket:', error);
+      toast.error('Error al crear el ticket');
+    }
   };
 
   const handleViewOrder = async (order: Order) => {
@@ -442,13 +518,22 @@ export function OrdersModule() {
                       </span>
                     </td>
                     <td className="py-4 px-4">
-                      <button
-                        onClick={() => handleViewOrder(order)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                        title="Ver Detalle"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleViewOrder(order)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                          title="Ver Detalle"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleCreateTicket(order)}
+                          className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                          title="Crear Ticket de Soporte"
+                        >
+                          <LifeBuoy className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -732,8 +817,149 @@ export function OrdersModule() {
                 >
                   Cerrar
                 </button>
+                <button
+                  onClick={() => {
+                    if (selectedOrder) {
+                      handleCreateTicket(selectedOrder);
+                      setShowViewModal(false);
+                    }
+                  }}
+                  className="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition font-medium flex items-center gap-2"
+                >
+                  <LifeBuoy className="w-5 h-5" />
+                  Crear Ticket de Soporte
+                </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showTicketModal && selectedOrder && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-6 rounded-t-2xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold">Crear Ticket de Soporte</h2>
+                  <p className="text-emerald-100 mt-1">Orden: {selectedOrder.order_number}</p>
+                </div>
+                <button
+                  onClick={() => setShowTicketModal(false)}
+                  className="p-2 hover:bg-white/20 rounded-lg transition"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmitTicket} className="p-6 space-y-6">
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                <div className="flex items-center gap-3 mb-3">
+                  <Building2 className="w-5 h-5 text-slate-600" />
+                  <div>
+                    <p className="font-semibold text-slate-900">
+                      {selectedOrder.clients?.company_name || selectedOrder.clients?.contact_name}
+                    </p>
+                    <p className="text-sm text-slate-600">{selectedOrder.clients?.email}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-slate-600">Orden:</span>
+                    <span className="font-semibold text-slate-900 ml-2">{selectedOrder.order_number}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-600">Monto:</span>
+                    <span className="font-semibold text-slate-900 ml-2">
+                      ${selectedOrder.total_amount.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Asunto *
+                </label>
+                <input
+                  type="text"
+                  value={ticketFormData.subject}
+                  onChange={(e) => setTicketFormData({ ...ticketFormData, subject: e.target.value })}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  placeholder="Resumen del problema"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Descripción *
+                </label>
+                <textarea
+                  value={ticketFormData.description}
+                  onChange={(e) => setTicketFormData({ ...ticketFormData, description: e.target.value })}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  rows={6}
+                  placeholder="Describe el problema detalladamente..."
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Prioridad *
+                  </label>
+                  <select
+                    value={ticketFormData.priority}
+                    onChange={(e) => setTicketFormData({ ...ticketFormData, priority: e.target.value as any })}
+                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    required
+                  >
+                    <option value="low">Baja</option>
+                    <option value="medium">Media</option>
+                    <option value="high">Alta</option>
+                    <option value="urgent">Urgente</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Categoría
+                  </label>
+                  <select
+                    value={ticketFormData.category_id}
+                    onChange={(e) => setTicketFormData({ ...ticketFormData, category_id: e.target.value })}
+                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  >
+                    <option value="">Sin categoría</option>
+                    {ticketCategories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowTicketModal(false)}
+                  className="flex-1 px-6 py-3 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition font-medium flex items-center justify-center gap-2"
+                >
+                  <Send className="w-5 h-5" />
+                  Crear Ticket
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
