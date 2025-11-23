@@ -14,12 +14,10 @@ import { DashboardModule } from './components/Dashboard/DashboardModule';
 import { ClientsModule } from './components/Clients/ClientsModule';
 import { CampaignsModule } from './components/Campaigns/CampaignsModule';
 import { OrdersModule } from './components/Orders/OrdersModule';
-import { InvoicesModule } from './components/Invoices/InvoicesModule';
 import { CallsModule } from './components/Calls/CallsModule';
 import { TicketsModule } from './components/Tickets/TicketsModule';
 import { InboxModule } from './components/Inbox/InboxModule';
 import { SettingsModule } from './components/Settings/SettingsModule';
-import { AccountingModule } from './components/Accounting/AccountingModule';
 import ParametersModule from './components/Settings/ParametersModule';
 import { ExternalValidationModule } from './components/Settings/ExternalValidationModule';
 import { useTwilioDevice } from './hooks/useTwilioDevice';
@@ -74,8 +72,6 @@ function MainApp() {
         return <CampaignsModule />;
       case 'orders':
         return <OrdersModule />;
-      case 'invoices':
-        return <InvoicesModule />;
       case 'calls':
         return <CallsModule />;
       case 'tickets':
@@ -84,8 +80,6 @@ function MainApp() {
         return <InboxModule />;
       case 'settings':
         return <SettingsModule />;
-      case 'accounting':
-        return <AccountingModule />;
       case 'parameters':
         return <ParametersModule />;
       case 'validation':

@@ -29,8 +29,6 @@ const menuItems = [
   { id: 'clients', label: 'Clientes', icon: Users, moduleKey: 'clientes' as ModuleKey },
   { id: 'campaigns', label: 'Campañas', icon: Mail, moduleKey: 'campanas' as ModuleKey },
   { id: 'orders', label: 'Órdenes', icon: ShoppingCart, moduleKey: 'ordenes' as ModuleKey },
-  { id: 'invoices', label: 'Facturas', icon: FileText, moduleKey: 'facturas' as ModuleKey },
-  { id: 'accounting', label: 'Contabilidad', icon: DollarSign, moduleKey: 'contabilidad' as ModuleKey },
   { id: 'calls', label: 'Llamadas', icon: Phone, moduleKey: 'llamadas' as ModuleKey },
   { id: 'tickets', label: 'Tickets', icon: Ticket, moduleKey: 'tickets' as ModuleKey },
   { id: 'inbox', label: 'Buzón', icon: Inbox, moduleKey: 'buzon' as ModuleKey },
