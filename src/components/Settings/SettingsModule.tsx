@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { getEnvVar } from '../../lib/envLoader';
 import {
-  Settings, Mail, Server, Globe, Shield, Save, CheckCircle, AlertCircle, Phone, TestTube, Inbox, Eye, EyeOff, Building2
+  Settings, Mail, Server, Globe, Shield, Save, CheckCircle, AlertCircle, Phone, TestTube, Inbox, Eye, EyeOff, Building2, MessageCircle
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -11,7 +12,7 @@ import { BranchesModule } from './BranchesModule';
 export function SettingsModule() {
   const toast = useToast();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'smtp' | 'email' | 'general' | 'twilio' | 'inbox' | 'branches'>('smtp');
+  const [activeTab, setActiveTab] = useState<'smtp' | 'email' | 'general' | 'twilio' | 'inbox' | 'branches' | 'webchat'>('smtp');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
 
   const [smtpConfig, setSmtpConfig] = useState({
@@ -77,6 +78,24 @@ export function SettingsModule() {
     is_active: true
   });
 
+  const appUrl = getEnvVar('VITE_APP_URL') || window.location.origin;
+  const [webchatSettings, setWebchatSettings] = useState({
+    domain: 'dogcatify.com',
+    title: 'Dogcatify Chat',
+    theme: '#2563eb',
+    endpoint: 'https://api.flowbridge.site/functions/v1/api-gateway/dcd7ec42-e7fb-46fa-93d3-ccdf3e053795',
+    get_endpoint: 'https://api.flowbridge.site/functions/v1/api-gateway/3d05a848-9614-40f8-9502-83222d0aff43',
+    widget_script_url: `${appUrl}/webchat-widget-v2.js`,
+    api_key: '',
+    integration_header: 'X-Integration-Key',
+    integration_key: 'pub_5bc238047db11edae7d4ecb2805f0057a2505c706e625c9a243b6e95bf33cd67',
+    get_integration_header: 'X-Integration-Key',
+    get_integration_key: '',
+    max_message_length: 2000,
+    max_attachments: 5,
+    max_attachment_mb: 10
+  });
+
   const [showPasswords, setShowPasswords] = useState({
     imap: false,
     smtp: false
@@ -88,6 +107,10 @@ export function SettingsModule() {
     name: string;
     symbol: string;
   }>>([]);
+
+  const webchatSnippet = `<div id="crm-webchat"></div>\n<script>\n  window.CRM_WEBCHAT_CONFIG = {\n    endpoint: '${webchatSettings.endpoint}',\n    getEndpoint: '${webchatSettings.get_endpoint}',\n    domain: '${webchatSettings.domain}',\n    title: '${webchatSettings.title}',\n    logoUrl: '/logo-dogcatify.jpg',\n    primaryColor: '#0D9488',\n    secondaryColor: '#14B8A6',\n    agentColor: '#2563EB',\n    backgroundColor: '#F3F4F6',\n    statusText: 'En línea',\n    welcomeMessage: '¡Hola! Soy Dotty, tu asistente virtual de DogCatify. ¿En qué puedo ayudarte hoy?',\n    quickReplies: ['¿Qué servicios ofrecen?','¿Cómo reservar?','Horarios de atención','Contacto'],\n    integrationHeader: '${webchatSettings.integration_header}',\n    integrationKey: '${webchatSettings.integration_key}',\n    getIntegrationHeader: '${webchatSettings.get_integration_header}',\n    getIntegrationKey: '${webchatSettings.get_integration_key}',\n    apiKey: '${webchatSettings.api_key}'\n  };\n</script>\n<script src="${webchatSettings.widget_script_url}"></script>`;
+
+  const webchatApiExample = `POST ${webchatSettings.endpoint}\nHeaders:\n  Content-Type: application/json\n  ${webchatSettings.integration_header || 'X-Integration-Key'}: ${webchatSettings.integration_key || '<INTEGRATION_KEY>'}\n\n{\n  "session_id": "sess_123",\n  "message": "Hola, necesito ayuda",\n  "visitor": {\n    "name": "Carlos",\n    "email": "carlos@dominio.com",\n    "phone": "+18001234567"\n  },\n  "page_url": "https://dogcatify.com/precios",\n  "source_domain": "dogcatify.com",\n  "attachments": [\n    {\n      "filename": "pixel.png",\n      "type": "image/png",\n      "content": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y6p7dEAAAAASUVORK5CYII="\n    }\n  ]\n}`;
 
   useEffect(() => {
     loadSettings();
@@ -129,6 +152,35 @@ export function SettingsModule() {
           setEmailSettings(setting.setting_value as any);
         } else if (setting.setting_key === 'general_settings') {
           setGeneralSettings(setting.setting_value as any);
+        } else if (setting.setting_key === 'webchat_settings') {
+          setWebchatSettings((prev) => {
+            const next = {
+              ...prev,
+              ...(setting.setting_value as any)
+            };
+            if (!next.endpoint) {
+              next.endpoint = 'https://api.flowbridge.site/functions/v1/api-gateway/dcd7ec42-e7fb-46fa-93d3-ccdf3e053795';
+            }
+            if (!next.get_endpoint) {
+              next.get_endpoint = 'https://api.flowbridge.site/functions/v1/api-gateway/3d05a848-9614-40f8-9502-83222d0aff43';
+            }
+            if (!next.integration_header) {
+              next.integration_header = 'X-Integration-Key';
+            }
+            if (!next.integration_key) {
+              next.integration_key = 'pub_5bc238047db11edae7d4ecb2805f0057a2505c706e625c9a243b6e95bf33cd67';
+            }
+            if (!next.get_integration_header) {
+              next.get_integration_header = 'X-Integration-Key';
+            }
+            if (!next.get_integration_key) {
+              next.get_integration_key = next.integration_key || '';
+            }
+            if (!next.widget_script_url) {
+              next.widget_script_url = `${appUrl}/webchat-widget-v2.js`;
+            }
+            return next;
+          });
         }
       });
     }
@@ -224,6 +276,10 @@ export function SettingsModule() {
 
   const handleSaveGeneral = () => {
     saveSettings('general_settings', generalSettings);
+  };
+
+  const handleSaveWebchat = () => {
+    saveSettings('webchat_settings', webchatSettings);
   };
 
   const handleTestTwilio = async () => {
@@ -434,6 +490,17 @@ export function SettingsModule() {
         >
           <Inbox className="w-5 h-5" />
           <span>Buzón Personal</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('webchat')}
+          className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition ${
+            activeTab === 'webchat'
+              ? 'bg-gradient-to-r from-teal-600 to-teal-500 text-white shadow-lg'
+              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+          }`}
+        >
+          <MessageCircle className="w-5 h-5" />
+          <span>Chat Web</span>
         </button>
         <button
           onClick={() => setActiveTab('twilio')}
@@ -1072,6 +1139,222 @@ export function SettingsModule() {
                 onClick={handleSaveInbox}
                 disabled={saveStatus === 'saving'}
                 className="flex items-center space-x-2 bg-gradient-to-r from-orange-600 to-orange-500 text-white px-6 py-3 rounded-lg hover:from-orange-700 hover:to-orange-600 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Save className="w-5 h-5" />
+                <span>Guardar Configuración</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'webchat' && (
+        <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8">
+          <div className="flex items-center space-x-3 mb-6">
+            <div className="bg-teal-100 p-3 rounded-lg">
+              <MessageCircle className="w-6 h-6 text-teal-600" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">Configuración de Chat Web</h2>
+              <p className="text-slate-600">Comparte el widget o consume la API desde dogcatify.com</p>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Dominio permitido</label>
+                <input
+                  type="text"
+                  value={webchatSettings.domain}
+                  onChange={(e) => setWebchatSettings({ ...webchatSettings, domain: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  placeholder="dogcatify.com"
+                />
+                <p className="text-xs text-slate-500 mt-1">Debe coincidir con el dominio enviado en `source_domain`.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Título del widget</label>
+                <input
+                  type="text"
+                  value={webchatSettings.title}
+                  onChange={(e) => setWebchatSettings({ ...webchatSettings, title: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Color del widget</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={webchatSettings.theme}
+                    onChange={(e) => setWebchatSettings({ ...webchatSettings, theme: e.target.value })}
+                    className="h-10 w-14 border border-slate-300 rounded-lg"
+                  />
+                  <input
+                    type="text"
+                    value={webchatSettings.theme}
+                    onChange={(e) => setWebchatSettings({ ...webchatSettings, theme: e.target.value })}
+                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Endpoint API (POST)</label>
+                <input
+                  type="text"
+                  value={webchatSettings.endpoint}
+                  onChange={(e) => setWebchatSettings({ ...webchatSettings, endpoint: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Endpoint API (GET)</label>
+                <input
+                  type="text"
+                  value={webchatSettings.get_endpoint}
+                  onChange={(e) => setWebchatSettings({ ...webchatSettings, get_endpoint: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                />
+                <p className="text-xs text-slate-500 mt-1">Se usa para obtener mensajes con el param `session_id`.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Header de integración</label>
+                <input
+                  type="text"
+                  value={webchatSettings.integration_header}
+                  onChange={(e) => setWebchatSettings({ ...webchatSettings, integration_header: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  placeholder="X-Integration-Key"
+                />
+                <p className="text-xs text-slate-500 mt-1">Header que exige el API Gateway.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Integration Key (Gateway)</label>
+                <input
+                  type="text"
+                  value={webchatSettings.integration_key}
+                  onChange={(e) => setWebchatSettings({ ...webchatSettings, integration_key: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  placeholder="pub_..."
+                />
+                <p className="text-xs text-slate-500 mt-1">Se envía en el header configurado arriba.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Header de integración (GET)</label>
+                <input
+                  type="text"
+                  value={webchatSettings.get_integration_header}
+                  onChange={(e) => setWebchatSettings({ ...webchatSettings, get_integration_header: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  placeholder="X-Integration-Key"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Integration Key (GET)</label>
+                <input
+                  type="text"
+                  value={webchatSettings.get_integration_key}
+                  onChange={(e) => setWebchatSettings({ ...webchatSettings, get_integration_key: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  placeholder="pub_..."
+                />
+                <p className="text-xs text-slate-500 mt-1">Se envía en el header del endpoint GET.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Script del widget</label>
+                <input
+                  type="text"
+                  value={webchatSettings.widget_script_url}
+                  readOnly
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-slate-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">API Key (Supabase directo)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={webchatSettings.api_key}
+                    onChange={(e) => setWebchatSettings({ ...webchatSettings, api_key: e.target.value })}
+                    placeholder="Genera una API Key"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const key = `wc_${crypto.randomUUID()}`;
+                      setWebchatSettings({ ...webchatSettings, api_key: key });
+                    }}
+                    className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg hover:bg-slate-200 transition text-sm"
+                  >
+                    Generar
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">Úsala solo si consumes el endpoint directo de Supabase.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Límites activos</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <input
+                    type="number"
+                    value={webchatSettings.max_message_length}
+                    readOnly
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-100"
+                  />
+                  <input
+                    type="number"
+                    value={webchatSettings.max_attachments}
+                    readOnly
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-100"
+                  />
+                  <input
+                    type="number"
+                    value={webchatSettings.max_attachment_mb}
+                    readOnly
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-100"
+                  />
+                </div>
+                <p className="text-xs text-slate-500 mt-1">Estos límites se aplican en el endpoint y el widget.</p>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-slate-700 mb-2">Snippet del Widget</p>
+              <pre className="bg-slate-900 text-slate-100 rounded-xl p-4 text-xs overflow-auto">
+                {webchatSnippet}
+              </pre>
+              <p className="text-xs text-slate-500 mt-2">
+                Copia este código en dogcatify.com para habilitar el chat flotante.
+              </p>
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-slate-700 mb-2">Cómo consumir la API</p>
+              <pre className="bg-slate-900 text-slate-100 rounded-xl p-4 text-xs overflow-auto">
+                {webchatApiExample}
+              </pre>
+              <p className="text-xs text-slate-500 mt-2">
+                Para consultar una conversación: GET {webchatSettings.endpoint}?session_id=&lt;id&gt; (con header `x-api-key`). El campo `content` debe ser base64 válido (con o sin prefijo data:).
+              </p>
+            </div>
+
+            <div className="pt-4 flex justify-end">
+              <button
+                onClick={handleSaveWebchat}
+                disabled={saveStatus === 'saving'}
+                className="flex items-center space-x-2 bg-gradient-to-r from-teal-600 to-teal-500 text-white px-6 py-3 rounded-lg hover:from-teal-700 hover:to-teal-600 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Save className="w-5 h-5" />
                 <span>Guardar Configuración</span>

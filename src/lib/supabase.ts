@@ -60,7 +60,7 @@ export const supabase = new Proxy({} as SupabaseClient, {
     const client = getBaseClient();
     const token = externalAuth.getStoredToken();
 
-    if (token && (prop === 'from' || prop === 'rpc')) {
+    if (token && (prop === 'from' || prop === 'rpc' || prop === 'channel' || prop === 'removeChannel' || prop === 'getChannels')) {
       return getAuthenticatedClient()[prop as keyof SupabaseClient];
     }
 

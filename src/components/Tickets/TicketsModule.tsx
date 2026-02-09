@@ -66,7 +66,8 @@ export function TicketsModule() {
   const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
+  const [notifyPayload, setNotifyPayload] = useState<any>(null);
   const [clients, setClients] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<any[]>([]);
@@ -83,6 +84,7 @@ export function TicketsModule() {
   const [activeTab, setActiveTab] = useState<'comments' | 'activity'>('comments');
   const { user } = useAuth();
   const { showToast } = useToast();
+  const [webchatDraft, setWebchatDraft] = useState<{ conversationId: string | null } | null>(null);
 
   const [formData, setFormData] = useState({
     ticket_number: '',
@@ -106,6 +108,29 @@ export function TicketsModule() {
       loadCategories();
     };
     initializeModule();
+  }, []);
+
+  useEffect(() => {
+    const draftRaw = localStorage.getItem('webchat_ticket_draft');
+    if (!draftRaw) return;
+    try {
+      const draft = JSON.parse(draftRaw);
+      setFormData((prev) => ({
+        ...prev,
+        client_id: draft.client_id || '',
+        subject: draft.subject || '',
+        description: draft.description || '',
+        priority: draft.priority || 'medium',
+        category_id: draft.category_id || '',
+        assigned_to: draft.assigned_to || ''
+      }));
+      setWebchatDraft({ conversationId: draft.conversation_id || null });
+      setShowModal(true);
+    } catch {
+      // ignore invalid draft
+    } finally {
+      localStorage.removeItem('webchat_ticket_draft');
+    }
   }, []);
 
   useEffect(() => {
@@ -199,13 +224,13 @@ export function TicketsModule() {
     if (data) setComments(data);
   };
 
-  const loadActivities = async (ticketId: string) => {
+  const loadHistory = async (ticketId: string) => {
     const { data } = await supabase
-      .from('ticket_activity')
+      .from('ticket_history')
       .select('*')
       .eq('ticket_id', ticketId)
-      .order('created_at', { ascending: false });
-    if (data) setActivities(data);
+      .order('created_at', { ascending: true });
+    if (data) setHistory(data);
   };
 
   const filterTickets = () => {
@@ -273,6 +298,22 @@ export function TicketsModule() {
     if (error) {
       showToast('Error al crear ticket', 'error');
       return;
+    }
+
+    if (webchatDraft?.conversationId) {
+      await supabase.from('webchat_messages').insert({
+        conversation_id: webchatDraft.conversationId,
+        sender_type: 'agent',
+        sender_id: user?.id || null,
+        sender_name: user?.name || user?.email || null,
+        message: `Ticket creado: ${ticketData.ticket_number}`,
+        attachments: []
+      });
+      await supabase
+        .from('webchat_conversations')
+        .update({ result: 'Derivado a ticket', updated_at: new Date().toISOString() })
+        .eq('id', webchatDraft.conversationId);
+      setWebchatDraft(null);
     }
 
     showToast('Ticket creado exitosamente', 'success');
@@ -366,9 +407,25 @@ export function TicketsModule() {
   const handleTicketClick = (ticket: Ticket) => {
     setSelectedTicket(ticket);
     loadComments(ticket.id);
-    loadActivities(ticket.id);
+    loadHistory(ticket.id);
     setShowDetailModal(true);
   };
+  // Notificación en tiempo real de cambios/comentarios
+  useEffect(() => {
+    if (!selectedTicket) return;
+    // Import dinámico para evitar error SSR
+    import('../../hooks/useTicketNotification').then(({ useTicketNotification }) => {
+      useTicketNotification(selectedTicket.id, (payload) => {
+        setNotifyPayload(payload);
+        if (payload.type === 'comment') {
+          loadComments(selectedTicket.id);
+        } else if (payload.type === 'status') {
+          loadHistory(selectedTicket.id);
+        }
+      });
+    });
+    // eslint-disable-next-line
+  }, [selectedTicket]);
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -885,96 +942,112 @@ export function TicketsModule() {
                     </div>
                   )}
                 </div>
-                <div className="relative user-dropdown-container">
-                  <label className="block text-xs font-semibold text-slate-700 mb-2">
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4" />
-                      Asignar a Usuario
+                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Panel historial de estado */}
+                  <div className="bg-white rounded-xl shadow border border-slate-200 p-4">
+                    <h4 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                      <Activity className="w-5 h-5 text-blue-600" />
+                      Historial de Estado
+                    </h4>
+                    <div className="space-y-3 max-h-64 overflow-y-auto">
+                      {history.length === 0 ? (
+                        <p className="text-center text-slate-500 py-8">No hay historial aún</p>
+                      ) : (
+                        history.map((h) => (
+                          <div key={h.id} className="flex gap-3 pb-3 border-b border-slate-100 last:border-0">
+                            <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                              <Activity className="w-4 h-4 text-blue-600" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm text-slate-900">
+                                <span className="font-semibold">{h.old_status} → {h.new_status}</span>
+                                {h.change_reason && (
+                                  <span className="text-slate-600"> - {h.change_reason}</span>
+                                )}
+                              </p>
+                              <span className="text-xs text-slate-500 mt-1 block">
+                                {new Date(h.created_at).toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
-                  </label>
-                  <div className="relative user-dropdown-container">
-                    <input
-                      type="text"
-                      value={userSearchTerm || users.find(u => u.id === selectedTicket.assigned_to)?.name || ''}
-                      onChange={(e) => {
-                        handleUserSearch(e.target.value);
-                      }}
-                      onFocus={() => {
-                        if (!userSearchTerm) {
-                          setFilteredUsers(users);
-                        }
-                        setShowUserDropdown(true);
-                      }}
-                      placeholder="Buscar usuario..."
-                      className="w-full px-3 py-2 pr-8 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                    />
-                    <User className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    {showUserDropdown && (
-                      <div className="absolute z-50 w-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                        <div
-                          onClick={() => {
-                            handleAssignUser(selectedTicket.id, '');
-                            setUserSearchTerm('');
-                            setShowUserDropdown(false);
-                            setFilteredUsers(users);
-                          }}
-                          className="px-3 py-2 hover:bg-slate-50 cursor-pointer border-b border-slate-100"
-                        >
-                          <span className="text-sm text-slate-500 italic">Sin asignar</span>
-                        </div>
-                        {filteredUsers.map((u) => (
-                          <div
-                            key={u.id}
-                            onClick={() => {
-                              handleAssignUser(selectedTicket.id, u.id);
-                              setUserSearchTerm(u.name);
-                              setShowUserDropdown(false);
-                            }}
-                            className="px-3 py-2 hover:bg-blue-50 cursor-pointer"
-                          >
-                            <div className="text-sm font-medium text-slate-900">{u.name}</div>
-                            <div className="text-xs text-slate-500">{u.email}</div>
+                  </div>
+                  {/* Panel comentarios */}
+                  <div className="bg-white rounded-xl shadow border border-slate-200 p-4">
+                    <h4 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                      <MessageSquare className="w-5 h-5 text-blue-600" />
+                      Comentarios
+                    </h4>
+                    <div className="space-y-4 mb-6 max-h-64 overflow-y-auto">
+                      {comments.length === 0 ? (
+                        <p className="text-center text-slate-500 py-8">No hay comentarios aún</p>
+                      ) : (
+                        comments.map((comment) => (
+                          <div key={comment.id} className={`rounded-xl p-4 ${comment.is_internal ? 'bg-amber-50 border border-amber-200' : 'bg-slate-50'}`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-semibold text-slate-900">
+                                    {comment.user_name || 'Usuario Desconocido'}
+                                  </span>
+                                  <span className="text-xs text-slate-500">
+                                    {comment.user_email || 'Sin email'}
+                                  </span>
+                                </div>
+                                {comment.is_internal && (
+                                  <span className="text-xs px-2 py-0.5 bg-amber-200 text-amber-800 rounded-full">
+                                    Interno
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-xs text-slate-500">
+                                {new Date(comment.created_at).toLocaleString()}
+                              </span>
+                            </div>
+                            <p className="text-sm text-slate-700 whitespace-pre-wrap">{comment.comment}</p>
                           </div>
-                        ))}
-                        {filteredUsers.length === 0 && (
-                          <div className="px-3 py-4 text-center text-sm text-slate-500">
-                            No se encontraron usuarios
-                          </div>
-                        )}
+                        ))
+                      )}
+                    </div>
+                    <div className="border-t border-slate-200 pt-6">
+                      <div className="mb-3">
+                        <label className="flex items-center gap-2 text-sm text-slate-600">
+                          <input
+                            type="checkbox"
+                            checked={isInternalComment}
+                            onChange={(e) => setIsInternalComment(e.target.checked)}
+                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          Comentario interno (no visible para el cliente)
+                        </label>
                       </div>
-                    )}
+                      <div className="flex gap-3">
+                        <textarea
+                          value={newComment}
+                          onChange={(e) => setNewComment(e.target.value)}
+                          placeholder="Escribe un comentario..."
+                          rows={3}
+                          className="flex-1 px-4 py-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter' && e.ctrlKey) {
+                              handleAddComment();
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={handleAddComment}
+                          className="px-6 h-fit bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition flex items-center gap-2 font-medium shadow-lg"
+                        >
+                          <Send className="w-4 h-4" />
+                          Enviar
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-2">Tip: Presiona Ctrl+Enter para enviar</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-
-              <div className="p-6 border-b border-slate-200">
-                <h3 className="text-sm font-semibold text-slate-700 mb-2">Descripción</h3>
-                <p className="text-slate-600 whitespace-pre-wrap">{selectedTicket.description}</p>
-                {selectedTicket.tags && selectedTicket.tags.length > 0 && (
-                  <div className="flex items-center gap-2 mt-4 flex-wrap">
-                    <Tag className="w-4 h-4 text-slate-400" />
-                    {selectedTicket.tags.map((tag, idx) => (
-                      <span key={idx} className="text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded-full">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="p-6 border-b border-slate-200">
-                <h3 className="text-sm font-semibold text-slate-700 mb-3">Acciones Rápidas</h3>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => handleUpdateStatus(selectedTicket.id, 'in_progress')}
-                    className="px-4 py-2 bg-blue-100 text-blue-700 text-sm rounded-lg hover:bg-blue-200 transition font-medium"
-                  >
-                    En Progreso
-                  </button>
-                  <button
-                    onClick={() => handleUpdateStatus(selectedTicket.id, 'waiting')}
-                    className="px-4 py-2 bg-yellow-100 text-yellow-700 text-sm rounded-lg hover:bg-yellow-200 transition font-medium"
-                  >
                     En Espera
                   </button>
                   <button

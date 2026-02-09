@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebChat Widget Test</title>
+  </head>
+  <body style="margin:0; min-height:100vh; background:#F3F4F6; font-family:Inter, system-ui, sans-serif;">
+    <div style="padding:32px;">
+      <h1 style="margin:0 0 8px;">Prueba Widget DogCatify</h1>
+      <p style="margin:0; color:#475569;">Abre el widget flotante abajo a la derecha.</p>
+    </div>
+
+    <div id="crm-webchat"></div>
+    <script>
+      window.CRM_WEBCHAT_CONFIG = {
+        endpoint: 'https://api.flowbridge.site/functions/v1/api-gateway/dcd7ec42-e7fb-46fa-93d3-ccdf3e053795',
+        getEndpoint: 'https://api.flowbridge.site/functions/v1/api-gateway/3d05a848-9614-40f8-9502-83222d0aff43',
+        domain: 'dogcatify.com',
+        title: 'Dotty',
+        logoUrl: '/logo-dogcatify.jpg',
+        primaryColor: '#0D9488',
+        secondaryColor: '#14B8A6',
+        agentColor: '#2563EB',
+        backgroundColor: '#F3F4F6',
+        statusText: 'En línea',
+        welcomeMessage: '¡Hola! Soy Dotty, tu asistente virtual de DogCatify. ¿En qué puedo ayudarte hoy?',
+        quickReplies: ['¿Qué servicios ofrecen?','¿Cómo reservar?','Horarios de atención','Contacto'],
+        integrationHeader: 'X-Integration-Key',
+        integrationKey: 'pub_5bc238047db11edae7d4ecb2805f0057a2505c706e625c9a243b6e95bf33cd67',
+        getIntegrationHeader: 'X-Integration-Key',
+        getIntegrationKey: 'pub_912f4d330d38c6fe585e8fb42890c47a109d08693f2ed13256d5a1ebacd1c56f'
+      };
+    </script>
+    <script src="/webchat-widget-v2.js"></script>
+  </body>
+</html>

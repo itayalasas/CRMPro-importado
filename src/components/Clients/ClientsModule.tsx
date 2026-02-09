@@ -131,6 +131,29 @@ export function ClientsModule() {
   }, []);
 
   useEffect(() => {
+    const draftRaw = localStorage.getItem('webchat_client_draft');
+    if (!draftRaw) return;
+    try {
+      const draft = JSON.parse(draftRaw);
+      setEditingClient(null);
+      setFormData((prev) => ({
+        ...prev,
+        contact_name: draft.contact_name || '',
+        email: draft.email || '',
+        phone: draft.phone || '',
+        company_name: draft.company_name || '',
+        status: draft.status || 'prospect'
+      }));
+      setErrors({});
+      setShowModal(true);
+    } catch {
+      // ignore invalid draft
+    } finally {
+      localStorage.removeItem('webchat_client_draft');
+    }
+  }, []);
+
+  useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
 

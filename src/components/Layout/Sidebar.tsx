@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   LayoutDashboard,
   Users,
@@ -8,6 +8,7 @@ import {
   Phone,
   Ticket,
   Inbox,
+  MessageCircle,
   Settings,
   LogOut,
   DollarSign,
@@ -17,7 +18,9 @@ import {
   Shield
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 import { usePermissions, ModuleKey } from '../../hooks/usePermissions';
+import { supabase } from '../../lib/supabase';
 
 interface SidebarProps {
   activeModule: string;
@@ -32,6 +35,7 @@ const menuItems = [
   { id: 'calls', label: 'Llamadas', icon: Phone, moduleKey: 'llamadas' as ModuleKey },
   { id: 'tickets', label: 'Tickets', icon: Ticket, moduleKey: 'tickets' as ModuleKey },
   { id: 'inbox', label: 'Buzón', icon: Inbox, moduleKey: 'buzon' as ModuleKey },
+  { id: 'webchat', label: 'Chat Web', icon: MessageCircle, moduleKey: 'chat_web' as ModuleKey },
   { id: 'validation', label: 'Validación Ext.', icon: Shield, moduleKey: 'validacion_ext' as ModuleKey },
   { id: 'parameters', label: 'Parámetros', icon: Settings, moduleKey: 'parametros' as ModuleKey },
   { id: 'settings', label: 'Configuración', icon: Settings, moduleKey: 'configuracion' as ModuleKey },
@@ -39,8 +43,12 @@ const menuItems = [
 
 export function Sidebar({ activeModule, onModuleChange }: SidebarProps) {
   const { signOut, user } = useAuth();
+  const toast = useToast();
   const { hasModuleAccess } = usePermissions();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [webchatUnread, setWebchatUnread] = useState(0);
+  const lastNotifyRef = useRef<Record<string, number>>({});
+  const lastViewedStorageKey = 'crm_webchat_last_viewed';
 
   const accessibleMenuItems = menuItems.filter(item => hasModuleAccess(item.moduleKey));
 
@@ -48,6 +56,64 @@ export function Sidebar({ activeModule, onModuleChange }: SidebarProps) {
     onModuleChange(module);
     setIsMobileMenuOpen(false);
   };
+
+  const loadWebchatUnread = async () => {
+    const { data, error } = await supabase
+      .from('webchat_conversations')
+      .select('id, visitor_name, last_message_at')
+      .order('last_message_at', { ascending: false });
+
+    if (error) {
+      return;
+    }
+
+    let lastViewedMap: Record<string, string> = {};
+    try {
+      const raw = localStorage.getItem(lastViewedStorageKey);
+      lastViewedMap = raw ? JSON.parse(raw) : {};
+    } catch {
+      lastViewedMap = {};
+    }
+
+    const unread = (data || []).filter((conv) => {
+      if (!conv.last_message_at) return false;
+      const lastViewed = lastViewedMap[conv.id];
+      if (!lastViewed) return true;
+      return new Date(conv.last_message_at).getTime() > new Date(lastViewed).getTime();
+    });
+
+    setWebchatUnread(unread.length);
+  };
+
+  useEffect(() => {
+    loadWebchatUnread();
+    const channel = supabase
+      .channel('webchat-sidebar-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'webchat_messages' },
+        (payload) => {
+          const newMessage = payload.new as { conversation_id: string; sender_type?: string; sender_name?: string } | null;
+          if (!newMessage) return;
+
+          if (newMessage.sender_type === 'visitor') {
+            const lastNotified = lastNotifyRef.current[newMessage.conversation_id] || 0;
+            const now = Date.now();
+            if (now - lastNotified > 5000) {
+              toast.info('Nuevo mensaje en Chat Web');
+              lastNotifyRef.current[newMessage.conversation_id] = now;
+            }
+          }
+
+          loadWebchatUnread();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [toast]);
 
   return (
     <>
@@ -94,21 +160,29 @@ export function Sidebar({ activeModule, onModuleChange }: SidebarProps) {
         {accessibleMenuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeModule === item.id;
+          const showWebchatBadge = item.id === 'webchat' && webchatUnread > 0;
 
           return (
             <button
               key={item.id}
               onClick={() => handleModuleChange(item.id)}
-              className={`w-full flex items-center space-x-3 px-4 py-3.5 rounded-xl transition-all group ${
+              className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all group ${
                 isActive
                   ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg scale-[1.02]'
                   : 'text-slate-300 hover:bg-slate-700/70 hover:text-white active:scale-95'
               }`}
             >
-              <Icon className={`w-5 h-5 transition-transform ${
-                isActive ? '' : 'group-hover:scale-110'
-              }`} />
-              <span className="font-medium text-sm">{item.label}</span>
+              <div className="flex items-center space-x-3">
+                <Icon className={`w-5 h-5 transition-transform ${
+                  isActive ? '' : 'group-hover:scale-110'
+                }`} />
+                <span className="font-medium text-sm">{item.label}</span>
+              </div>
+              {showWebchatBadge && (
+                <span className="bg-indigo-500 text-white text-xs px-2 py-0.5 rounded-full">
+                  {webchatUnread}
+                </span>
+              )}
             </button>
           );
         })}

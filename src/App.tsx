@@ -20,6 +20,7 @@ import { InboxModule } from './components/Inbox/InboxModule';
 import { SettingsModule } from './components/Settings/SettingsModule';
 import ParametersModule from './components/Settings/ParametersModule';
 import { ExternalValidationModule } from './components/Settings/ExternalValidationModule';
+import { WebChatModule } from './components/WebChat/WebChatModule';
 import { useTwilioDevice } from './hooks/useTwilioDevice';
 import { useInvoiceAutoValidation } from './hooks/useInvoiceAutoValidation';
 import { useInvoiceEmailQueue } from './hooks/useInvoiceEmailQueue';
@@ -78,6 +79,8 @@ function MainApp() {
         return <TicketsModule />;
       case 'inbox':
         return <InboxModule />;
+      case 'webchat':
+        return <WebChatModule />;
       case 'settings':
         return <SettingsModule />;
       case 'parameters':

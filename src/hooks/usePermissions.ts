@@ -12,6 +12,7 @@ export type ModuleKey =
   | 'llamadas'
   | 'tickets'
   | 'buzon'
+  | 'chat_web'
   | 'validacion_ext'
   | 'parametros'
   | 'configuracion';
