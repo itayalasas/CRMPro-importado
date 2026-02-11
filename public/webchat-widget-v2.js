@@ -47,13 +47,14 @@
   const endpoint = config.endpoint;
   const getEndpoint = config.getEndpoint || config.get_endpoint || endpoint;
   const domain = config.domain || window.location.hostname;
-  const title = config.title || 'Dotty';
+  const botName = config.botName || config.bot_name || 'Dotty';
+  const title = config.title || botName;
   const themePrimary = config.primaryColor || '#0D9488';
   const themeSecondary = config.secondaryColor || '#14B8A6';
   const logoUrl = config.logoUrl || '';
   const statusText = config.statusText || 'En línea';
   const welcomeMessage = config.welcomeMessage || '¡Hola! Soy Dotty, tu asistente virtual de DogCatify. ¿En qué puedo ayudarte hoy?';
-  const quickReplies = config.quickReplies || [
+  let quickReplies = config.quickReplies || [
     '¿Qué servicios ofrecen?','¿Cómo reservar?','Horarios de atención','Contacto'
   ];
   const apiKey = config.apiKey || '';
@@ -70,9 +71,123 @@
   const sessionKey = 'crm_webchat_session_id';
   const visitorKey = 'crm_webchat_visitor';
   const agentRequestKey = 'crm_webchat_agent_requested';
+  const startedKey = 'crm_webchat_conversation_started';
+  const welcomeSentKey = 'crm_webchat_welcome_sent';
   const queuedKey = 'crm_webchat_queued_messages';
   const pollIntervalMs = 2000;
   const maxMessageLength = 2000;
+
+  const getCfg = (key) => {
+    // Allow pages to set CRM_WEBCHAT_CONFIG after the widget script loads.
+    const liveConfig = (window && window.CRM_WEBCHAT_CONFIG) ? window.CRM_WEBCHAT_CONFIG : config;
+    if (liveConfig && Object.prototype.hasOwnProperty.call(liveConfig, key)) return liveConfig[key];
+    if (liveConfig?.variables && Object.prototype.hasOwnProperty.call(liveConfig.variables, key)) return liveConfig.variables[key];
+    if (liveConfig?.env && Object.prototype.hasOwnProperty.call(liveConfig.env, key)) return liveConfig.env[key];
+    return undefined;
+  };
+
+  const getBotApiUrl = () =>
+    getCfg('VITE_WIDGET_URL') ||
+    getCfg('vite_widget_url') ||
+    getCfg('widgetUrl') ||
+    getCfg('widget_url') ||
+    getCfg('botApiUrl') ||
+    getCfg('bot_api_url') ||
+    getCfg('dogcatifyBotApiUrl') ||
+    getCfg('dogcatify_bot_api_url') ||
+    null;
+
+  const getBotProxyUrl = () =>
+    getCfg('botProxyUrl') ||
+    getCfg('bot_proxy_url') ||
+    getCfg('VITE_WIDGET_BOT_PROXY_URL') ||
+    getCfg('vite_widget_bot_proxy_url') ||
+    getCfg('VITE_WIDGET_PROXY_URL') ||
+    getCfg('vite_widget_proxy_url') ||
+    null;
+
+  const getBotIntegrationKey = () =>
+    getCfg('VITE_WIDGET_APIKEY') ||
+    getCfg('vite_widget_apikey') ||
+    getCfg('widgetApiKey') ||
+    getCfg('widget_api_key') ||
+    getCfg('botIntegrationKey') ||
+    getCfg('bot_integration_key') ||
+    getCfg('dogcatifyIntegrationKey') ||
+    getCfg('dogcatify_integration_key') ||
+    null;
+  const botIntegrationHeader = 'X-Integration-Key';
+
+  const fetchBotReply = async (messageText) => {
+    const botProxyUrl = getBotProxyUrl();
+    const botApiUrl = getBotApiUrl();
+    const botIntegrationKey = getBotIntegrationKey();
+    const proxyAuthKey = (typeof getIntegrationKey === 'function')
+      ? getIntegrationKey()
+      : (typeof getIntegrationKey === 'string' && getIntegrationKey.trim().length > 0)
+        ? getIntegrationKey
+        : integrationKey;
+    const finalBotUrl = botProxyUrl || botApiUrl;
+    if (!finalBotUrl) {
+      console.warn('[WebChat] Missing VITE_WIDGET_URL in CRM_WEBCHAT_CONFIG (expected at CRM_WEBCHAT_CONFIG.VITE_WIDGET_URL or CRM_WEBCHAT_CONFIG.variables.VITE_WIDGET_URL), and no botProxyUrl provided.');
+      return {
+        reply: 'No pude conectar con el asistente automático. ¿Quieres que te contacte un agente?',
+        handoff: false,
+        quickReplies,
+      };
+    }
+
+    if (!botProxyUrl && !botIntegrationKey) {
+      console.warn('[WebChat] Missing VITE_WIDGET_APIKEY in CRM_WEBCHAT_CONFIG (expected at CRM_WEBCHAT_CONFIG.VITE_WIDGET_APIKEY or CRM_WEBCHAT_CONFIG.variables.VITE_WIDGET_APIKEY).');
+    }
+
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 12000) : null;
+    try {
+      console.info('[WebChat] Bot request', {
+        url: finalBotUrl,
+        mode: botProxyUrl ? 'proxy' : 'direct',
+        hasIntegrationKey: botProxyUrl ? !!proxyAuthKey : !!botIntegrationKey,
+      });
+
+      const response = await fetch(finalBotUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(botProxyUrl
+            ? (proxyAuthKey ? { [botIntegrationHeader]: proxyAuthKey } : {})
+            : (botIntegrationKey ? { [botIntegrationHeader]: botIntegrationKey } : {})),
+        },
+        body: JSON.stringify({ message: messageText }),
+        ...(controller ? { signal: controller.signal } : {}),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        throw new Error(errorText || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      return {
+        reply: typeof data?.reply === 'string' ? data.reply : '',
+        handoff: !!data?.handoff,
+        quickReplies: Array.isArray(data?.quickReplies) ? data.quickReplies : quickReplies,
+      };
+    } catch (e) {
+      const maybeMessage = (e && typeof e === 'object' && 'message' in e) ? String(e.message) : String(e);
+      const hint = /failed to fetch|networkerror/i.test(maybeMessage)
+        ? 'Suele ser CORS, mixed-content (https->http), DNS o bloqueo de red.'
+        : undefined;
+      console.warn('[WebChat] Error fetching bot reply', { url: finalBotUrl, hint, error: e });
+      return {
+        reply: 'No pude obtener una respuesta automática. ¿Quieres que te contacte un agente?',
+        handoff: false,
+        quickReplies,
+      };
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  };
 
   const getSessionId = () => {
     let sessionId = localStorage.getItem(sessionKey);
@@ -100,7 +215,9 @@
     try {
       const raw = localStorage.getItem(queuedKey);
       const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
+      if (!Array.isArray(parsed)) return [];
+      // Never persist/render the synthetic welcome message as a queued message.
+      return parsed.filter((msg) => msg && msg.id !== 'welcome');
     } catch {
       return [];
     }
@@ -118,13 +235,52 @@
   let currentConversation = null;
   let agentRequested = localStorage.getItem(agentRequestKey) === '1';
   let agentConnected = false;
+  let conversationStarted = localStorage.getItem(startedKey) === '1';
   let errorCount = 0;
   let isPollingPaused = false;
   let pendingMessages = [];
   let showWelcomeOnOpen = false;
   let typingActive = false;
   let localSystemMessages = [];
+  let localClientMessages = [];
   let queuedMessages = loadQueuedMessages();
+
+  let lastClientCreatedAtMs = 0;
+  const nextCreatedAtIso = (preferredIso) => {
+    const preferredMs = (() => {
+      if (!preferredIso) return null;
+      const date = new Date(preferredIso);
+      const ms = date.getTime();
+      return Number.isNaN(ms) ? null : ms;
+    })();
+    const nowMs = Date.now();
+    const baseMs = preferredMs != null ? preferredMs : nowMs;
+    const nextMs = Math.max(baseMs, lastClientCreatedAtMs + 1);
+    lastClientCreatedAtMs = nextMs;
+    return new Date(nextMs).toISOString();
+  };
+
+  let outboundChain = Promise.resolve();
+  const sentOnce = new Set();
+  const sendMessageOrdered = (payload) => {
+    const withCreatedAt = {
+      ...payload,
+      created_at: nextCreatedAtIso(payload?.created_at),
+    };
+
+    const dedupeKey = `${withCreatedAt.sender_type || ''}|${withCreatedAt.created_at || ''}|${withCreatedAt.message || ''}|${withCreatedAt.message_type || ''}`;
+    if (sentOnce.has(dedupeKey)) return Promise.resolve({ skipped: true });
+    sentOnce.add(dedupeKey);
+
+    const sendPromise = outboundChain.then(() => sendMessage(withCreatedAt));
+    outboundChain = sendPromise.catch(() => {});
+    return sendPromise;
+  };
+
+  const markConversationStarted = () => {
+    localStorage.setItem(startedKey, '1');
+    conversationStarted = true;
+  };
 
   const ensureFont = () => {
     if (document.getElementById('crm-webchat-font')) return;
@@ -141,7 +297,10 @@
     style.id = 'crm-webchat-styles';
     style.textContent = `
       #dotty-widget { position: fixed; right: 24px; bottom: 24px; z-index: 9999; font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-      .dotty-fab { width: 56px; height: 56px; border-radius: 999px; background: linear-gradient(90deg, ${themePrimary}, ${themeSecondary}); color: #fff; border: 0; cursor: pointer; box-shadow: 0 10px 25px rgba(0,0,0,.2); position: relative; transition: transform .2s, box-shadow .2s; }
+      #dotty-widget, #dotty-widget * { box-sizing: border-box; }
+      #dotty-widget button { font: inherit; letter-spacing: normal; text-transform: none; }
+
+      .dotty-fab { width: 56px; height: 56px; border-radius: 999px; background: linear-gradient(90deg, ${themePrimary}, ${themeSecondary}); color: #fff; border: 0; cursor: pointer; box-shadow: 0 10px 25px rgba(0,0,0,.2); position: relative; transition: transform .2s, box-shadow .2s; display: inline-flex; align-items: center; justify-content: center; padding: 0; line-height: 0; }
       .dotty-fab:hover { transform: scale(1.08); box-shadow: 0 12px 30px rgba(0,0,0,.25); }
       .dotty-badge { position: absolute; top: -4px; right: -4px; width: 16px; height: 16px; background: #EF4444; border: 2px solid #fff; border-radius: 999px; animation: pulse 1.5s infinite; }
       @keyframes pulse { 0%{transform:scale(.9);} 70%{transform:scale(1);} 100%{transform:scale(.9);} }
@@ -170,9 +329,11 @@
       .dotty-input { flex: 1; border: 1px solid #D1D5DB; border-radius: 999px; padding: 8px 12px; outline: none; }
       .dotty-input:focus { border-color: ${themeSecondary}; box-shadow: 0 0 0 2px rgba(20,184,166,.2); }
       .dotty-input:disabled { background: #F8FAFC; color: #94A3B8; }
-      .dotty-send { width: 36px; height: 36px; border-radius: 999px; border: 0; cursor: pointer; background: ${themePrimary}; color: #fff; }
+      .dotty-send { width: 36px; height: 36px; border-radius: 999px; border: 0; cursor: pointer; background: ${themePrimary}; color: #fff; display: inline-flex; align-items: center; justify-content: center; padding: 0; line-height: 0; }
       .dotty-send:disabled { opacity: .5; cursor: not-allowed; }
-      .dotty-icon-btn { width: 36px; height: 36px; border-radius: 999px; border: 0; background: rgba(255,255,255,.15); color: #fff; cursor: pointer; }
+      .dotty-icon-btn { width: 36px; height: 36px; border-radius: 999px; border: 0; background: rgba(255,255,255,.15); color: #fff; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+      .dotty-fab svg, .dotty-send svg, .dotty-icon-btn svg { display: block; }
+      #dotty-close { font-size: 18px; line-height: 1; }
       .dotty-agent-btn { width: 44px; height: 44px; background: #F1F5F9; color: ${themePrimary}; border: 1px solid #E2E8F0; box-shadow: 0 8px 16px rgba(15, 118, 110, 0.18); display: inline-flex; align-items: center; justify-content: center; }
       .dotty-agent-btn svg { width: 22px; height: 22px; display: block; }
       .dotty-agent-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 18px rgba(15, 118, 110, 0.22); }
@@ -328,6 +489,10 @@
     return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
   };
 
+  function normalizeText(value) {
+    return String(value || '').trim().toLowerCase();
+  }
+
   const renderQuickReplies = () => {
     quickList.innerHTML = '';
     if (!quickReplies || quickReplies.length === 0 || agentRequested) {
@@ -364,7 +529,7 @@
         setLogoContent(currentConversation.assigned_user_name);
       }
     } else {
-      headerTitle.textContent = title;
+      headerTitle.textContent = botName;
       if (logoUrl) {
         setLogoContent({ type: 'image', src: logoUrl, alt: title });
       } else {
@@ -393,7 +558,8 @@
       input.disabled = false;
       sendButton.disabled = false;
       input.placeholder = 'Escribe tu mensaje...';
-      waitingBanner.style.display = 'block';
+      // Keep a single notice inside the message list; avoid duplicating via a banner.
+      waitingBanner.style.display = 'none';
       quickWrap.style.display = 'none';
       agentButton.style.display = 'none';
     } else {
@@ -410,13 +576,78 @@
   const resetSession = () => {
     localStorage.removeItem(sessionKey);
     localStorage.removeItem(agentRequestKey);
+    localStorage.removeItem(startedKey);
+    localStorage.removeItem(welcomeSentKey);
+    localStorage.removeItem(queuedKey);
     sessionId = getSessionId();
     agentRequested = false;
     agentConnected = false;
+    conversationStarted = false;
     currentConversation = null;
     cachedMessages = [];
     pendingMessages = [];
+    localClientMessages = [];
+    queuedMessages = [];
     updateAgentUI();
+  };
+
+  const ensurePolling = () => {
+    if (!isOpen) return;
+    // Before an agent is requested, keep the widget fully local.
+    if (!agentRequested && !agentConnected) return;
+    if (pollTimer) return;
+    pollTimer = setInterval(fetchMessages, pollIntervalMs);
+  };
+
+  const addLocalClientMessage = (messageText, createdAt) => {
+    localClientMessages.push({
+      id: `local-client-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      sender_type: 'visitor',
+      sender_name: visitor?.name || null,
+      message: messageText,
+      created_at: createdAt || new Date().toISOString(),
+    });
+  };
+
+  const reconcileLocalClientMessages = (serverMessages) => {
+    if (!Array.isArray(serverMessages) || serverMessages.length === 0 || localClientMessages.length === 0) return;
+    const toTime = (value) => {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+    };
+    localClientMessages = localClientMessages.filter((localMsg) => {
+      const localTime = toTime(localMsg.created_at);
+      const found = serverMessages.some((msg) =>
+        msg.sender_type === 'visitor' &&
+        msg.message === localMsg.message &&
+        Math.abs(toTime(msg.created_at) - localTime) < 60000
+      );
+      return !found;
+    });
+  };
+
+  const reconcileLocalBotMessages = (serverMessages) => {
+    if (!Array.isArray(serverMessages) || serverMessages.length === 0 || localSystemMessages.length === 0) return;
+
+    const botNameNormalized = normalizeText(botName);
+    const toTime = (value) => {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+    };
+
+    localSystemMessages = localSystemMessages.filter((localMsg) => {
+      if (!localMsg || !localMsg.message) return true;
+      if (normalizeText(localMsg.sender_name) !== botNameNormalized) return true;
+
+      const localTime = toTime(localMsg.created_at);
+      const found = serverMessages.some((msg) =>
+        normalizeText(msg?.message) === normalizeText(localMsg.message) &&
+        normalizeText(msg?.sender_name) === botNameNormalized &&
+        Math.abs(toTime(msg?.created_at) - localTime) < 60000
+      );
+
+      return !found;
+    });
   };
 
   const mergeMessages = (serverMessages) => {
@@ -445,7 +676,7 @@
   const queueMessageToServer = async (queued) => {
     if (!queued || !queued.message) return;
     try {
-      await sendMessage({
+      await sendMessageOrdered({
         session_id: sessionId,
         message: queued.message,
         sender_type: queued.sender_type,
@@ -465,11 +696,20 @@
   };
 
   const upsertWelcomeMessage = () => {
-    const now = new Date().toISOString();
+    const now = nextCreatedAtIso();
+    // Clean up any queued welcome left by older widget versions.
+    if (queuedMessages.length) {
+      const cleaned = queuedMessages.filter((msg) => msg && msg.id !== 'welcome');
+      if (cleaned.length !== queuedMessages.length) {
+        queuedMessages = cleaned;
+        saveQueuedMessages(queuedMessages);
+      }
+    }
     const existingIndex = localSystemMessages.findIndex((msg) => msg.id === 'welcome');
     const welcome = {
       id: 'welcome',
       sender_type: 'bot',
+      sender_name: botName,
       message: welcomeMessage,
       created_at: now,
     };
@@ -478,8 +718,12 @@
     } else {
       localSystemMessages.push(welcome);
     }
-    if (!agentRequested && !agentConnected) {
-      upsertQueuedMessage('welcome', 'bot', welcomeMessage, now, title);
+
+    const alreadySent = localStorage.getItem(welcomeSentKey) === '1';
+    if (!alreadySent) {
+      markConversationStarted();
+      localStorage.setItem(welcomeSentKey, '1');
+      // Intentionally do NOT send to CRM until the user requests an agent.
     }
   };
 
@@ -541,7 +785,10 @@
     if (serverQueued.length === 0) {
       return;
     }
-    queuedMessages = serverQueued.map((msg) => ({
+    queuedMessages = serverQueued
+      // Ignore synthetic welcome if a previous version queued it.
+      .filter((msg) => msg && msg.id !== 'welcome')
+      .map((msg) => ({
       id: msg.id || `queued-${msg.created_at}-${Math.random().toString(36).slice(2)}`,
       sender_type: msg.sender_type,
       sender_name: msg.sender_name || null,
@@ -577,21 +824,63 @@
     if (showWelcomeOnOpen) {
       showWelcomeOnOpen = false;
     }
-    if (agentRequested && !agentConnected) {
-      systemMessages.push({
-        id: 'system-waiting',
-        sender_type: 'system',
-        message: 'He solicitado un agente para ti. Un miembro de nuestro equipo te atenderá en breve. Por favor, mantente en línea.',
-        created_at: new Date().toISOString(),
-      });
-    }
 
-    const baseList = [...messages, ...queuedMessages, ...localSystemMessages, ...systemMessages];
+    const baseList = [...messages, ...queuedMessages, ...localClientMessages, ...localSystemMessages, ...systemMessages];
     cachedMessages = mergeMessages(baseList);
+
+    // Deduplicate consecutive identical messages (commonly caused by race/echo).
+    const toTime = (value) => {
+      const date = new Date(value || 0);
+      return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+    };
+    const deduped = [];
+    for (const msg of cachedMessages) {
+      const prev = deduped[deduped.length - 1];
+      if (
+        prev &&
+        prev.sender_type === msg.sender_type &&
+        normalizeText(prev.message) === normalizeText(msg.message) &&
+        Math.abs(toTime(prev.created_at) - toTime(msg.created_at)) < 2000
+      ) {
+        continue;
+      }
+      deduped.push(msg);
+    }
+    cachedMessages = deduped;
+
+    const botNameNormalized = normalizeText(botName);
+    const visitorNameNormalized = normalizeText(visitor?.name);
 
     cachedMessages.forEach((msg) => {
       const wrapper = document.createElement('div');
-      const type = msg.sender_type === 'visitor' ? 'user' : (msg.sender_type === 'system' ? 'system' : 'bot');
+      const senderNameNormalized = normalizeText(msg?.sender_name);
+
+      const isBotByName = !!(senderNameNormalized && senderNameNormalized === botNameNormalized);
+      const isVisitorByName = !!(
+        senderNameNormalized &&
+        visitorNameNormalized &&
+        senderNameNormalized === visitorNameNormalized
+      );
+
+      // Primary rule: system messages are centered.
+      // Fallback rule: if sender_type comes back wrong from the backend,
+      // classify by sender_name (Dotty vs the visitor) to keep sides stable.
+      let type = 'bot';
+      if (msg.sender_type === 'system') {
+        type = 'system';
+      } else if (isBotByName) {
+        type = 'bot';
+      } else if (msg.sender_type === 'visitor') {
+        if (visitorNameNormalized) {
+          type = isVisitorByName ? 'user' : 'bot';
+        } else {
+          // No visitor identity: keep visitor-type messages on the user side.
+          type = 'user';
+        }
+      } else {
+        type = 'bot';
+      }
+
       wrapper.className = `dotty-msg ${type}`;
 
       const bubble = document.createElement('div');
@@ -700,40 +989,49 @@
         if (agentConnected) {
           localStorage.removeItem(agentRequestKey);
           agentRequested = false;
-          localSystemMessages = localSystemMessages.filter((msg) => msg.id !== 'conversation-closed');
+          localSystemMessages = localSystemMessages.filter(
+            (msg) => msg.id !== 'conversation-closed' && msg.id !== 'system-waiting' && msg.id !== 'auto-agent'
+          );
         } else if (isClosedConversation) {
           localStorage.removeItem(agentRequestKey);
           agentRequested = false;
-          localSystemMessages = localSystemMessages.filter((msg) => msg.id !== 'welcome');
+          localSystemMessages = localSystemMessages.filter(
+            (msg) => msg.id !== 'welcome' && msg.id !== 'system-waiting' && msg.id !== 'auto-agent'
+          );
           upsertConversationClosedMessage(currentConversation.closed_at);
         }
       } else {
         currentConversation = null;
         agentConnected = false;
       }
-      if (!agentConnected && !isClosedConversation && Array.isArray(result?.messages)) {
-        agentConnected = result.messages.some((msg) => msg.sender_type === 'agent');
-      }
       updateAgentUI();
       if (Array.isArray(result.messages)) {
+        const normalizedAgentRequestText = normalizeText('Solicitud de agente');
+        const filteredServerMessages = result.messages.filter((msg) => {
+          if (normalizeText(msg?.message_type) === 'request_agent') return false;
+          const messageText = normalizeText(msg?.message);
+          if (messageText === normalizedAgentRequestText) return false;
+          return true;
+        });
+
+        reconcileLocalClientMessages(filteredServerMessages);
+        reconcileLocalBotMessages(filteredServerMessages);
         if (Array.isArray(result.queued_messages) && result.queued_messages.length > 0) {
           mergeQueuedFromServer(result.queued_messages);
         }
-        reconcileQueuedMessages(result.messages);
+        reconcileQueuedMessages(filteredServerMessages);
         const isClosedConversation = currentConversation?.status === 'closed';
-        if (!isClosedConversation && !agentConnected && result.messages.length === 0) {
+        if (!isClosedConversation && !agentConnected && filteredServerMessages.length === 0) {
           upsertWelcomeMessage();
         } else {
           localSystemMessages = localSystemMessages.filter((msg) => msg.id !== 'welcome');
         }
-        renderMessages(result.messages);
+        renderMessages(filteredServerMessages);
       }
     } catch (e) {
       console.warn('[WebChat] Error fetching messages', e);
     }
   };
-
-  const normalizeText = (value) => value.trim().toLowerCase();
 
   const setTyping = (value) => {
     typingActive = value;
@@ -770,6 +1068,8 @@
   const queueOrSendBotMessage = async (messageText, createdAt) => {
     if (agentRequested || agentConnected) {
       try {
+        localStorage.setItem(startedKey, '1');
+        conversationStarted = true;
         await sendMessage({
           session_id: sessionId,
           message: messageText,
@@ -788,32 +1088,78 @@
       }
       return;
     }
-    upsertQueuedMessage(`bot-${Date.now()}`, 'bot', messageText, createdAt || new Date().toISOString(), title);
+    // If there's no agent requested/connected, keep bot responses local only.
   };
 
-  const requestAgent = async () => {
+  const requestAgent = async (afterCreatedAt) => {
     if (agentRequested || agentConnected) return;
+
+    // Use a fresh session when escalating to an agent to avoid attaching to an
+    // old server-side conversation (since we keep the pre-agent chat local).
+    sessionId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : `sess_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    localStorage.setItem(sessionKey, sessionId);
+
     agentRequested = true;
     localStorage.setItem(agentRequestKey, '1');
+    markConversationStarted();
     updateAgentUI();
 
-    localSystemMessages = localSystemMessages.filter((msg) => msg.id !== 'auto-agent');
+    // Single in-chat system notice (stable id + timestamp).
+    // If triggered by a user message, make sure this comes AFTER it.
+    const afterTime = (() => {
+      if (!afterCreatedAt) return null;
+      const date = new Date(afterCreatedAt);
+      const ms = date.getTime();
+      return Number.isNaN(ms) ? null : ms;
+    })();
+    const waitingCreatedAt = nextCreatedAtIso(afterTime ? new Date(afterTime + 1).toISOString() : null);
+
+    localSystemMessages = localSystemMessages.filter((msg) => msg.id !== 'auto-agent' && msg.id !== 'system-waiting');
     localSystemMessages.push({
-      id: 'auto-agent',
+      id: 'system-waiting',
       sender_type: 'system',
       message: 'Estamos contactando a un agente disponible. Gracias por tu paciencia.',
-      created_at: new Date().toISOString(),
+      created_at: waitingCreatedAt,
     });
 
     renderMessages(cachedMessages);
 
     try {
-      await sendMessage({
+      // First, send the local transcript to the queue (still no conversation created).
+      const transcript = [...localClientMessages, ...localSystemMessages]
+        .filter((msg) => msg && msg.message)
+        .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
+
+      for (const msg of transcript) {
+        const safeSenderType = msg?.sender_type === 'bot'
+          ? 'bot'
+          : (msg?.sender_type === 'system' ? 'system' : 'visitor');
+        const safeSenderName = safeSenderType === 'bot'
+          ? (msg?.sender_name || botName || null)
+          : (safeSenderType === 'visitor' ? (msg?.sender_name || visitor?.name || null) : null);
+
+        await sendMessageOrdered({
+          session_id: sessionId,
+          message: msg.message,
+          sender_type: safeSenderType,
+          sender_name: safeSenderName,
+          created_at: msg.created_at,
+          queue_only: true,
+          visitor,
+          page_url: window.location.href,
+          source_domain: domain,
+          source_channel: 'widget',
+          source_detail: 'webchat-widget-v2',
+          attachments: [],
+        });
+      }
+
+      await sendMessageOrdered({
         session_id: sessionId,
         message: 'Solicitud de agente',
         sender_type: 'visitor',
         sender_name: visitor?.name || null,
-        created_at: new Date().toISOString(),
+        created_at: nextCreatedAtIso(afterTime ? new Date(afterTime + 2).toISOString() : null),
         message_type: 'request_agent',
         visitor,
         page_url: window.location.href,
@@ -823,10 +1169,14 @@
         attachments: [],
       });
       fetchMessages();
+      ensurePolling();
     } catch (e) {
       console.warn('[WebChat] Error sending agent request', e);
+      agentRequested = false;
+      localStorage.removeItem(agentRequestKey);
       errorBanner.textContent = 'No se pudo solicitar un agente. Intenta nuevamente.';
       errorBanner.style.display = 'block';
+      updateAgentUI();
     }
   };
 
@@ -854,13 +1204,6 @@
     }
   };
 
-  const quickReplyResponses = config.quickReplyResponses || {
-    '¿Qué servicios ofrecen?': 'Ofrecemos servicios especializados para el cuidado de mascotas. ¿Quieres que un agente te comparta el detalle? ',
-    '¿Cómo reservar?': 'Puedes reservar indicándonos tu nombre, mascota y horario preferido. ¿Te ponemos en contacto con un agente?',
-    'Horarios de atención': 'Atendemos de lunes a sábado. ¿Deseas el horario exacto para tu ciudad?',
-    'Contacto': 'Déjanos tu teléfono o correo y te contactamos a la brevedad.'
-  };
-
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (input.disabled) return;
@@ -875,77 +1218,80 @@
     if (!input.value.trim()) return;
 
     const messageText = input.value.trim();
-    const localCreatedAt = new Date().toISOString();
+    const localCreatedAt = nextCreatedAtIso();
 
-    let optimisticId = null;
+    // Pre-agent path: keep local, call DogCatify Q&A API for reply.
     if (!agentRequested && !agentConnected) {
-      enqueueMessage('visitor', messageText, visitor?.name || null);
+      markConversationStarted();
+      addLocalClientMessage(messageText, localCreatedAt);
       renderMessages(cachedMessages);
       input.value = '';
-    } else {
-      optimisticId = `local-${Date.now()}`;
-      const optimistic = {
-        id: optimisticId,
-        sender_type: 'visitor',
-        message: messageText,
-        created_at: localCreatedAt,
-        pending: true,
-      };
+      errorBanner.style.display = 'none';
 
-      pendingMessages.push(optimistic);
-      renderMessages(cachedMessages);
-      input.value = '';
+      setTyping(true);
+      const botResult = await fetchBotReply(messageText);
+      setTyping(false);
+
+      if (Array.isArray(botResult?.quickReplies) && botResult.quickReplies.length > 0) {
+        quickReplies = botResult.quickReplies;
+        renderQuickReplies();
+      }
+
+      const replyText = String(botResult?.reply || '').trim();
+      if (replyText) {
+        const replyCreatedAt = nextCreatedAtIso();
+        localSystemMessages.push({
+          id: `bot-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          sender_type: 'bot',
+          sender_name: botName,
+          message: replyText,
+          created_at: replyCreatedAt,
+        });
+        renderMessages(cachedMessages);
+
+        if (botResult?.handoff) {
+          await requestAgent(replyCreatedAt);
+        }
+      } else if (botResult?.handoff) {
+        await requestAgent(localCreatedAt);
+      }
+
+      return;
     }
 
-    try {
-      if (agentRequested || agentConnected) {
-        await sendMessage({
-          session_id: sessionId,
-          message: messageText,
-          sender_type: 'visitor',
-          sender_name: visitor?.name || null,
-          created_at: localCreatedAt,
-          visitor,
-          page_url: window.location.href,
-          source_domain: domain,
-          source_channel: 'widget',
-          source_detail: 'webchat-widget-v2',
-          attachments: [],
-        });
-        errorBanner.style.display = 'none';
-      }
+    markConversationStarted();
+    const optimisticId = `local-${Date.now()}`;
+    pendingMessages.push({
+      id: optimisticId,
+      sender_type: 'visitor',
+      message: messageText,
+      created_at: localCreatedAt,
+      pending: true,
+    });
+    renderMessages(cachedMessages);
+    input.value = '';
 
-      const matchedQuickReply = quickReplies.find((reply) => normalizeText(reply) === normalizeText(messageText));
-      if (matchedQuickReply) {
-        const responseText = quickReplyResponses[matchedQuickReply];
-        if (responseText) {
-          setTyping(true);
-          setTimeout(() => {
-            setTyping(false);
-            const createdAt = new Date().toISOString();
-            localSystemMessages.push({
-              id: `quick-${Date.now()}`,
-              sender_type: 'bot',
-              message: responseText,
-              created_at: createdAt,
-            });
-            queueOrSendBotMessage(responseText, createdAt);
-            renderMessages(cachedMessages);
-          }, 900);
-        }
-      } else if (!agentRequested && !agentConnected) {
-        setTyping(true);
-        setTimeout(() => {
-          setTyping(false);
-          requestAgent();
-        }, 900);
-      }
-      setTimeout(fetchMessages, 400);
+    try {
+      await sendMessageOrdered({
+        session_id: sessionId,
+        message: messageText,
+        sender_type: 'visitor',
+        sender_name: visitor?.name || null,
+        created_at: localCreatedAt,
+        visitor,
+        page_url: window.location.href,
+        source_domain: domain,
+        source_channel: 'widget',
+        source_detail: 'webchat-widget-v2',
+        attachments: [],
+      });
+      errorBanner.style.display = 'none';
+
+      setTimeout(fetchMessages, 250);
+      ensurePolling();
     } catch (e) {
       console.warn('[WebChat] Error sending message', e);
-      if (optimisticId) {
-        pendingMessages = pendingMessages.filter((msg) => msg.id !== optimisticId);
-      }
+      pendingMessages = pendingMessages.filter((msg) => msg.id !== optimisticId);
       renderMessages(cachedMessages);
       errorBanner.textContent = 'No se pudo enviar el mensaje. Intenta nuevamente.';
       errorBanner.style.display = 'block';
@@ -989,8 +1335,14 @@
       showWelcomeOnOpen = true;
       renderMessages(cachedMessages);
       renderQuickReplies();
-      fetchMessages();
-      pollTimer = setInterval(fetchMessages, pollIntervalMs);
+      if (!conversationStarted && !agentRequested && !agentConnected && cachedMessages.length === 0) {
+        upsertWelcomeMessage();
+        renderMessages(cachedMessages);
+      }
+      if (agentRequested || agentConnected) {
+        fetchMessages();
+        ensurePolling();
+      }
       badge.style.background = '#EF4444'; // reset badge color
     } else {
       if (pollTimer) {

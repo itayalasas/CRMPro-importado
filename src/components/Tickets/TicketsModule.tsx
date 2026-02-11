@@ -66,6 +66,7 @@ export function TicketsModule() {
   const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [history, setHistory] = useState<any[]>([]);
   const [notifyPayload, setNotifyPayload] = useState<any>(null);
   const [clients, setClients] = useState<any[]>([]);
@@ -82,6 +83,8 @@ export function TicketsModule() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'comments' | 'activity'>('comments');
+  const [assigneeSearchTerm, setAssigneeSearchTerm] = useState('');
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
   const { user } = useAuth();
   const { showToast } = useToast();
   const [webchatDraft, setWebchatDraft] = useState<{ conversationId: string | null } | null>(null);
@@ -150,6 +153,20 @@ export function TicketsModule() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showUserDropdown]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showAssigneeDropdown) {
+        const target = event.target as HTMLElement;
+        if (!target.closest('.assignee-dropdown-container')) {
+          setShowAssigneeDropdown(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showAssigneeDropdown]);
 
   const generateTicketNumber = () => {
     const timestamp = Date.now().toString().slice(-6);
@@ -231,6 +248,20 @@ export function TicketsModule() {
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: true });
     if (data) setHistory(data);
+  };
+
+  const loadActivities = async (ticketId: string) => {
+    const { data, error } = await supabase
+      .from('ticket_activity')
+      .select('*')
+      .eq('ticket_id', ticketId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      return;
+    }
+
+    setActivities((data as Activity[]) || []);
   };
 
   const filterTickets = () => {
@@ -382,6 +413,7 @@ export function TicketsModule() {
     showToast('Usuario asignado correctamente', 'success');
     loadTickets();
     if (selectedTicket?.id === ticketId) {
+      setSelectedTicket((prev) => (prev ? { ...prev, assigned_to: userId || null } : prev));
       loadActivities(ticketId);
     }
   };
@@ -406,10 +438,19 @@ export function TicketsModule() {
 
   const handleTicketClick = (ticket: Ticket) => {
     setSelectedTicket(ticket);
+    setAssigneeSearchTerm('');
+    setShowAssigneeDropdown(false);
     loadComments(ticket.id);
     loadHistory(ticket.id);
+    loadActivities(ticket.id);
     setShowDetailModal(true);
   };
+
+  useEffect(() => {
+    if (!showDetailModal || !selectedTicket) return;
+    const assignedUser = users.find((u) => u.id === selectedTicket.assigned_to);
+    setAssigneeSearchTerm(assignedUser?.name || '');
+  }, [showDetailModal, selectedTicket, users]);
   // Notificación en tiempo real de cambios/comentarios
   useEffect(() => {
     if (!selectedTicket) return;
@@ -562,7 +603,8 @@ export function TicketsModule() {
           {filteredTickets.length === 0 ? (
             <div className="p-12 text-center">
               <MessageSquare className="w-16 h-16 mx-auto mb-4 text-slate-300" />
-              <p className="text-lg text-slate-500">No se encontraron tickets</p>
+              <h3 className="text-lg font-semibold text-slate-800 mb-1">No se encontraron tickets</h3>
+              <p className="text-sm text-slate-600">Intenta ajustar la búsqueda o los filtros.</p>
             </div>
           ) : (
             filteredTickets.map((ticket) => (
@@ -573,29 +615,39 @@ export function TicketsModule() {
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-start gap-4 flex-1">
-                    <div className={`p-3 rounded-xl ${ticket.ticket_categories ? 'bg-opacity-10' : 'bg-slate-100'}`}
-                         style={{ backgroundColor: ticket.ticket_categories?.color + '20' }}>
-                      {ticket.ticket_categories ? getCategoryIcon(ticket.ticket_categories.icon) : <AlertCircle className="w-5 h-5" />}
+                    <div
+                      className={`p-3 rounded-xl ${ticket.ticket_categories ? 'bg-opacity-10' : 'bg-slate-100'}`}
+                      style={{ backgroundColor: ticket.ticket_categories?.color ? `${ticket.ticket_categories.color}20` : undefined }}
+                    >
+                      {ticket.ticket_categories ? (
+                        getCategoryIcon(ticket.ticket_categories.icon)
+                      ) : (
+                        <AlertCircle className="w-5 h-5" />
+                      )}
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-sm font-mono text-slate-500 bg-slate-100 px-2 py-1 rounded">
-                          {ticket.ticket_number}
-                        </span>
-                        {ticket.ticket_categories && (
-                          <span className="text-xs px-2 py-1 rounded-full" style={{
-                            backgroundColor: ticket.ticket_categories.color + '20',
-                            color: ticket.ticket_categories.color
-                          }}>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-semibold text-slate-700">{ticket.ticket_number}</span>
+                        {ticket.ticket_categories?.name && (
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-full border"
+                            style={{
+                              borderColor: ticket.ticket_categories.color,
+                              color: ticket.ticket_categories.color,
+                            }}
+                          >
                             {ticket.ticket_categories.name}
                           </span>
                         )}
                       </div>
-                      <h3 className="text-lg font-semibold text-slate-900 mb-1 group-hover:text-blue-600 transition">
+
+                      <h3 className="text-lg font-semibold text-slate-900 mb-1 group-hover:text-blue-600 transition truncate">
                         {ticket.subject}
                       </h3>
                       <p className="text-sm text-slate-600 line-clamp-2 mb-3">{ticket.description}</p>
-                      <div className="flex items-center gap-4 text-sm text-slate-500">
+
+                      <div className="flex items-center gap-4 text-sm text-slate-500 flex-wrap">
                         <div className="flex items-center gap-1">
                           <Building2 className="w-4 h-4" />
                           <span>{ticket.clients?.company_name || ticket.clients?.contact_name}</span>
@@ -942,130 +994,106 @@ export function TicketsModule() {
                     </div>
                   )}
                 </div>
-                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Panel historial de estado */}
-                  <div className="bg-white rounded-xl shadow border border-slate-200 p-4">
-                    <h4 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                      <Activity className="w-5 h-5 text-blue-600" />
-                      Historial de Estado
-                    </h4>
-                    <div className="space-y-3 max-h-64 overflow-y-auto">
-                      {history.length === 0 ? (
-                        <p className="text-center text-slate-500 py-8">No hay historial aún</p>
-                      ) : (
-                        history.map((h) => (
-                          <div key={h.id} className="flex gap-3 pb-3 border-b border-slate-100 last:border-0">
-                            <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                              <Activity className="w-4 h-4 text-blue-600" />
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-sm text-slate-900">
-                                <span className="font-semibold">{h.old_status} → {h.new_status}</span>
-                                {h.change_reason && (
-                                  <span className="text-slate-600"> - {h.change_reason}</span>
-                                )}
-                              </p>
-                              <span className="text-xs text-slate-500 mt-1 block">
-                                {new Date(h.created_at).toLocaleString()}
-                              </span>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
+
+                <div className="relative assignee-dropdown-container">
+                  <p className="text-xs text-slate-500 mb-1">Asignar a Usuario</p>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={assigneeSearchTerm}
+                      onChange={(e) => {
+                        setAssigneeSearchTerm(e.target.value);
+                        setShowAssigneeDropdown(true);
+                      }}
+                      onFocus={() => setShowAssigneeDropdown(true)}
+                      className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition pr-10"
+                      placeholder="Buscar usuario..."
+                    />
+                    <User className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
                   </div>
-                  {/* Panel comentarios */}
-                  <div className="bg-white rounded-xl shadow border border-slate-200 p-4">
-                    <h4 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                      <MessageSquare className="w-5 h-5 text-blue-600" />
-                      Comentarios
-                    </h4>
-                    <div className="space-y-4 mb-6 max-h-64 overflow-y-auto">
-                      {comments.length === 0 ? (
-                        <p className="text-center text-slate-500 py-8">No hay comentarios aún</p>
-                      ) : (
-                        comments.map((comment) => (
-                          <div key={comment.id} className={`rounded-xl p-4 ${comment.is_internal ? 'bg-amber-50 border border-amber-200' : 'bg-slate-50'}`}>
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <div className="flex flex-col">
-                                  <span className="text-sm font-semibold text-slate-900">
-                                    {comment.user_name || 'Usuario Desconocido'}
-                                  </span>
-                                  <span className="text-xs text-slate-500">
-                                    {comment.user_email || 'Sin email'}
-                                  </span>
-                                </div>
-                                {comment.is_internal && (
-                                  <span className="text-xs px-2 py-0.5 bg-amber-200 text-amber-800 rounded-full">
-                                    Interno
-                                  </span>
-                                )}
-                              </div>
-                              <span className="text-xs text-slate-500">
-                                {new Date(comment.created_at).toLocaleString()}
-                              </span>
-                            </div>
-                            <p className="text-sm text-slate-700 whitespace-pre-wrap">{comment.comment}</p>
-                          </div>
-                        ))
-                      )}
+
+                  {showAssigneeDropdown && (
+                    <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleAssignUser(selectedTicket.id, '');
+                          setAssigneeSearchTerm('');
+                          setShowAssigneeDropdown(false);
+                        }}
+                        className="w-full px-4 py-3 text-left hover:bg-blue-50 transition border-b border-slate-100"
+                      >
+                        <div className="font-medium text-slate-900">Sin asignar</div>
+                        <div className="text-xs text-slate-500">Quitar asignación</div>
+                      </button>
+                      {users
+                        .filter((u) => {
+                          const term = assigneeSearchTerm.trim().toLowerCase();
+                          if (!term) return true;
+                          return u.name.toLowerCase().includes(term) || u.email.toLowerCase().includes(term);
+                        })
+                        .map((u) => (
+                          <button
+                            key={u.id}
+                            type="button"
+                            onClick={() => {
+                              handleAssignUser(selectedTicket.id, u.id);
+                              setAssigneeSearchTerm(u.name);
+                              setShowAssigneeDropdown(false);
+                            }}
+                            className="w-full px-4 py-3 text-left hover:bg-blue-50 transition border-b border-slate-100 last:border-0"
+                          >
+                            <div className="font-medium text-slate-900">{u.name}</div>
+                            <div className="text-xs text-slate-500">{u.email} • {u.role}</div>
+                          </button>
+                        ))}
                     </div>
-                    <div className="border-t border-slate-200 pt-6">
-                      <div className="mb-3">
-                        <label className="flex items-center gap-2 text-sm text-slate-600">
-                          <input
-                            type="checkbox"
-                            checked={isInternalComment}
-                            onChange={(e) => setIsInternalComment(e.target.checked)}
-                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                          />
-                          Comentario interno (no visible para el cliente)
-                        </label>
-                      </div>
-                      <div className="flex gap-3">
-                        <textarea
-                          value={newComment}
-                          onChange={(e) => setNewComment(e.target.value)}
-                          placeholder="Escribe un comentario..."
-                          rows={3}
-                          className="flex-1 px-4 py-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                          onKeyPress={(e) => {
-                            if (e.key === 'Enter' && e.ctrlKey) {
-                              handleAddComment();
-                            }
-                          }}
-                        />
-                        <button
-                          onClick={handleAddComment}
-                          className="px-6 h-fit bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition flex items-center gap-2 font-medium shadow-lg"
-                        >
-                          <Send className="w-4 h-4" />
-                          Enviar
-                        </button>
-                      </div>
-                      <p className="text-xs text-slate-500 mt-2">Tip: Presiona Ctrl+Enter para enviar</p>
-                    </div>
-                  </div>
-                </div>
-                    En Espera
-                  </button>
-                  <button
-                    onClick={() => handleUpdateStatus(selectedTicket.id, 'resolved')}
-                    className="px-4 py-2 bg-green-100 text-green-700 text-sm rounded-lg hover:bg-green-200 transition font-medium"
-                  >
-                    Resolver
-                  </button>
-                  <button
-                    onClick={() => handleUpdateStatus(selectedTicket.id, 'closed')}
-                    className="px-4 py-2 bg-slate-100 text-slate-700 text-sm rounded-lg hover:bg-slate-200 transition font-medium"
-                  >
-                    Cerrar
-                  </button>
+                  )}
                 </div>
               </div>
 
               <div className="p-6">
+                <div className="mb-6">
+                  <h3 className="text-sm font-semibold text-slate-700 mb-3">Descripción</h3>
+                  <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                    {selectedTicket.description}
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-200 pt-6 mb-6">
+                  <h3 className="text-sm font-semibold text-slate-700 mb-3">Acciones Rápidas</h3>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => handleUpdateStatus(selectedTicket.id, 'in_progress')}
+                      disabled={selectedTicket.status === 'in_progress'}
+                      className="px-4 py-2 bg-blue-100 text-blue-700 text-sm rounded-lg hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition font-medium"
+                    >
+                      En Progreso
+                    </button>
+                    <button
+                      onClick={() => handleUpdateStatus(selectedTicket.id, 'waiting')}
+                      disabled={selectedTicket.status === 'waiting'}
+                      className="px-4 py-2 bg-yellow-100 text-yellow-700 text-sm rounded-lg hover:bg-yellow-200 disabled:opacity-50 disabled:cursor-not-allowed transition font-medium"
+                    >
+                      En Espera
+                    </button>
+                    <button
+                      onClick={() => handleUpdateStatus(selectedTicket.id, 'resolved')}
+                      disabled={selectedTicket.status === 'resolved'}
+                      className="px-4 py-2 bg-green-100 text-green-700 text-sm rounded-lg hover:bg-green-200 disabled:opacity-50 disabled:cursor-not-allowed transition font-medium"
+                    >
+                      Resolver
+                    </button>
+                    <button
+                      onClick={() => handleUpdateStatus(selectedTicket.id, 'closed')}
+                      disabled={selectedTicket.status === 'closed'}
+                      className="px-4 py-2 bg-slate-100 text-slate-700 text-sm rounded-lg hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition font-medium"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+                </div>
+
                 <div className="flex gap-4 border-b border-slate-200 mb-6">
                   <button
                     onClick={() => setActiveTab('comments')}

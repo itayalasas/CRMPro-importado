@@ -3,12 +3,16 @@
     window.__CRM_WEBCHAT_WIDGET_V2_LOADED = true;
     const currentScript = document.currentScript;
     const script = document.createElement('script');
+    const config = window.CRM_WEBCHAT_CONFIG || {};
+    const widgetVersion = config.widgetVersion || config.widget_version || '20260210-2';
     try {
-      script.src = currentScript?.src
-        ? new URL('webchat-widget-v2.js', currentScript.src).toString()
-        : 'webchat-widget-v2.js';
+      const baseUrl = currentScript?.src
+        ? new URL('webchat-widget-v2.js', currentScript.src)
+        : new URL('webchat-widget-v2.js', window.location.href);
+      baseUrl.searchParams.set('v', String(widgetVersion));
+      script.src = baseUrl.toString();
     } catch {
-      script.src = 'webchat-widget-v2.js';
+      script.src = `webchat-widget-v2.js?v=${encodeURIComponent(String(widgetVersion))}`;
     }
     script.async = true;
     document.head.appendChild(script);

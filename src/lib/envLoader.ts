@@ -10,6 +10,8 @@ interface EnvConfig {
     VITE_AUTH_API_KEY: string;
     VITE_APP_URL: string;
     VITE_AUTH_CODE_EXCHANGE_URL: string;
+    VITE_WIDGET_URL: string;
+    VITE_WIDGET_APIKEY: string; 
   };
   updated_at: string;
 }
@@ -64,28 +66,29 @@ class EnvironmentLoader {
       }
 
       const data: EnvConfig = await response.json();
-      this.config = data.variables;
+      const variables = (data as unknown as { variables?: unknown })?.variables;
+      const apiVars = this.normalizeVariables(variables);
+      const localVars = this.normalizeVariables(import.meta.env as unknown);
+      this.config = this.mergeVariables(apiVars, localVars);
 
       console.log('✅ Configuración cargada exitosamente');
       console.log('📦 Proyecto:', data.project_name);
       console.log('📝 Descripción:', data.description);
       console.log('🕒 Última actualización:', new Date(data.updated_at).toLocaleString());
 
+      if (!this.config.VITE_WIDGET_URL) {
+        console.warn('⚠️ VITE_WIDGET_URL no está configurado (API y local). El widget mostrará "Missing VITE_WIDGET_URL".');
+      }
+      if (!this.config.VITE_WIDGET_APIKEY) {
+        console.warn('⚠️ VITE_WIDGET_APIKEY no está configurado (API y local).');
+      }
+
       this.injectIntoImportMeta();
     } catch (error) {
       console.error('❌ Error cargando configuración desde API:', error);
       console.warn('⚠️ Usando variables de entorno locales (.env) como fallback');
 
-      this.config = {
-        VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
-        VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL || '',
-        VITE_AUTH_URL: import.meta.env.VITE_AUTH_URL || '',
-        VITE_AUTH_SYSTEM_URL: import.meta.env.VITE_AUTH_SYSTEM_URL || '',
-        VITE_AUTH_APP_ID: import.meta.env.VITE_AUTH_APP_ID || '',
-        VITE_AUTH_API_KEY: import.meta.env.VITE_AUTH_API_KEY || '',
-        VITE_APP_URL: import.meta.env.VITE_APP_URL || '',
-        VITE_AUTH_CODE_EXCHANGE_URL: import.meta.env.VITE_AUTH_CODE_EXCHANGE_URL || '',
-      };
+      this.config = this.normalizeVariables(import.meta.env as unknown);
 
       this.injectIntoImportMeta();
     }
@@ -95,7 +98,8 @@ class EnvironmentLoader {
     if (!this.config) return;
 
     Object.entries(this.config).forEach(([key, value]) => {
-      (import.meta.env as any)[key] = value;
+      const env = import.meta.env as unknown as Record<string, unknown>;
+      env[key] = value;
     });
   }
 
@@ -117,6 +121,68 @@ class EnvironmentLoader {
 
   isLoading(): boolean {
     return this.loading;
+  }
+
+  private normalizeVariables(input: unknown): EnvConfig['variables'] {
+    const raw = (input && typeof input === 'object') ? (input as Record<string, unknown>) : {};
+
+    const read = (...candidates: string[]): string => {
+      for (const candidate of candidates) {
+        const value = raw[candidate];
+        if (typeof value === 'string' && value.trim().length > 0) return value;
+      }
+      return '';
+    };
+
+    return {
+      VITE_SUPABASE_ANON_KEY: read('VITE_SUPABASE_ANON_KEY', 'vite_supabase_anon_key'),
+      VITE_SUPABASE_URL: read('VITE_SUPABASE_URL', 'vite_supabase_url'),
+      VITE_AUTH_URL: read('VITE_AUTH_URL', 'vite_auth_url'),
+      VITE_AUTH_SYSTEM_URL: read('VITE_AUTH_SYSTEM_URL', 'vite_auth_system_url'),
+      VITE_AUTH_APP_ID: read('VITE_AUTH_APP_ID', 'vite_auth_app_id'),
+      VITE_AUTH_API_KEY: read('VITE_AUTH_API_KEY', 'vite_auth_api_key'),
+      VITE_APP_URL: read('VITE_APP_URL', 'vite_app_url'),
+      VITE_AUTH_CODE_EXCHANGE_URL: read('VITE_AUTH_CODE_EXCHANGE_URL', 'vite_auth_code_exchange_url'),
+
+      // Widget/bot settings (support common naming variants)
+      VITE_WIDGET_URL: read(
+        'VITE_WIDGET_URL',
+        'vite_widget_url',
+        'WIDGET_URL',
+        'widget_url',
+        'widgetUrl',
+        'botApiUrl',
+        'bot_api_url'
+      ),
+      VITE_WIDGET_APIKEY: read(
+        'VITE_WIDGET_APIKEY',
+        'VITE_WIDGET_API_KEY',
+        'vite_widget_apikey',
+        'vite_widget_api_key',
+        'WIDGET_APIKEY',
+        'WIDGET_API_KEY',
+        'widget_apikey',
+        'widget_api_key',
+        'widgetApiKey',
+        'botIntegrationKey',
+        'bot_integration_key'
+      ),
+    };
+  }
+
+  private mergeVariables(primary: EnvConfig['variables'], fallback: EnvConfig['variables']): EnvConfig['variables'] {
+    return {
+      VITE_SUPABASE_ANON_KEY: primary.VITE_SUPABASE_ANON_KEY || fallback.VITE_SUPABASE_ANON_KEY,
+      VITE_SUPABASE_URL: primary.VITE_SUPABASE_URL || fallback.VITE_SUPABASE_URL,
+      VITE_AUTH_URL: primary.VITE_AUTH_URL || fallback.VITE_AUTH_URL,
+      VITE_AUTH_SYSTEM_URL: primary.VITE_AUTH_SYSTEM_URL || fallback.VITE_AUTH_SYSTEM_URL,
+      VITE_AUTH_APP_ID: primary.VITE_AUTH_APP_ID || fallback.VITE_AUTH_APP_ID,
+      VITE_AUTH_API_KEY: primary.VITE_AUTH_API_KEY || fallback.VITE_AUTH_API_KEY,
+      VITE_APP_URL: primary.VITE_APP_URL || fallback.VITE_APP_URL,
+      VITE_AUTH_CODE_EXCHANGE_URL: primary.VITE_AUTH_CODE_EXCHANGE_URL || fallback.VITE_AUTH_CODE_EXCHANGE_URL,
+      VITE_WIDGET_URL: primary.VITE_WIDGET_URL || fallback.VITE_WIDGET_URL,
+      VITE_WIDGET_APIKEY: primary.VITE_WIDGET_APIKEY || fallback.VITE_WIDGET_APIKEY,
+    };
   }
 }
 

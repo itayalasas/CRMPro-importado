@@ -29,7 +29,15 @@
         integrationHeader: 'X-Integration-Key',
         integrationKey: 'pub_5bc238047db11edae7d4ecb2805f0057a2505c706e625c9a243b6e95bf33cd67',
         getIntegrationHeader: 'X-Integration-Key',
-        getIntegrationKey: 'pub_912f4d330d38c6fe585e8fb42890c47a109d08693f2ed13256d5a1ebacd1c56f'
+        getIntegrationKey: 'pub_912f4d330d38c6fe585e8fb42890c47a109d08693f2ed13256d5a1ebacd1c56f',
+
+        // Bot/assistant configuration (required for fetchBotReply)
+        // Option A: direct (visible in browser)
+        VITE_WIDGET_URL: 'https://api.flowbridge.site/functions/v1/api-gateway/84509071-8288-4698-b0dd-37bb6a5627a8',
+        VITE_WIDGET_APIKEY: 'pub_c37d9f0c0b339da3ff57445f0a6bae41d63236e3aecb771bc0ecf0a9aeacfda2'
+
+        // Option B: proxy (recommended if you don't want to expose upstream URL/key)
+        // botProxyUrl: 'https://<YOUR_SUPABASE_PROJECT>.supabase.co/functions/v1/webchat-bot-proxy'
       };
     </script>
     <script src="/webchat-widget-v2.js"></script>

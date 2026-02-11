@@ -93,8 +93,14 @@ Deno.serve(async (req: Request) => {
         .eq('conversation_id', conversation.id)
         .order('created_at', { ascending: true });
 
+      const { data: queuedMessages } = await supabase
+        .from('webchat_message_queue')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: true });
+
       return new Response(
-        JSON.stringify({ conversation, messages: messages || [] }),
+        JSON.stringify({ conversation, messages: messages || [], queued_messages: queuedMessages || [] }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -144,8 +150,55 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const allowedSenderTypes = ['visitor', 'bot', 'system'];
-      const normalizedSenderType = allowedSenderTypes.includes(sender_type) ? sender_type : 'visitor';
+      const normalizeText = (value: unknown) => String(value ?? '').trim().toLowerCase();
+      const normalizeEnumText = (value: unknown) => normalizeText(value);
+
+      const normalizeSenderTypeForQueue = (value: unknown): 'visitor' | 'bot' | 'system' => {
+        const normalized = normalizeEnumText(value);
+        if (normalized === 'agent') return 'bot';
+        if (normalized === 'bot' || normalized === 'system' || normalized === 'visitor') return normalized;
+        return 'visitor';
+      };
+
+      const inferLegacySenderType = (base: unknown, messageValue: unknown): 'visitor' | 'bot' | 'system' => {
+        const normalizedBase = normalizeSenderTypeForQueue(base);
+        if (normalizedBase !== 'visitor') return normalizedBase;
+
+        const text = normalizeText(messageValue);
+        if (!text) return normalizedBase;
+
+        // Legacy widget versions sometimes sent bot/system messages as visitor.
+        // Infer only for the fixed widget-generated phrases.
+        if (
+          text.startsWith('¡hola! soy dotty') ||
+          text.includes('asistente automático') ||
+          text.includes('respuesta automática')
+        ) {
+          return 'bot';
+        }
+
+        if (
+          text.startsWith('estamos contactando a un agente disponible') ||
+          text.startsWith('la conversación ha finalizado')
+        ) {
+          return 'system';
+        }
+
+        return normalizedBase;
+      };
+
+      const normalizeSenderTypeForMessages = (value: unknown): 'visitor' | 'agent' | 'system' => {
+        const normalized = normalizeEnumText(value);
+        if (normalized === 'bot') return 'agent';
+        if (normalized === 'agent' || normalized === 'system' || normalized === 'visitor') return normalized;
+        return 'visitor';
+      };
+
+      const allowedSenderTypes = ['visitor', 'bot', 'system', 'agent'] as const;
+      const normalizedSenderTypeRaw = normalizeEnumText(sender_type);
+      const normalizedSenderType = (allowedSenderTypes as readonly string[]).includes(normalizedSenderTypeRaw)
+        ? normalizedSenderTypeRaw
+        : 'visitor';
       const createdAtValue = created_at && !Number.isNaN(new Date(created_at).getTime()) ? created_at : undefined;
 
       if (queue_only) {
@@ -156,11 +209,14 @@ Deno.serve(async (req: Request) => {
           );
         }
 
+        const inferredSenderType = inferLegacySenderType(normalizedSenderType, message);
+        const queueSenderType = normalizeSenderTypeForQueue(inferredSenderType);
+
         const { error: queueError } = await supabase
           .from('webchat_message_queue')
           .insert({
             session_id,
-            sender_type: normalizedSenderType,
+            sender_type: queueSenderType,
             sender_name: sender_name || visitor?.name || null,
             message: message || null,
             created_at: createdAtValue || new Date().toISOString(),
@@ -338,47 +394,14 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      if (message_type === 'request_agent') {
-        const { data: queuedMessages } = await supabase
-          .from('webchat_message_queue')
-          .select('*')
-          .eq('session_id', session_id)
-          .order('created_at', { ascending: true });
-
-        if (queuedMessages && queuedMessages.length > 0) {
-          const insertPayload = queuedMessages.map((queued) => ({
-            conversation_id: conversationId,
-            sender_type: queued.sender_type,
-            sender_id: session_id,
-            sender_name: queued.sender_name,
-            message: queued.message,
-            attachments: [],
-            created_at: queued.created_at,
-          }));
-
-          const { error: queueInsertError } = await supabase
-            .from('webchat_messages')
-            .insert(insertPayload);
-
-          if (queueInsertError) {
-            return new Response(
-              JSON.stringify({ error: 'No se pudo sincronizar mensajes en cola' }),
-              { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-          }
-
-          await supabase
-            .from('webchat_message_queue')
-            .delete()
-            .eq('session_id', session_id);
-        }
-      }
+      // NOTE: We intentionally keep queued transcript messages in webchat_message_queue.
+      // They will be synced into webchat_messages when an agent takes the conversation.
 
       const { error: messageError } = await supabase
         .from('webchat_messages')
         .insert({
           conversation_id: conversationId,
-          sender_type: normalizedSenderType,
+          sender_type: normalizeSenderTypeForMessages(inferLegacySenderType(normalizedSenderType, message)),
           sender_id: session_id,
           sender_name: sender_name || visitor?.name || null,
           message: message || null,

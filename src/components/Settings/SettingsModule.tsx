@@ -79,6 +79,10 @@ export function SettingsModule() {
   });
 
   const appUrl = getEnvVar('VITE_APP_URL') || window.location.origin;
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
+  const botProxyUrl = supabaseUrl ? `${supabaseUrl}/functions/v1/webchat-bot-proxy` : '';
+  const widgetUrl = getEnvVar('VITE_WIDGET_URL');
+  const widgetApiKey = getEnvVar('VITE_WIDGET_APIKEY');
   const [webchatSettings, setWebchatSettings] = useState({
     domain: 'dogcatify.com',
     title: 'Dogcatify Chat',
@@ -108,7 +112,7 @@ export function SettingsModule() {
     symbol: string;
   }>>([]);
 
-  const webchatSnippet = `<div id="crm-webchat"></div>\n<script>\n  window.CRM_WEBCHAT_CONFIG = {\n    endpoint: '${webchatSettings.endpoint}',\n    getEndpoint: '${webchatSettings.get_endpoint}',\n    domain: '${webchatSettings.domain}',\n    title: '${webchatSettings.title}',\n    logoUrl: '/logo-dogcatify.jpg',\n    primaryColor: '#0D9488',\n    secondaryColor: '#14B8A6',\n    agentColor: '#2563EB',\n    backgroundColor: '#F3F4F6',\n    statusText: 'En línea',\n    welcomeMessage: '¡Hola! Soy Dotty, tu asistente virtual de DogCatify. ¿En qué puedo ayudarte hoy?',\n    quickReplies: ['¿Qué servicios ofrecen?','¿Cómo reservar?','Horarios de atención','Contacto'],\n    integrationHeader: '${webchatSettings.integration_header}',\n    integrationKey: '${webchatSettings.integration_key}',\n    getIntegrationHeader: '${webchatSettings.get_integration_header}',\n    getIntegrationKey: '${webchatSettings.get_integration_key}',\n    apiKey: '${webchatSettings.api_key}'\n  };\n</script>\n<script src="${webchatSettings.widget_script_url}"></script>`;
+  const webchatSnippet = `<div id="crm-webchat"></div>\n<script>\n  window.CRM_WEBCHAT_CONFIG = {\n    endpoint: '${webchatSettings.endpoint}',\n    getEndpoint: '${webchatSettings.get_endpoint}',\n    domain: '${webchatSettings.domain}',\n    title: '${webchatSettings.title}',\n    logoUrl: '/logo-dogcatify.jpg',\n    primaryColor: '#0D9488',\n    secondaryColor: '#14B8A6',\n    agentColor: '#2563EB',\n    backgroundColor: '#F3F4F6',\n    statusText: 'En línea',\n    welcomeMessage: '¡Hola! Soy Dotty, tu asistente virtual de DogCatify. ¿En qué puedo ayudarte hoy?',\n    quickReplies: ['¿Qué servicios ofrecen?','¿Cómo reservar?','Horarios de atención','Contacto'],\n    integrationHeader: '${webchatSettings.integration_header}',\n    integrationKey: '${webchatSettings.integration_key}',\n    getIntegrationHeader: '${webchatSettings.get_integration_header}',\n    getIntegrationKey: '${webchatSettings.get_integration_key}',\n    apiKey: '${webchatSettings.api_key}',\n\n    // Bot/assistant configuration (read by webchat-widget-v2.js)\n    botProxyUrl: '${botProxyUrl}',\n    VITE_WIDGET_URL: '${widgetUrl}',\n    VITE_WIDGET_APIKEY: '${widgetApiKey}',\n    variables: {\n      botProxyUrl: '${botProxyUrl}',\n      VITE_WIDGET_URL: '${widgetUrl}',\n      VITE_WIDGET_APIKEY: '${widgetApiKey}'\n    }\n  };\n</script>\n<script src="${webchatSettings.widget_script_url}"></script>`;
 
   const webchatApiExample = `POST ${webchatSettings.endpoint}\nHeaders:\n  Content-Type: application/json\n  ${webchatSettings.integration_header || 'X-Integration-Key'}: ${webchatSettings.integration_key || '<INTEGRATION_KEY>'}\n\n{\n  "session_id": "sess_123",\n  "message": "Hola, necesito ayuda",\n  "visitor": {\n    "name": "Carlos",\n    "email": "carlos@dominio.com",\n    "phone": "+18001234567"\n  },\n  "page_url": "https://dogcatify.com/precios",\n  "source_domain": "dogcatify.com",\n  "attachments": [\n    {\n      "filename": "pixel.png",\n      "type": "image/png",\n      "content": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y6p7dEAAAAASUVORK5CYII="\n    }\n  ]\n}`;
 

@@ -24,6 +24,11 @@ import { useToast } from '../../contexts/ToastContext';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { useDialer } from '../../contexts/DialerContext';
 import { searchUsers } from '../../lib/userService';
+import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
+import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
+import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
+import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
+import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
 
 const sourceLabels: Record<string, string> = {
   widget: 'Widget',
@@ -71,7 +76,7 @@ interface WebChatConversation {
 interface WebChatMessage {
   id: string;
   conversation_id: string;
-  sender_type: 'visitor' | 'agent' | 'system';
+  sender_type: 'visitor' | 'agent' | 'bot' | 'system';
   sender_id: string | null;
   sender_name: string | null;
   message: string | null;
@@ -84,6 +89,151 @@ interface TicketDraft {
   description: string;
   priority: 'low' | 'medium' | 'high' | 'urgent';
   client_id?: string;
+}
+
+interface TicketRecord {
+  id: string;
+  ticket_number: string;
+  client_id: string | null;
+  subject: string;
+  description: string;
+  status: 'open' | 'in_progress' | 'waiting' | 'resolved' | 'closed';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  assigned_to: string | null;
+  assigned_user?: { id: string; full_name: string | null; email: string | null } | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+interface TicketComment {
+  id: string;
+  ticket_id: string;
+  user_id: string | null;
+  user_name?: string | null;
+  user_email?: string | null;
+  comment: string;
+  is_internal: boolean;
+  created_at: string;
+}
+
+interface TicketActivity {
+  id: string;
+  ticket_id: string;
+  user_id: string | null;
+  action: string;
+  field_changed: string | null;
+  old_value: string | null;
+  new_value: string | null;
+  description: string | null;
+  created_at: string;
+}
+
+interface TicketRecord {
+  id: string;
+  ticket_number: string;
+  client_id: string | null;
+  subject: string;
+  description: string;
+  status: 'open' | 'in_progress' | 'waiting' | 'resolved' | 'closed';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  assigned_to: string | null;
+  assigned_user?: { id: string; full_name: string; email: string } | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+interface TicketComment {
+  id: string;
+  ticket_id: string;
+  user_id: string | null;
+  user_name: string | null;
+  user_email: string | null;
+  comment: string;
+  is_internal: boolean;
+  created_at: string;
+}
+
+interface TicketActivity {
+  id: string;
+  ticket_id: string;
+  user_id: string | null;
+  action: string;
+  field_changed: string | null;
+  old_value: string | null;
+  new_value: string | null;
+  description: string | null;
+  created_at: string;
+}
+
+interface TicketRecord {
+  id: string;
+  ticket_number: string;
+  client_id: string | null;
+  subject: string;
+  description: string;
+  status: 'open' | 'in_progress' | 'waiting' | 'resolved' | 'closed';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  assigned_to: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+interface TicketComment {
+  id: string;
+  ticket_id: string;
+  user_id: string | null;
+  user_name: string | null;
+  user_email: string | null;
+  comment: string;
+  is_internal: boolean;
+  created_at: string;
+}
+
+interface TicketActivity {
+  id: string;
+  ticket_id: string;
+  user_id: string | null;
+  action_type: string;
+  old_value: string | null;
+  new_value: string | null;
+  description: string | null;
+  created_at: string;
+}
+
+interface TicketRecord {
+  id: string;
+  ticket_number: string;
+  client_id: string | null;
+  subject: string;
+  description: string;
+  status: 'open' | 'in_progress' | 'waiting' | 'resolved' | 'closed';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  assigned_to: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+interface TicketComment {
+  id: string;
+  ticket_id: string;
+  user_id: string | null;
+  user_name?: string | null;
+  user_email?: string | null;
+  comment: string;
+  is_internal: boolean;
+  created_at: string;
+}
+
+interface TicketActivity {
+  id: string;
+  ticket_id: string;
+  user_id: string | null;
+  action: string;
+  field_changed: string | null;
+  old_value: string | null;
+  new_value: string | null;
+  description: string | null;
+  created_at: string;
 }
 
 interface ClientDraft {
@@ -106,7 +256,7 @@ interface ClientLookup {
 export function WebChatModule() {
   const { user } = useAuth();
   const toast = useToast();
-  const { navigateToInbox } = useNavigation();
+  const { navigateToInbox, setActiveModule } = useNavigation();
   const { initiateCall } = useDialer();
 
   const [conversations, setConversations] = useState<WebChatConversation[]>([]);
@@ -122,7 +272,7 @@ export function WebChatModule() {
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferQuery, setTransferQuery] = useState('');
   const [transferResults, setTransferResults] = useState<{ id: string; name: string; email: string }[]>([]);
-  const [sidePanelMode, setSidePanelMode] = useState<'client' | 'ticket' | null>(null);
+  const [sidePanelMode, setSidePanelMode] = useState<'client' | 'ticket' | 'ticket_view' | null>(null);
   const [clientSearch, setClientSearch] = useState('');
   const [clientResults, setClientResults] = useState<ClientLookup[]>([]);
   const [clientSearchLoading, setClientSearchLoading] = useState(false);
@@ -138,7 +288,17 @@ export function WebChatModule() {
     description: '',
     priority: 'medium'
   });
+  const [ticketViewLoading, setTicketViewLoading] = useState(false);
+  const [ticketViewTicket, setTicketViewTicket] = useState<TicketRecord | null>(null);
+  const [ticketViewComments, setTicketViewComments] = useState<TicketComment[]>([]);
+  const [ticketViewActivities, setTicketViewActivities] = useState<TicketActivity[]>([]);
+  const [ticketViewTab, setTicketViewTab] = useState<'comments' | 'activity'>('comments');
+  const [ticketViewNewComment, setTicketViewNewComment] = useState('');
+  const [ticketViewIsInternal, setTicketViewIsInternal] = useState(false);
+  const [ticketViewHasUpdates, setTicketViewHasUpdates] = useState(false);
+  const ticketViewStatusRef = useRef<TicketRecord['status'] | null>(null);
   const [sidePanelSaving, setSidePanelSaving] = useState(false);
+  const [linkedTicketStatus, setLinkedTicketStatus] = useState<TicketRecord['status'] | null>(null);
   const [createdClientId, setCreatedClientId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messageListRef = useRef<HTMLDivElement | null>(null);
@@ -170,9 +330,76 @@ export function WebChatModule() {
     [conversations, selectedConversationId]
   );
 
+  const linkedTicketNumber = useMemo(() => {
+    if (!selectedConversationId) return null;
+    const ticketMsg = [...messages]
+      .reverse()
+      .find((msg) => typeof msg.message === 'string' && msg.message.includes('Ticket creado:'))
+      ?.message;
+
+    if (!ticketMsg) return null;
+    const match = ticketMsg.match(/Ticket creado:\s*(TKT-[A-Z0-9-]+)/i);
+    return match?.[1] || null;
+  }, [messages, selectedConversationId]);
+
+  useEffect(() => {
+    if (!linkedTicketNumber) {
+      setLinkedTicketStatus(null);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('tickets')
+        .select('status')
+        .eq('ticket_number', linkedTicketNumber)
+        .maybeSingle();
+
+      if (cancelled) return;
+      if (error || !data?.status) {
+        setLinkedTicketStatus(null);
+        return;
+      }
+      setLinkedTicketStatus(data.status as TicketRecord['status']);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [linkedTicketNumber]);
+
+  useEffect(() => {
+    ticketViewStatusRef.current = ticketViewTicket?.status ?? null;
+  }, [ticketViewTicket?.status]);
+
+  const linkedTicketNumber = useMemo(() => {
+    if (!selectedConversationId) return null;
+    const ticketMsg = [...messages]
+      .reverse()
+      .find((msg) => typeof msg.message === 'string' && msg.message.includes('Ticket creado:'))
+      ?.message;
+
+    if (!ticketMsg) return null;
+    const match = ticketMsg.match(/Ticket creado:\s*(TKT-[A-Z0-9-]+)/i);
+    return match?.[1] || null;
+  }, [messages, selectedConversationId]);
+
+  const linkedTicketNumber = useMemo(() => {
+    if (!selectedConversationId) return null;
+    const ticketMsg = [...messages]
+      .reverse()
+      .find((msg) => typeof msg.message === 'string' && msg.message.includes('Ticket creado:'))
+      ?.message;
+
+    if (!ticketMsg) return null;
+    const match = ticketMsg.match(/Ticket creado:\s*(TKT-[A-Z0-9-]+)/i);
+    return match?.[1] || null;
+  }, [messages, selectedConversationId]);
+
   const isAdmin = user?.role === 'admin';
   const isAssignedToUser = selectedConversation?.assigned_user_id && selectedConversation.assigned_user_id === user?.id;
-  const isConversationLocked = !!selectedConversation?.assigned_user_id && !isAssignedToUser && !isAdmin;
+  const isConversationLocked = !!selectedConversation?.assigned_user_id && !isAssignedToUser;
   const isClosed = selectedConversation?.status === 'closed';
 
   const causeOptions = [
@@ -337,45 +564,6 @@ export function WebChatModule() {
               />
             </div>
             <select
-              value={causeFilter}
-              onChange={(e) => setCauseFilter(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-white/80 py-2 text-sm text-slate-700 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
-            >
-              <option value="all">Todas las causas</option>
-              {causeOptions.map((cause) => (
-                <option key={cause} value={cause}>{cause}</option>
-              ))}
-            </select>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-white/80 py-2 text-sm text-slate-700 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
-            >
-              <option value="all">Todos los estados</option>
-              <option value="open">Abierto</option>
-              <option value="assigned">Asignado</option>
-              <option value="taken">Tomado</option>
-              <option value="resolved">Resuelto</option>
-              <option value="closed">Cerrado</option>
-            </select>
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            {filteredConversations.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-500">
-                <MessageCircle className="h-10 w-10 text-slate-300" />
-                <p className="text-sm">No hay conversaciones</p>
-              </div>
-            ) : (
-              <div className="space-y-2 p-3">
-                {filteredConversations.map(conv => (
-                  <button
-                    key={conv.id}
-                    onClick={() => setSelectedConversationId(conv.id)}
-                    className={`w-full rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md ${
-                      selectedConversationId === conv.id
-                        ? 'border-teal-500 bg-teal-50/70 shadow-md'
-                        : 'border-slate-200 bg-white'
-                    }`}
                   >
                     <div className="flex items-center justify-between">
                       <div>
@@ -407,19 +595,6 @@ export function WebChatModule() {
                               : 'Cerrado'}
                       </span>
                     </div>
-                    <div className="mt-3 space-y-2">
-                      <div className="flex items-center justify-between text-xs text-slate-400">
-                        Último mensaje: {conv.last_message_at ? new Date(conv.last_message_at).toLocaleString() : '—'}
-                        {(() => {
-                          const lastViewed = lastViewedMap[conv.id];
-                          if (!conv.last_message_at) return null;
-                          if (!lastViewed || new Date(conv.last_message_at).getTime() > new Date(lastViewed).getTime()) {
-                            return <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-semibold text-white">Nuevo</span>;
-                          }
-                          return null;
-                        })()}
-                      </div>
-                      {(conv.cause || conv.cause_custom || conv.result) && (
                         <div className="flex flex-wrap gap-2 text-[11px]">
                           <CauseBadge cause={conv.cause} custom={conv.cause_custom} />
                           <ResultBadge result={conv.result} />
@@ -477,7 +652,8 @@ export function WebChatModule() {
                     {isAdmin && selectedConversation.assigned_user_id && (
                       <button
                         onClick={() => handleUpdateStatus('open')}
-                        className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-red-600 shadow-sm transition hover:-translate-y-0.5"
+                        disabled={isConversationLocked}
+                        className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-red-600 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <X className="h-4 w-4" />
                         <span>Liberar</span>
@@ -513,20 +689,29 @@ export function WebChatModule() {
                   <span>Llamar</span>
                 </button>
                 <button
-                  onClick={openTicketPanel}
-                  className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={isConversationLocked || isClosed}
+                  onClick={handleTicketButtonClick}
+                  className={
+                    linkedTicketNumber && linkedTicketStatus
+                      ? `flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 ${getTicketStatusClasses(linkedTicketStatus)}`
+                      : 'flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60'
+                  }
+                  disabled={isConversationLocked || (!linkedTicketNumber && isClosed)}
                 >
                   <Ticket className="h-4 w-4" />
-                  <span>Crear Ticket</span>
+                  <span className="flex flex-col leading-tight">
+                    <span>{linkedTicketNumber ? 'Ver Ticket' : 'Crear Ticket'}</span>
+                    {linkedTicketNumber && (
+                      <span className="text-[10px] font-normal text-slate-500">{linkedTicketNumber}</span>
+                    )}
+                  </span>
                 </button>
                 <button
-                  onClick={openClientPanel}
+                  onClick={() => openClientPanel()}
                   className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={isConversationLocked || isClosed}
                 >
                   <UserPlus className="h-4 w-4" />
-                  <span>Crear Cliente</span>
+                  <span>{createdClientId ? 'Cliente asociado' : 'Crear Cliente'}</span>
                 </button>
                 <div className="ml-auto flex items-center gap-2">
                   {selectedConversation.status === 'closed' && !isConversationLocked && (
@@ -540,7 +725,18 @@ export function WebChatModule() {
                   )}
                   <button
                     onClick={() => handleUpdateStatus('closed')}
-                    disabled={isConversationLocked || isClosed}
+                    disabled={
+                      isConversationLocked ||
+                      isClosed ||
+                      (!!linkedTicketNumber &&
+                        (!linkedTicketStatus || (linkedTicketStatus !== 'resolved' && linkedTicketStatus !== 'closed')))
+                    }
+                    title={
+                      linkedTicketNumber &&
+                      (!linkedTicketStatus || (linkedTicketStatus !== 'resolved' && linkedTicketStatus !== 'closed'))
+                        ? 'No puedes cerrar el chat mientras el ticket esté abierto.'
+                        : undefined
+                    }
                     className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <CheckCircle className="h-4 w-4" />
@@ -572,13 +768,13 @@ export function WebChatModule() {
                       <div
                         key={msg.id}
                         className={`max-w-2xl rounded-2xl px-4 py-3 shadow-sm ${
-                          msg.sender_type === 'agent'
+                          (msg.sender_type === 'agent' || msg.sender_type === 'bot')
                             ? 'ml-auto bg-gradient-to-r from-blue-600 to-indigo-600 text-white'
                             : 'bg-white text-slate-800 border border-slate-200'
                         }`}
                       >
                         <div className="mb-2 text-xs opacity-80">
-                          {msg.sender_name || (msg.sender_type === 'agent' ? 'Agente' : 'Visitante')} · {new Date(msg.created_at).toLocaleString()}
+                          {msg.sender_name || ((msg.sender_type === 'agent' || msg.sender_type === 'bot') ? 'Agente' : 'Visitante')} · {new Date(msg.created_at).toLocaleString()}
                         </div>
                         {msg.message && <p className="text-sm whitespace-pre-line">{msg.message}</p>}
                         {msg.attachments && msg.attachments.length > 0 && (
@@ -590,7 +786,7 @@ export function WebChatModule() {
                                 target="_blank"
                                 rel="noreferrer"
                                 className={`flex items-center gap-2 text-sm ${
-                                  msg.sender_type === 'agent' ? 'text-white/90' : 'text-blue-600'
+                                  (msg.sender_type === 'agent' || msg.sender_type === 'bot') ? 'text-white/90' : 'text-blue-600'
                                 }`}
                               >
                                 <FileText className="h-4 w-4" />
@@ -666,14 +862,38 @@ export function WebChatModule() {
             <div className="flex items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-5 py-4">
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">
-                  {sidePanelMode === 'client' ? 'Crear Cliente' : 'Crear Ticket'}
+                  {sidePanelMode === 'client'
+                    ? 'Crear Cliente'
+                    : sidePanelMode === 'client_view'
+                      ? 'Ver Cliente'
+                    : sidePanelMode === 'ticket_view'
+                      ? 'Ver Ticket'
+                      : 'Crear Ticket'}
                 </h3>
-                <p className="text-xs text-slate-500">
-                  {selectedConversation.visitor_name || selectedConversation.visitor_email || selectedConversation.visitor_phone || 'Visitante'}
+                <p className="text-xs text-slate-500 flex items-center gap-2">
+                  <span>
+                    {sidePanelMode === 'ticket_view' && ticketViewTicket?.ticket_number
+                      ? ticketViewTicket.ticket_number
+                      : selectedConversation.visitor_name || selectedConversation.visitor_email || selectedConversation.visitor_phone || 'Visitante'}
+                  </span>
+                  {sidePanelMode === 'ticket_view' &&
+                    ticketViewHasUpdates &&
+                    (ticketViewTicket?.status === 'resolved' || ticketViewTicket?.status === 'closed') && (
+                      <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700">
+                        Actualizado
+                      </span>
+                    )}
                 </p>
               </div>
               <button
-                onClick={() => setSidePanelMode(null)}
+                onClick={() => {
+                  setSidePanelMode(null);
+                  setTicketViewTicket(null);
+                  setTicketViewComments([]);
+                  setTicketViewActivities([]);
+                  setTicketViewNewComment('');
+                  setTicketViewIsInternal(false);
+                }}
                 className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 shadow-sm transition hover:-translate-y-0.5"
               >
                 <X className="h-4 w-4" />
@@ -765,6 +985,204 @@ export function WebChatModule() {
                     </select>
                   </div>
                 </div>
+              ) : sidePanelMode === 'ticket_view' ? (
+                <div className="space-y-4">
+                  {ticketViewLoading ? (
+                    <div className="text-sm text-slate-500">Cargando ticket...</div>
+                  ) : !ticketViewTicket ? (
+                    <div className="text-sm text-slate-500">No hay ticket para mostrar.</div>
+                  ) : (
+                    <>
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-xs text-slate-500">{ticketViewTicket.ticket_number}</div>
+                            <div className="mt-1 font-semibold text-slate-900 truncate">{ticketViewTicket.subject}</div>
+                          </div>
+                          <div className="flex flex-col items-end gap-2">
+                            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getTicketStatusClasses(ticketViewTicket.status)}`}>
+                              {ticketViewTicket.status.replace('_', ' ').toUpperCase()}
+                            </span>
+                            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getTicketPriorityClasses(ticketViewTicket.priority)}`}>
+                              {ticketViewTicket.priority.toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-slate-600">Descripción</label>
+                        <div className="mt-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 whitespace-pre-wrap">
+                          {ticketViewTicket.description}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-slate-600">Acciones rápidas</label>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {(ticketViewTicket.status === 'resolved' || ticketViewTicket.status === 'closed') && (
+                            <button
+                              type="button"
+                              onClick={() => handleTicketViewUpdateStatus('open')}
+                              className="rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 transition hover:bg-teal-100"
+                            >
+                              Reabrir
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleTicketViewUpdateStatus('in_progress')}
+                            disabled={true}
+                            className="rounded-xl bg-blue-100 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-200 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            En Progreso
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleTicketViewUpdateStatus('waiting')}
+                            disabled={true}
+                            className="rounded-xl bg-yellow-100 px-3 py-2 text-xs font-semibold text-yellow-700 transition hover:bg-yellow-200 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            En Espera
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleTicketViewUpdateStatus('resolved')}
+                            disabled={true}
+                            className="rounded-xl bg-green-100 px-3 py-2 text-xs font-semibold text-green-700 transition hover:bg-green-200 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Resolver
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleTicketViewUpdateStatus('closed')}
+                            disabled={true}
+                            className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Cerrar
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="mt-2">
+                        <div className="flex gap-2 border-b border-slate-200">
+                          <button
+                            type="button"
+                            onClick={() => setTicketViewTab('comments')}
+                            className={`px-2 pb-2 text-xs font-semibold border-b-2 transition ${
+                              ticketViewTab === 'comments'
+                                ? 'text-teal-700 border-teal-600'
+                                : 'text-slate-500 border-transparent hover:text-slate-700'
+                            }`}
+                          >
+                            Comentarios ({ticketViewComments.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTicketViewTab('activity')}
+                            className={`px-2 pb-2 text-xs font-semibold border-b-2 transition ${
+                              ticketViewTab === 'activity'
+                                ? 'text-teal-700 border-teal-600'
+                                : 'text-slate-500 border-transparent hover:text-slate-700'
+                            }`}
+                          >
+                            Actividad ({ticketViewActivities.length})
+                          </button>
+                        </div>
+
+                        {ticketViewTab === 'comments' ? (
+                          <>
+                            <div className="mt-3 space-y-3 max-h-56 overflow-y-auto">
+                              {ticketViewComments.length === 0 ? (
+                                <div className="text-xs text-slate-500">No hay comentarios.</div>
+                              ) : (
+                                ticketViewComments.map((c) => (
+                                  <div
+                                    key={c.id}
+                                    className={`rounded-2xl border p-3 text-sm ${
+                                      c.is_internal
+                                        ? 'border-amber-200 bg-amber-50'
+                                        : 'border-slate-200 bg-white'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <div className="text-xs font-semibold text-slate-700 truncate">
+                                          {c.user_name || 'Usuario'}
+                                        </div>
+                                        {c.user_email && <div className="text-[11px] text-slate-400 truncate">{c.user_email}</div>}
+                                      </div>
+                                      <div className="text-[11px] text-slate-400">
+                                        {new Date(c.created_at).toLocaleString()}
+                                      </div>
+                                    </div>
+                                    <div className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{c.comment}</div>
+                                    {c.is_internal && (
+                                      <div className="mt-2 text-[10px] font-semibold text-amber-700">Interno</div>
+                                    )}
+                                  </div>
+                                ))
+                              )}
+                            </div>
+
+                            <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3">
+                              <label className="flex items-center gap-2 text-xs text-slate-600">
+                                <input
+                                  type="checkbox"
+                                  checked={ticketViewIsInternal}
+                                  onChange={(e) => setTicketViewIsInternal(e.target.checked)}
+                                  className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                                />
+                                Comentario interno
+                              </label>
+                              <textarea
+                                value={ticketViewNewComment}
+                                onChange={(e) => setTicketViewNewComment(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    void handleTicketViewAddComment();
+                                  }
+                                }}
+                                disabled={ticketViewTicket.status === 'resolved' || ticketViewTicket.status === 'closed'}
+                                rows={3}
+                                placeholder="Escribe un comentario..."
+                                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-slate-50"
+                              />
+                              <button
+                                type="button"
+                                onClick={handleTicketViewAddComment}
+                                disabled={ticketViewTicket.status === 'resolved' || ticketViewTicket.status === 'closed'}
+                                className="mt-2 w-full rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Enviar
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="mt-3 space-y-3 max-h-72 overflow-y-auto">
+                            {ticketViewActivities.length === 0 ? (
+                              <div className="text-xs text-slate-500">No hay actividad registrada.</div>
+                            ) : (
+                              ticketViewActivities.map((a) => (
+                                <div key={a.id} className="rounded-2xl border border-slate-200 bg-white p-3">
+                                  <div className="text-xs font-semibold text-slate-800">{a.action}</div>
+                                  {a.field_changed && (
+                                    <div className="mt-1 text-xs text-slate-600">
+                                      {a.field_changed}: {a.old_value} → {a.new_value}
+                                    </div>
+                                  )}
+                                  {a.description && <div className="mt-1 text-xs text-slate-600">{a.description}</div>}
+                                  <div className="mt-2 text-[11px] text-slate-400">{new Date(a.created_at).toLocaleString()}</div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
               ) : (
                 <div className="space-y-4">
                   {createdClientId && (
@@ -808,15 +1226,17 @@ export function WebChatModule() {
               )}
             </div>
 
-            <div className="border-t border-slate-200/80 bg-white px-5 py-4">
-              <button
-                onClick={sidePanelMode === 'client' ? handleSaveClient : handleSaveTicket}
-                disabled={sidePanelSaving}
-                className="w-full rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {sidePanelSaving ? 'Guardando...' : sidePanelMode === 'client' ? 'Crear Cliente' : 'Crear Ticket'}
-              </button>
-            </div>
+            {(sidePanelMode === 'client' || sidePanelMode === 'ticket') && (
+              <div className="border-t border-slate-200/80 bg-white px-5 py-4">
+                <button
+                  onClick={sidePanelMode === 'client' ? handleSaveClient : handleSaveTicket}
+                  disabled={sidePanelSaving}
+                  className="w-full rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {sidePanelSaving ? 'Guardando...' : sidePanelMode === 'client' ? 'Crear Cliente' : 'Crear Ticket'}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -939,6 +1359,16 @@ export function WebChatModule() {
       return;
     }
 
+    const ticketBlocksClose =
+      status === 'closed' &&
+      !!linkedTicketNumber &&
+      (!linkedTicketStatus || (linkedTicketStatus !== 'resolved' && linkedTicketStatus !== 'closed'));
+
+    if (ticketBlocksClose) {
+      toast.error('No puedes cerrar el chat si hay un ticket abierto. Resuelve o cierra el ticket primero.');
+      return;
+    }
+
     if (status === 'closed') {
       setShowCloseModal(true);
       return;
@@ -985,6 +1415,14 @@ export function WebChatModule() {
     if (!selectedConversation) return;
     if (isConversationLocked) {
       toast.error('La conversación está asignada a otro usuario');
+      return;
+    }
+
+    const ticketBlocksClose =
+      !!linkedTicketNumber &&
+      (!linkedTicketStatus || (linkedTicketStatus !== 'resolved' && linkedTicketStatus !== 'closed'));
+    if (ticketBlocksClose) {
+      toast.error('No puedes cerrar el chat si hay un ticket abierto. Resuelve o cierra el ticket primero.');
       return;
     }
 
@@ -1038,7 +1476,39 @@ export function WebChatModule() {
     setSidePanelMode('client');
   };
 
-  const openTicketPanel = () => {
+  const getTicketStatusClasses = (status: TicketRecord['status']) => {
+    switch (status) {
+      case 'open':
+        return 'bg-red-100 text-red-700 border-red-200';
+      case 'in_progress':
+        return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'waiting':
+        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+      case 'resolved':
+        return 'bg-green-100 text-green-700 border-green-200';
+      case 'closed':
+        return 'bg-slate-100 text-slate-700 border-slate-200';
+      default:
+        return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
+  };
+
+  const getTicketPriorityClasses = (priority: TicketRecord['priority']) => {
+    switch (priority) {
+      case 'low':
+        return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'medium':
+        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+      case 'high':
+        return 'bg-orange-100 text-orange-700 border-orange-200';
+      case 'urgent':
+        return 'bg-red-100 text-red-700 border-red-200';
+      default:
+        return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
+  };
+
+  const openTicketPanel = useCallback(() => {
     if (!selectedConversation) return;
     const lastVisitorMessage = [...messages]
       .reverse()
@@ -1050,7 +1520,20 @@ export function WebChatModule() {
       client_id: createdClientId || undefined
     });
     setSidePanelMode('ticket');
-  };
+  }, [createdClientId, messages, selectedConversation]);
+
+  const openLinkedTicket = useCallback((ticketNumber: string) => {
+    localStorage.setItem('tickets_open_ticket_number', ticketNumber);
+    setActiveModule('tickets');
+  }, [setActiveModule]);
+
+  const handleTicketButtonClick = useCallback(() => {
+    if (linkedTicketNumber) {
+      openLinkedTicket(linkedTicketNumber);
+      return;
+    }
+    openTicketPanel();
+  }, [linkedTicketNumber, openLinkedTicket, openTicketPanel]);
 
   const handleSaveClient = async () => {
     if (!user?.id) return;
@@ -1602,7 +2085,8 @@ export function WebChatModule() {
                       {isAdmin && selectedConversation.assigned_user_id && (
                         <button
                           onClick={() => handleUpdateStatus('open')}
-                          className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-red-600 shadow-sm transition hover:-translate-y-0.5"
+                          disabled={isConversationLocked}
+                          className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-red-600 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <X className="h-4 w-4" />
                           <span>Liberar</span>
@@ -1651,7 +2135,7 @@ export function WebChatModule() {
                     disabled={isConversationLocked || isClosed}
                   >
                     <UserPlus className="h-4 w-4" />
-                    <span>Crear Cliente</span>
+                    <span>{createdClientId ? 'Cliente asociado' : 'Crear Cliente'}</span>
                   </button>
                   <div className="ml-auto flex items-center gap-2">
                     {selectedConversation.status === 'closed' && !isConversationLocked && (
@@ -1665,7 +2149,18 @@ export function WebChatModule() {
                     )}
                     <button
                       onClick={() => handleUpdateStatus('closed')}
-                      disabled={isConversationLocked || isClosed}
+                      disabled={
+                        isConversationLocked ||
+                        isClosed ||
+                        (!!linkedTicketNumber &&
+                          (!linkedTicketStatus || (linkedTicketStatus !== 'resolved' && linkedTicketStatus !== 'closed')))
+                      }
+                      title={
+                        linkedTicketNumber &&
+                        (!linkedTicketStatus || (linkedTicketStatus !== 'resolved' && linkedTicketStatus !== 'closed'))
+                          ? 'No puedes cerrar el chat mientras el ticket esté abierto.'
+                          : undefined
+                      }
                       className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <CheckCircle className="h-4 w-4" />
@@ -1687,13 +2182,13 @@ export function WebChatModule() {
                         <div
                           key={msg.id}
                           className={`max-w-2xl rounded-2xl px-4 py-3 shadow-sm ${
-                            msg.sender_type === 'agent'
+                            (msg.sender_type === 'agent' || msg.sender_type === 'bot')
                               ? 'ml-auto bg-gradient-to-r from-blue-600 to-indigo-600 text-white'
                               : 'bg-white text-slate-800 border border-slate-200'
                           }`}
                         >
                           <div className="mb-2 text-xs opacity-80">
-                            {msg.sender_name || (msg.sender_type === 'agent' ? 'Agente' : 'Visitante')} · {new Date(msg.created_at).toLocaleString()}
+                            {msg.sender_name || ((msg.sender_type === 'agent' || msg.sender_type === 'bot') ? 'Agente' : 'Visitante')} · {new Date(msg.created_at).toLocaleString()}
                           </div>
                           {msg.message && <p className="text-sm whitespace-pre-line">{msg.message}</p>}
                           {msg.attachments && msg.attachments.length > 0 && (
@@ -1705,7 +2200,7 @@ export function WebChatModule() {
                                   target="_blank"
                                   rel="noreferrer"
                                   className={`flex items-center gap-2 text-sm ${
-                                    msg.sender_type === 'agent' ? 'text-white/90' : 'text-blue-600'
+                                    (msg.sender_type === 'agent' || msg.sender_type === 'bot') ? 'text-white/90' : 'text-blue-600'
                                   }`}
                                 >
                                   <FileText className="h-4 w-4" />
@@ -2138,7 +2633,7 @@ function ResultBadge({ result }: { result?: string | null }) {
 
 */
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   MessageCircle,
   UserCheck,
@@ -2163,6 +2658,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { useDialer } from '../../contexts/DialerContext';
 import { searchUsers } from '../../lib/userService';
+import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
 
 interface WebChatConversation {
   id: string;
@@ -2192,7 +2688,7 @@ interface WebChatConversation {
 interface WebChatMessage {
   id: string;
   conversation_id: string;
-  sender_type: 'visitor' | 'agent' | 'system';
+  sender_type: 'visitor' | 'agent' | 'bot' | 'system';
   sender_id: string | null;
   sender_name: string | null;
   message: string | null;
@@ -2205,6 +2701,43 @@ interface TicketDraft {
   description: string;
   priority: 'low' | 'medium' | 'high' | 'urgent';
   client_id?: string;
+}
+
+interface TicketRecord {
+  id: string;
+  ticket_number: string;
+  client_id: string | null;
+  subject: string;
+  description: string;
+  status: 'open' | 'in_progress' | 'waiting' | 'resolved' | 'closed';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  assigned_to: string | null;
+  assigned_user?: { id: string; full_name: string | null; email: string | null } | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+interface TicketComment {
+  id: string;
+  ticket_id: string;
+  user_id: string | null;
+  user_name?: string | null;
+  user_email?: string | null;
+  comment: string;
+  is_internal: boolean;
+  created_at: string;
+}
+
+interface TicketActivity {
+  id: string;
+  ticket_id: string;
+  user_id: string | null;
+  action: string;
+  field_changed: string | null;
+  old_value: string | null;
+  new_value: string | null;
+  description: string | null;
+  created_at: string;
 }
 
 interface ClientDraft {
@@ -2240,11 +2773,11 @@ export function WebChatModule() {
   const [attachments, setAttachments] = useState<File[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [channelFilter, setChannelFilter] = useState('all');
+  const [channelFilter, _setChannelFilter] = useState('all');
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferQuery, setTransferQuery] = useState('');
   const [transferResults, setTransferResults] = useState<{ id: string; name: string; email: string }[]>([]);
-  const [sidePanelMode, setSidePanelMode] = useState<'client' | 'ticket' | null>(null);
+  const [sidePanelMode, setSidePanelMode] = useState<'client' | 'client_view' | 'ticket' | 'ticket_view' | null>(null);
   const [clientSearch, setClientSearch] = useState('');
   const [clientResults, setClientResults] = useState<ClientLookup[]>([]);
   const [clientSearchLoading, setClientSearchLoading] = useState(false);
@@ -2260,16 +2793,37 @@ export function WebChatModule() {
     description: '',
     priority: 'medium'
   });
+  const [ticketViewLoading, setTicketViewLoading] = useState(false);
+  const [ticketViewTicket, setTicketViewTicket] = useState<TicketRecord | null>(null);
+  const [ticketViewComments, setTicketViewComments] = useState<TicketComment[]>([]);
+  const [ticketViewActivities, setTicketViewActivities] = useState<TicketActivity[]>([]);
+  const [ticketViewTab, setTicketViewTab] = useState<'comments' | 'activity'>('comments');
+  const [ticketViewNewComment, setTicketViewNewComment] = useState('');
+  const [ticketViewIsInternal, setTicketViewIsInternal] = useState(false);
+  const [ticketViewHasUpdates, setTicketViewHasUpdates] = useState(false);
+  const ticketViewStatusRef = useRef<TicketRecord['status'] | null>(null);
   const [sidePanelSaving, setSidePanelSaving] = useState(false);
+  const [linkedTicketStatus, setLinkedTicketStatus] = useState<TicketRecord['status'] | null>(null);
   const [createdClientId, setCreatedClientId] = useState<string | null>(null);
+  const [clientViewLoading, setClientViewLoading] = useState(false);
+  const [clientViewClient, setClientViewClient] = useState<ClientLookup | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const lastConvoErrorRef = useRef<number>(0);
   const loadingConversationsRef = useRef(false);
   const lastViewedStorageKey = 'crm_webchat_last_viewed';
+  const linkedClientStorageKey = 'crm_webchat_linked_client';
   const [lastViewedMap, setLastViewedMap] = useState<Record<string, string>>(() => {
     try {
       const raw = localStorage.getItem(lastViewedStorageKey);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [linkedClientMap, setLinkedClientMap] = useState<Record<string, string>>(() => {
+    try {
+      const raw = localStorage.getItem(linkedClientStorageKey);
       return raw ? JSON.parse(raw) : {};
     } catch {
       return {};
@@ -2291,9 +2845,52 @@ export function WebChatModule() {
     [conversations, selectedConversationId]
   );
 
+  const linkedTicketNumber = useMemo(() => {
+    if (!selectedConversationId) return null;
+    const ticketMsg = [...messages]
+      .reverse()
+      .find((msg) => typeof msg.message === 'string' && msg.message.includes('Ticket creado:'))
+      ?.message;
+
+    if (!ticketMsg) return null;
+    const match = ticketMsg.match(/Ticket creado:\s*(TKT-[A-Z0-9-]+)/i);
+    return match?.[1] || null;
+  }, [messages, selectedConversationId]);
+
+  useEffect(() => {
+    if (!linkedTicketNumber) {
+      setLinkedTicketStatus(null);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('tickets')
+        .select('status')
+        .eq('ticket_number', linkedTicketNumber)
+        .maybeSingle();
+
+      if (cancelled) return;
+      if (error || !data?.status) {
+        setLinkedTicketStatus(null);
+        return;
+      }
+      setLinkedTicketStatus(data.status as TicketRecord['status']);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [linkedTicketNumber]);
+
+  useEffect(() => {
+    ticketViewStatusRef.current = ticketViewTicket?.status ?? null;
+  }, [ticketViewTicket?.status]);
+
   const isAdmin = user?.role === 'admin';
   const isAssignedToUser = selectedConversation?.assigned_user_id && selectedConversation.assigned_user_id === user?.id;
-  const isConversationLocked = !!selectedConversation?.assigned_user_id && !isAssignedToUser && !isAdmin;
+  const isConversationLocked = !!selectedConversation?.assigned_user_id && !isAssignedToUser;
   const isClosed = selectedConversation?.status === 'closed';
 
   const causeOptions = [
@@ -2325,6 +2922,18 @@ export function WebChatModule() {
   useEffect(() => {
     localStorage.setItem(lastViewedStorageKey, JSON.stringify(lastViewedMap));
   }, [lastViewedMap]);
+
+  useEffect(() => {
+    localStorage.setItem(linkedClientStorageKey, JSON.stringify(linkedClientMap));
+  }, [linkedClientMap]);
+
+  useEffect(() => {
+    if (!selectedConversationId) {
+      setCreatedClientId(null);
+      return;
+    }
+    setCreatedClientId(linkedClientMap[selectedConversationId] || null);
+  }, [linkedClientMap, selectedConversationId]);
 
   const markConversationViewed = useCallback((conversationId: string, timestamp?: string | null) => {
     const value = timestamp || new Date().toISOString();
@@ -2489,8 +3098,62 @@ export function WebChatModule() {
 
   useEffect(() => {
     if (!selectedConversationId) return;
+    if (!selectedConversation?.assigned_user_id) {
+      setMessages([]);
+      return;
+    }
     loadMessages(selectedConversationId);
-  }, [loadMessages, selectedConversationId]);
+  }, [loadMessages, selectedConversation?.assigned_user_id, selectedConversationId]);
+
+  const syncQueuedTranscript = useCallback(async (sessionId: string, conversationId: string) => {
+    const { data: queued, error: queueError } = await supabase
+      .from('webchat_message_queue')
+      .select('*')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true });
+
+    if (queueError) {
+      console.warn('[WEBCHAT] Error cargando cola', queueError);
+      return;
+    }
+
+    if (!queued || queued.length === 0) return;
+
+    const mapSenderType = (value: unknown): 'visitor' | 'agent' | 'system' => {
+      const normalized = String(value ?? '').trim().toLowerCase();
+      if (normalized === 'bot') return 'agent';
+      if (normalized === 'agent' || normalized === 'system' || normalized === 'visitor') return normalized as any;
+      return 'visitor';
+    };
+
+    const insertPayload = queued.map((row: any) => ({
+      conversation_id: conversationId,
+      sender_type: mapSenderType(row.sender_type),
+      sender_id: sessionId,
+      sender_name: row.sender_name || null,
+      message: row.message || null,
+      attachments: [],
+      created_at: row.created_at || new Date().toISOString(),
+    }));
+
+    const { error: insertError } = await supabase
+      .from('webchat_messages')
+      .insert(insertPayload);
+
+    if (insertError) {
+      console.warn('[WEBCHAT] Error sincronizando cola', insertError);
+      return;
+    }
+
+    const { error: deleteError } = await supabase
+      .from('webchat_message_queue')
+      .delete()
+      .eq('session_id', sessionId);
+
+    if (deleteError) {
+      console.warn('[WEBCHAT] Error limpiando cola', deleteError);
+    }
+  }, []);
 
   const handleAssignToMe = async () => {
     if (!selectedConversation || !user?.id) return;
@@ -2515,8 +3178,11 @@ export function WebChatModule() {
       return;
     }
 
+    await syncQueuedTranscript(selectedConversation.session_id, selectedConversation.id);
+
     toast.success('Conversación asignada');
     loadConversations();
+    loadMessages(selectedConversation.id);
   };
 
   const handleTransferSearch = async (query: string) => {
@@ -2537,14 +3203,16 @@ export function WebChatModule() {
       return;
     }
 
+    const nowIso = new Date().toISOString();
+
     const { error } = await supabase
       .from('webchat_conversations')
       .update({
         assigned_user_id: targetUser.id,
         assigned_user_name: targetUser.name,
-        assigned_at: new Date().toISOString(),
+        assigned_at: nowIso,
         status: 'taken',
-        updated_at: new Date().toISOString(),
+        updated_at: nowIso,
       })
       .eq('id', selectedConversation.id);
 
@@ -2554,6 +3222,23 @@ export function WebChatModule() {
     }
 
     toast.success(`Transferida a ${targetUser.name}`);
+
+    // Optimistic local update so the current agent gets locked immediately.
+    setConversations((prev) =>
+      prev.map((conv) =>
+        conv.id === selectedConversation.id
+          ? {
+              ...conv,
+              assigned_user_id: targetUser.id,
+              assigned_user_name: targetUser.name,
+              assigned_at: nowIso,
+              status: 'taken',
+              updated_at: nowIso,
+            }
+          : conv
+      )
+    );
+
     setShowTransfer(false);
     setTransferQuery('');
     setTransferResults([]);
@@ -2567,6 +3252,15 @@ export function WebChatModule() {
     if (!selectedConversation) return;
     if (isConversationLocked && status === 'open' && !isAdmin) {
       toast.error('No tienes permisos para liberar esta conversación');
+      return;
+    }
+
+    const ticketBlocksClose =
+      status === 'closed' &&
+      !!linkedTicketNumber &&
+      (!linkedTicketStatus || (linkedTicketStatus !== 'resolved' && linkedTicketStatus !== 'closed'));
+    if (ticketBlocksClose) {
+      toast.error('No puedes cerrar el chat si hay un ticket abierto. Resuelve o cierra el ticket primero.');
       return;
     }
 
@@ -2603,6 +3297,14 @@ export function WebChatModule() {
     if (!selectedConversation) return;
     if (isConversationLocked) {
       toast.error('La conversación está asignada a otro usuario');
+      return;
+    }
+
+    const ticketBlocksClose =
+      !!linkedTicketNumber &&
+      (!linkedTicketStatus || (linkedTicketStatus !== 'resolved' && linkedTicketStatus !== 'closed'));
+    if (ticketBlocksClose) {
+      toast.error('No puedes cerrar el chat si hay un ticket abierto. Resuelve o cierra el ticket primero.');
       return;
     }
 
@@ -2657,8 +3359,15 @@ export function WebChatModule() {
     }
   };
 
-  const openClientPanel = () => {
+  const openClientPanel = (options?: { forceChange?: boolean }) => {
     if (!selectedConversation) return;
+
+    const hasLinkedClient = !!(selectedConversationId && linkedClientMap[selectedConversationId]);
+    if (hasLinkedClient && !options?.forceChange) {
+      setSidePanelMode('client_view');
+      return;
+    }
+
     setClientDraft({
       company_name: '',
       contact_name: selectedConversation.visitor_name || '',
@@ -2668,8 +3377,73 @@ export function WebChatModule() {
     });
     setClientSearch('');
     setClientResults([]);
-    setCreatedClientId(null);
     setSidePanelMode('client');
+  };
+
+  useEffect(() => {
+    if (sidePanelMode !== 'client_view') return;
+    if (!createdClientId) {
+      setClientViewClient(null);
+      setClientViewLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setClientViewLoading(true);
+    (async () => {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('id, company_name, contact_name, email, phone, status')
+        .eq('id', createdClientId)
+        .maybeSingle();
+
+      if (cancelled) return;
+      if (error || !data) {
+        setClientViewClient(null);
+        setClientViewLoading(false);
+        toast.error('No se pudo cargar el cliente');
+        return;
+      }
+
+      setClientViewClient(data as ClientLookup);
+      setClientViewLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [createdClientId, sidePanelMode, toast]);
+
+  const getTicketStatusClasses = (status: TicketRecord['status']) => {
+    switch (status) {
+      case 'open':
+        return 'bg-red-100 text-red-700 border-red-200';
+      case 'in_progress':
+        return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'waiting':
+        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+      case 'resolved':
+        return 'bg-green-100 text-green-700 border-green-200';
+      case 'closed':
+        return 'bg-slate-100 text-slate-700 border-slate-200';
+      default:
+        return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
+  };
+
+  const getTicketPriorityClasses = (priority: TicketRecord['priority']) => {
+    switch (priority) {
+      case 'low':
+        return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'medium':
+        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+      case 'high':
+        return 'bg-orange-100 text-orange-700 border-orange-200';
+      case 'urgent':
+        return 'bg-red-100 text-red-700 border-red-200';
+      default:
+        return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
   };
 
   const openTicketPanel = () => {
@@ -2685,6 +3459,174 @@ export function WebChatModule() {
     });
     setSidePanelMode('ticket');
   };
+
+  const loadTicketView = useCallback(async (ticketNumber: string) => {
+    const normalizedTicketNumber = (ticketNumber.match(/(TKT-[A-Z0-9-]+)/i)?.[1] || ticketNumber).trim();
+    setTicketViewLoading(true);
+    setTicketViewTicket(null);
+    setTicketViewComments([]);
+    setTicketViewActivities([]);
+    setTicketViewTab('comments');
+
+    const { data: ticket, error: ticketError } = await supabase
+      .from('tickets')
+      .select('id, ticket_number, client_id, subject, description, status, priority, assigned_to, created_by, created_at')
+      .eq('ticket_number', normalizedTicketNumber)
+      .maybeSingle();
+
+    if (ticketError || !ticket) {
+      setTicketViewLoading(false);
+      toast.error('No se encontró el ticket');
+      return;
+    }
+
+    const [{ data: comments }, { data: activities }, { data: assignedUser }] = await Promise.all([
+      supabase
+        .from('ticket_comments')
+        .select('*')
+        .eq('ticket_id', ticket.id)
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('ticket_activity')
+        .select('*')
+        .eq('ticket_id', ticket.id)
+        .order('created_at', { ascending: true }),
+      ticket.assigned_to
+        ? supabase
+            .from('system_users')
+            .select('id, full_name, email')
+            .eq('id', ticket.assigned_to)
+            .maybeSingle()
+        : Promise.resolve({ data: null } as any),
+    ]);
+
+    setTicketViewTicket({
+      ...(ticket as any),
+      assigned_user: (assignedUser as any) || null,
+    });
+    setTicketViewComments((comments as TicketComment[]) || []);
+    setTicketViewActivities((activities as TicketActivity[]) || []);
+    setTicketViewLoading(false);
+  }, [toast]);
+
+  const openTicketViewPanel = useCallback((ticketNumber: string) => {
+    setSidePanelMode('ticket_view');
+    setTicketViewHasUpdates(false);
+    void loadTicketView(ticketNumber);
+  }, [loadTicketView]);
+
+  // If the panel is opened without going through openTicketViewPanel (duplicate UI paths),
+  // ensure we still load the linked ticket.
+  useEffect(() => {
+    if (sidePanelMode !== 'ticket_view') return;
+    if (ticketViewLoading) return;
+    if (ticketViewTicket) return;
+    if (!linkedTicketNumber) return;
+    void loadTicketView(linkedTicketNumber);
+  }, [linkedTicketNumber, loadTicketView, sidePanelMode, ticketViewLoading, ticketViewTicket]);
+
+  const refreshTicketView = useCallback(async () => {
+    if (!ticketViewTicket?.ticket_number) return;
+    await loadTicketView(ticketViewTicket.ticket_number);
+  }, [loadTicketView, ticketViewTicket?.ticket_number]);
+
+  useEffect(() => {
+    if (sidePanelMode !== 'ticket_view') return;
+    if (!ticketViewTicket?.id) return;
+
+    const ticketId = ticketViewTicket.id;
+
+    const channel = supabase
+      .channel(`webchat-ticket-view-${ticketId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'ticket_comments', filter: `ticket_id=eq.${ticketId}` },
+        () => {
+          void refreshTicketView();
+          const status = ticketViewStatusRef.current;
+          if (status === 'resolved' || status === 'closed') {
+            setTicketViewHasUpdates(true);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'ticket_activity', filter: `ticket_id=eq.${ticketId}` },
+        () => {
+          void refreshTicketView();
+          const status = ticketViewStatusRef.current;
+          if (status === 'resolved' || status === 'closed') {
+            setTicketViewHasUpdates(true);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'tickets', filter: `id=eq.${ticketId}` },
+        () => {
+          void refreshTicketView();
+          const status = ticketViewStatusRef.current;
+          if (status === 'resolved' || status === 'closed') {
+            setTicketViewHasUpdates(true);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refreshTicketView, sidePanelMode, ticketViewTicket?.id]);
+
+  const handleTicketViewUpdateStatus = useCallback(async (newStatus: TicketRecord['status']) => {
+    if (!ticketViewTicket?.id) return;
+    const updateData: any = { status: newStatus, updated_by: user?.id };
+    if (newStatus === 'resolved' || newStatus === 'closed') {
+      updateData.resolved_at = new Date().toISOString();
+    }
+    if (newStatus === 'open') {
+      updateData.resolved_at = null;
+    }
+    const { error } = await supabase.from('tickets').update(updateData).eq('id', ticketViewTicket.id);
+    if (error) {
+      toast.error('Error al actualizar estado');
+      return;
+    }
+    toast.success('Ticket actualizado');
+    await refreshTicketView();
+  }, [refreshTicketView, toast, ticketViewTicket?.id, user?.id]);
+
+  const handleTicketViewAddComment = useCallback(async () => {
+    if (!ticketViewTicket?.id || !ticketViewNewComment.trim()) return;
+    if (ticketViewTicket.status === 'resolved' || ticketViewTicket.status === 'closed') {
+      toast.error('El ticket está cerrado/resuelto. Reábrelo para agregar comentarios.');
+      return;
+    }
+    await ensureCurrentUserInSystemUsers();
+    const { error } = await supabase.from('ticket_comments').insert({
+      ticket_id: ticketViewTicket.id,
+      user_id: user?.id,
+      user_name: user?.name,
+      user_email: user?.email,
+      comment: ticketViewNewComment,
+      is_internal: ticketViewIsInternal,
+    });
+    if (error) {
+      toast.error('Error al agregar comentario');
+      return;
+    }
+    setTicketViewNewComment('');
+    setTicketViewIsInternal(false);
+    await refreshTicketView();
+  }, [refreshTicketView, ticketViewIsInternal, ticketViewNewComment, ticketViewTicket?.id, ticketViewTicket?.status, toast, user?.email, user?.id, user?.name]);
+
+  const handleTicketButtonClick = useCallback(() => {
+    if (linkedTicketNumber) {
+      openTicketViewPanel(linkedTicketNumber);
+      return;
+    }
+    openTicketPanel();
+  }, [linkedTicketNumber, openTicketPanel, openTicketViewPanel]);
 
   const handleSaveClient = async () => {
     if (!user?.id) return;
@@ -2751,7 +3693,11 @@ export function WebChatModule() {
       }
     }
 
-    setCreatedClientId(data?.id || null);
+    const newClientId = data?.id || null;
+    setCreatedClientId(newClientId);
+    if (selectedConversationId && newClientId) {
+      setLinkedClientMap((prev) => ({ ...prev, [selectedConversationId]: newClientId }));
+    }
     toast.success('Cliente creado correctamente');
     setSidePanelMode(null);
     loadConversations();
@@ -2760,6 +3706,9 @@ export function WebChatModule() {
   const handleAssignExistingClient = async (client: ClientLookup) => {
     if (!selectedConversation) return;
     setCreatedClientId(client.id);
+    if (selectedConversationId) {
+      setLinkedClientMap((prev) => ({ ...prev, [selectedConversationId]: client.id }));
+    }
     setClientDraft({
       company_name: client.company_name || '',
       contact_name: client.contact_name || '',
@@ -2995,9 +3944,8 @@ export function WebChatModule() {
             <span>Actualizar</span>
           </button>
         </div>
-      </div>
 
-      <div className="flex gap-4 overflow-x-auto pb-2">
+        <div className="flex gap-4 overflow-x-auto pb-2">
         <KpiCard label="Total" value={kpi.total} tone="slate" />
         <KpiCard label="Abiertos" value={kpi.open} tone="orange" />
         <KpiCard label="Tomados" value={kpi.assigned} tone="emerald" />
@@ -3005,6 +3953,7 @@ export function WebChatModule() {
         <KpiCard label="Cerrados" value={kpi.closed} tone="slate" />
         <KpiCard label="Sin asignar" value={kpi.unassigned} tone="teal" />
         <KpiCard label="No leídos" value={unreadCount} tone="indigo" />
+      </div>
       </div>
 
       <div
@@ -3163,7 +4112,8 @@ export function WebChatModule() {
                     {isAdmin && selectedConversation.assigned_user_id && (
                       <button
                         onClick={() => handleUpdateStatus('open')}
-                        className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-red-600 shadow-sm transition hover:-translate-y-0.5"
+                        disabled={isConversationLocked}
+                        className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-red-600 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <X className="h-4 w-4" />
                         <span>Liberar</span>
@@ -3199,20 +4149,29 @@ export function WebChatModule() {
                   <span>Llamar</span>
                 </button>
                 <button
-                  onClick={openTicketPanel}
-                  className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={isConversationLocked || isClosed}
+                  onClick={handleTicketButtonClick}
+                  className={
+                    linkedTicketNumber && linkedTicketStatus
+                      ? `flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 ${getTicketStatusClasses(linkedTicketStatus)}`
+                      : 'flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60'
+                  }
+                  disabled={isConversationLocked || (!linkedTicketNumber && isClosed)}
                 >
                   <Ticket className="h-4 w-4" />
-                  <span>Crear Ticket</span>
+                  <span className="flex flex-col leading-tight">
+                    <span>{linkedTicketNumber ? 'Ver Ticket' : 'Crear Ticket'}</span>
+                    {linkedTicketNumber && (
+                      <span className="text-[10px] font-normal text-slate-500">{linkedTicketNumber}</span>
+                    )}
+                  </span>
                 </button>
                 <button
-                  onClick={openClientPanel}
+                  onClick={() => openClientPanel()}
                   className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={isConversationLocked || isClosed}
                 >
                   <UserPlus className="h-4 w-4" />
-                  <span>Crear Cliente</span>
+                  <span>{createdClientId ? 'Cliente asociado' : 'Crear Cliente'}</span>
                 </button>
                 <div className="ml-auto flex items-center gap-2">
                   {selectedConversation.status === 'closed' && !isConversationLocked && (
@@ -3225,8 +4184,28 @@ export function WebChatModule() {
                     </button>
                   )}
                   <button
-                    onClick={() => setShowCloseModal(true)}
-                    disabled={isConversationLocked || isClosed}
+                    onClick={() => {
+                      const ticketBlocksClose =
+                        !!linkedTicketNumber &&
+                        (!linkedTicketStatus || (linkedTicketStatus !== 'resolved' && linkedTicketStatus !== 'closed'));
+                      if (ticketBlocksClose) {
+                        toast.error('No puedes cerrar el chat si hay un ticket abierto. Resuelve o cierra el ticket primero.');
+                        return;
+                      }
+                      setShowCloseModal(true);
+                    }}
+                    disabled={
+                      isConversationLocked ||
+                      isClosed ||
+                      (!!linkedTicketNumber &&
+                        (!linkedTicketStatus || (linkedTicketStatus !== 'resolved' && linkedTicketStatus !== 'closed')))
+                    }
+                    title={
+                      linkedTicketNumber &&
+                      (!linkedTicketStatus || (linkedTicketStatus !== 'resolved' && linkedTicketStatus !== 'closed'))
+                        ? 'No puedes cerrar el chat mientras el ticket esté abierto.'
+                        : undefined
+                    }
                     className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <CheckCircle className="h-4 w-4" />
@@ -3236,7 +4215,11 @@ export function WebChatModule() {
               </div>
 
               <div ref={messageListRef} className="flex-1 overflow-y-auto bg-slate-50/80 p-6">
-                {isConversationLocked || isClosed ? (
+                {!selectedConversation?.assigned_user_id && !isClosed ? (
+                  <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                    Toma este chat para ver los mensajes.
+                  </div>
+                ) : isConversationLocked || isClosed ? (
                   <div className="flex h-full items-center justify-center text-sm text-slate-500">
                     {isClosed ? 'Conversación cerrada. Reabre para ver mensajes.' : 'No tienes acceso a los mensajes de esta conversación.'}
                   </div>
@@ -3248,13 +4231,13 @@ export function WebChatModule() {
                       <div
                         key={msg.id}
                         className={`max-w-2xl rounded-2xl px-4 py-3 shadow-sm ${
-                          msg.sender_type === 'agent'
+                          (msg.sender_type === 'agent' || msg.sender_type === 'bot')
                             ? 'ml-auto bg-gradient-to-r from-blue-600 to-indigo-600 text-white'
                             : 'bg-white text-slate-800 border border-slate-200'
                         }`}
                       >
                         <div className="mb-2 text-xs opacity-80">
-                          {msg.sender_name || (msg.sender_type === 'agent' ? 'Agente' : 'Visitante')} · {new Date(msg.created_at).toLocaleString()}
+                          {msg.sender_name || ((msg.sender_type === 'agent' || msg.sender_type === 'bot') ? 'Agente' : 'Visitante')} · {new Date(msg.created_at).toLocaleString()}
                         </div>
                         {msg.message && <p className="text-sm whitespace-pre-line">{msg.message}</p>}
                         {msg.attachments && msg.attachments.length > 0 && (
@@ -3266,7 +4249,7 @@ export function WebChatModule() {
                                 target="_blank"
                                 rel="noreferrer"
                                 className={`flex items-center gap-2 text-sm ${
-                                  msg.sender_type === 'agent' ? 'text-white/90' : 'text-blue-600'
+                                  (msg.sender_type === 'agent' || msg.sender_type === 'bot') ? 'text-white/90' : 'text-blue-600'
                                 }`}
                               >
                                 <FileText className="h-4 w-4" />
@@ -3342,14 +4325,42 @@ export function WebChatModule() {
             <div className="flex items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-5 py-4">
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">
-                  {sidePanelMode === 'client' ? 'Crear Cliente' : 'Crear Ticket'}
+                  {sidePanelMode === 'client'
+                    ? 'Crear Cliente'
+                    : sidePanelMode === 'client_view'
+                      ? 'Ver Cliente'
+                    : sidePanelMode === 'ticket_view'
+                      ? 'Ver Ticket'
+                      : 'Crear Ticket'}
                 </h3>
-                <p className="text-xs text-slate-500">
-                  {selectedConversation.visitor_name || selectedConversation.visitor_email || selectedConversation.visitor_phone || 'Visitante'}
+                <p className="text-xs text-slate-500 flex items-center gap-2">
+                  <span>
+                    {sidePanelMode === 'ticket_view' && ticketViewTicket?.ticket_number
+                      ? ticketViewTicket.ticket_number
+                      : selectedConversation.visitor_name || selectedConversation.visitor_email || selectedConversation.visitor_phone || 'Visitante'}
+                  </span>
+                  {sidePanelMode === 'ticket_view' &&
+                    ticketViewHasUpdates &&
+                    (ticketViewTicket?.status === 'resolved' || ticketViewTicket?.status === 'closed') && (
+                      <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700">
+                        Actualizado
+                      </span>
+                    )}
                 </p>
               </div>
               <button
-                onClick={() => setSidePanelMode(null)}
+                onClick={() => {
+                  setSidePanelMode(null);
+                  setTicketViewTicket(null);
+                  setTicketViewComments([]);
+                  setTicketViewActivities([]);
+                  setTicketViewNewComment('');
+                  setTicketViewIsInternal(false);
+                  setTicketViewTab('comments');
+                  setTicketViewHasUpdates(false);
+                  setClientViewClient(null);
+                  setClientViewLoading(false);
+                }}
                 className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 shadow-sm transition hover:-translate-y-0.5"
               >
                 <X className="h-4 w-4" />
@@ -3451,6 +4462,249 @@ export function WebChatModule() {
                     </select>
                   </div>
                 </div>
+              ) : sidePanelMode === 'client_view' ? (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                    <div className="text-xs font-semibold text-emerald-800">Cliente cargado</div>
+                    {createdClientId && (
+                      <div className="mt-1 text-[11px] text-emerald-700">ID: {createdClientId.slice(0, 8)}...</div>
+                    )}
+                  </div>
+
+                  {clientViewLoading ? (
+                    <div className="text-sm text-slate-500">Cargando cliente...</div>
+                  ) : !clientViewClient ? (
+                    <div className="text-sm text-slate-500">No hay cliente para mostrar.</div>
+                  ) : (
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-slate-900 truncate">
+                            {clientViewClient.contact_name || clientViewClient.company_name || 'Cliente'}
+                          </div>
+                          <div className="mt-1 text-xs text-slate-600 truncate">
+                            {clientViewClient.email || clientViewClient.phone || 'Sin contacto'}
+                          </div>
+                          {clientViewClient.company_name && (
+                            <div className="mt-1 text-xs text-slate-500 truncate">{clientViewClient.company_name}</div>
+                          )}
+                        </div>
+                        <span className="text-[10px] uppercase text-slate-400">{clientViewClient.status}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => openClientPanel({ forceChange: true })}
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5"
+                  >
+                    Cambiar cliente
+                  </button>
+                </div>
+              ) : sidePanelMode === 'ticket_view' ? (
+                <div className="space-y-4">
+                  {ticketViewLoading ? (
+                    <div className="text-sm text-slate-500">Cargando ticket...</div>
+                  ) : !ticketViewTicket ? (
+                    <div className="text-sm text-slate-500">No hay ticket para mostrar.</div>
+                  ) : (
+                    <>
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-xs text-slate-500">{ticketViewTicket.ticket_number}</div>
+                            <div className="mt-1 font-semibold text-slate-900 truncate">{ticketViewTicket.subject}</div>
+                            <div className="mt-1 text-xs text-slate-600 truncate">
+                              {ticketViewTicket.assigned_user?.full_name
+                                ? `Asignado a ${ticketViewTicket.assigned_user.full_name}`
+                                : 'No asignado'}
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-2">
+                            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getTicketStatusClasses(ticketViewTicket.status)}`}>
+                              {ticketViewTicket.status.replace('_', ' ').toUpperCase()}
+                            </span>
+                            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getTicketPriorityClasses(ticketViewTicket.priority)}`}>
+                              {ticketViewTicket.priority.toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-slate-600">Descripción</label>
+                        <div className="mt-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 whitespace-pre-wrap">
+                          {ticketViewTicket.description}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-slate-600">Acciones rápidas</label>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {(ticketViewTicket.status === 'resolved' || ticketViewTicket.status === 'closed') && (
+                            <button
+                              type="button"
+                              onClick={() => handleTicketViewUpdateStatus('open')}
+                              className="rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 transition hover:bg-teal-100"
+                            >
+                              Reabrir
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleTicketViewUpdateStatus('in_progress')}
+                            disabled={true}
+                            className="rounded-xl bg-blue-100 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-200 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            En Progreso
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleTicketViewUpdateStatus('waiting')}
+                            disabled={true}
+                            className="rounded-xl bg-yellow-100 px-3 py-2 text-xs font-semibold text-yellow-700 transition hover:bg-yellow-200 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            En Espera
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleTicketViewUpdateStatus('resolved')}
+                            disabled={true}
+                            className="rounded-xl bg-green-100 px-3 py-2 text-xs font-semibold text-green-700 transition hover:bg-green-200 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Resolver
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleTicketViewUpdateStatus('closed')}
+                            disabled={true}
+                            className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Cerrar
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="mt-2">
+                        <div className="flex gap-2 border-b border-slate-200">
+                          <button
+                            type="button"
+                            onClick={() => setTicketViewTab('comments')}
+                            className={`px-2 pb-2 text-xs font-semibold border-b-2 transition ${
+                              ticketViewTab === 'comments'
+                                ? 'text-teal-700 border-teal-600'
+                                : 'text-slate-500 border-transparent hover:text-slate-700'
+                            }`}
+                          >
+                            Comentarios ({ticketViewComments.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTicketViewTab('activity')}
+                            className={`px-2 pb-2 text-xs font-semibold border-b-2 transition ${
+                              ticketViewTab === 'activity'
+                                ? 'text-teal-700 border-teal-600'
+                                : 'text-slate-500 border-transparent hover:text-slate-700'
+                            }`}
+                          >
+                            Actividad ({ticketViewActivities.length})
+                          </button>
+                        </div>
+
+                        {ticketViewTab === 'comments' ? (
+                          <>
+                            <div className="mt-3 space-y-3 max-h-56 overflow-y-auto">
+                              {ticketViewComments.length === 0 ? (
+                                <div className="text-xs text-slate-500">No hay comentarios.</div>
+                              ) : (
+                                ticketViewComments.map((c) => (
+                                  <div
+                                    key={c.id}
+                                    className={`rounded-2xl border p-3 text-sm ${
+                                      c.is_internal
+                                        ? 'border-amber-200 bg-amber-50'
+                                        : 'border-slate-200 bg-white'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <div className="text-xs font-semibold text-slate-700 truncate">
+                                          {c.user_name || 'Usuario'}
+                                        </div>
+                                        {c.user_email && <div className="text-[11px] text-slate-400 truncate">{c.user_email}</div>}
+                                      </div>
+                                      <div className="text-[11px] text-slate-400">
+                                        {new Date(c.created_at).toLocaleString()}
+                                      </div>
+                                    </div>
+                                    <div className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{c.comment}</div>
+                                    {c.is_internal && (
+                                      <div className="mt-2 text-[10px] font-semibold text-amber-700">Interno</div>
+                                    )}
+                                  </div>
+                                ))
+                              )}
+                            </div>
+
+                            <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3">
+                              <label className="flex items-center gap-2 text-xs text-slate-600">
+                                <input
+                                  type="checkbox"
+                                  checked={ticketViewIsInternal}
+                                  onChange={(e) => setTicketViewIsInternal(e.target.checked)}
+                                  className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                                />
+                                Comentario interno
+                              </label>
+                              <textarea
+                                value={ticketViewNewComment}
+                                onChange={(e) => setTicketViewNewComment(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    void handleTicketViewAddComment();
+                                  }
+                                }}
+                                disabled={ticketViewTicket.status === 'resolved' || ticketViewTicket.status === 'closed'}
+                                rows={3}
+                                placeholder="Escribe un comentario..."
+                                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-slate-50"
+                              />
+                              <button
+                                type="button"
+                                onClick={handleTicketViewAddComment}
+                                disabled={ticketViewTicket.status === 'resolved' || ticketViewTicket.status === 'closed'}
+                                className="mt-2 w-full rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Enviar
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="mt-3 space-y-3 max-h-72 overflow-y-auto">
+                            {ticketViewActivities.length === 0 ? (
+                              <div className="text-xs text-slate-500">No hay actividad registrada.</div>
+                            ) : (
+                              ticketViewActivities.map((a) => (
+                                <div key={a.id} className="rounded-2xl border border-slate-200 bg-white p-3">
+                                  <div className="text-xs font-semibold text-slate-800">{a.action}</div>
+                                  {a.field_changed && (
+                                    <div className="mt-1 text-xs text-slate-600">
+                                      {a.field_changed}: {a.old_value} → {a.new_value}
+                                    </div>
+                                  )}
+                                  {a.description && <div className="mt-1 text-xs text-slate-600">{a.description}</div>}
+                                  <div className="mt-2 text-[11px] text-slate-400">{new Date(a.created_at).toLocaleString()}</div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
               ) : (
                 <div className="space-y-4">
                   {createdClientId && (
@@ -3494,15 +4748,17 @@ export function WebChatModule() {
               )}
             </div>
 
-            <div className="border-t border-slate-200/80 bg-white px-5 py-4">
-              <button
-                onClick={sidePanelMode === 'client' ? handleSaveClient : handleSaveTicket}
-                disabled={sidePanelSaving}
-                className="w-full rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {sidePanelSaving ? 'Guardando...' : sidePanelMode === 'client' ? 'Crear Cliente' : 'Crear Ticket'}
-              </button>
-            </div>
+            {(sidePanelMode === 'client' || sidePanelMode === 'ticket') && (
+              <div className="border-t border-slate-200/80 bg-white px-5 py-4">
+                <button
+                  onClick={sidePanelMode === 'client' ? handleSaveClient : handleSaveTicket}
+                  disabled={sidePanelSaving}
+                  className="w-full rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {sidePanelSaving ? 'Guardando...' : sidePanelMode === 'client' ? 'Crear Cliente' : 'Crear Ticket'}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
