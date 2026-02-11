@@ -96,7 +96,7 @@ function MainApp() {
     <DialerProvider>
       <div className="flex h-screen bg-gradient-to-br from-slate-50 to-slate-100 overflow-hidden">
         <Sidebar activeModule={activeModule} onModuleChange={setActiveModule} />
-        <main className="flex-1 flex flex-col overflow-hidden w-full">
+        <main className="flex-1 min-w-0 flex flex-col overflow-hidden w-full">
           <div className="flex-1 overflow-y-auto">
             <div className="pt-16 lg:pt-0 pb-4 lg:pb-0 min-h-full">
               <div className="px-4 sm:px-6 lg:px-8 py-4 lg:py-6">
