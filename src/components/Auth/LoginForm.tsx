@@ -1,18 +1,24 @@
 import { useState } from 'react';
-import { externalAuth } from '../../lib/externalAuth';
 import { Shield, ArrowRight, CheckCircle, Calendar } from 'lucide-react';
-import { getEnvVar } from '../../lib/envLoader';
+import { getEnvVar, waitForConfig } from '../../lib/envLoader';
 
 type AuthMode = 'login' | 'register';
 
 export function LoginForm() {
   const [mode, setMode] = useState<AuthMode>('login');
 
-  const handleAuth = () => {
+  const handleAuth = async () => {
+    await waitForConfig().catch(() => undefined);
+
     const redirectUri = `${window.location.origin}/callback`;
-    const baseUrl = getEnvVar('VITE_AUTH_URL');
+    const baseUrl = getEnvVar('VITE_AUTH_URL').trim();
     const appId = getEnvVar('VITE_AUTH_APP_ID');
     const apiKey = getEnvVar('VITE_AUTH_API_KEY');
+
+    if (!baseUrl || !appId) {
+      window.alert('No se pudo cargar la configuración de autenticación. Verifica get-env (VITE_AUTH_URL y VITE_AUTH_APP_ID).');
+      return;
+    }
 
     const page = mode === 'register' ? 'register' : 'login';
     const authUrl = `${baseUrl}/${page}?app_id=${encodeURIComponent(appId)}&redirect_uri=${encodeURIComponent(redirectUri)}&api_key=${encodeURIComponent(apiKey)}`;
