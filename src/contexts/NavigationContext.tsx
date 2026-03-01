@@ -1,8 +1,22 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
 interface NavigationContextType {
-  navigateToInbox: (recipientEmail?: string) => void;
+  navigateToInbox: (
+    recipientEmail?: string,
+    context?: {
+      webchatConversationId?: string;
+      sourceChannel?: string;
+      emailSubject?: string;
+      emailBody?: string;
+    }
+  ) => void;
   inboxRecipient: string | null;
+  inboxContext: {
+    webchatConversationId?: string;
+    sourceChannel?: string;
+    emailSubject?: string;
+    emailBody?: string;
+  } | null;
   clearInboxRecipient: () => void;
   activeModule: string;
   setActiveModule: (module: string) => void;
@@ -12,17 +26,33 @@ const NavigationContext = createContext<NavigationContextType | undefined>(undef
 
 export function NavigationProvider({ children }: { children: ReactNode }) {
   const [inboxRecipient, setInboxRecipient] = useState<string | null>(null);
+  const [inboxContext, setInboxContext] = useState<{
+    webchatConversationId?: string;
+    sourceChannel?: string;
+    emailSubject?: string;
+    emailBody?: string;
+  } | null>(null);
   const [activeModule, setActiveModule] = useState('dashboard');
 
-  const navigateToInbox = (recipientEmail?: string) => {
+  const navigateToInbox = (
+    recipientEmail?: string,
+    context?: {
+      webchatConversationId?: string;
+      sourceChannel?: string;
+      emailSubject?: string;
+      emailBody?: string;
+    }
+  ) => {
     if (recipientEmail) {
       setInboxRecipient(recipientEmail);
     }
+    setInboxContext(context || null);
     setActiveModule('inbox');
   };
 
   const clearInboxRecipient = () => {
     setInboxRecipient(null);
+    setInboxContext(null);
   };
 
   return (
@@ -30,6 +60,7 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
       value={{
         navigateToInbox,
         inboxRecipient,
+        inboxContext,
         clearInboxRecipient,
         activeModule,
         setActiveModule

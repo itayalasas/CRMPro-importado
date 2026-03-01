@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Settings, Plus, Edit2, Trash2, Check, X, DollarSign,
-  ShoppingCart, CreditCard, FileText, Package
+  ShoppingCart, CreditCard, FileText, Package, Ticket
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../contexts/ToastContext';
@@ -19,13 +19,22 @@ interface Parameter {
   is_default?: boolean;
 }
 
-type ParameterType = 'currencies' | 'order_statuses' | 'payment_statuses' | 'item_types' | 'payment_methods' | 'invoice_statuses';
+type ParameterType =
+  | 'currencies'
+  | 'order_statuses'
+  | 'payment_statuses'
+  | 'item_types'
+  | 'payment_methods'
+  | 'invoice_statuses'
+  | 'ticket_statuses'
+  | 'ticket_categories';
 
 const ParametersModule: React.FC = () => {
   const toast = useToast();
   const [activeTab, setActiveTab] = useState<ParameterType>('currencies');
   const [parameters, setParameters] = useState<Parameter[]>([]);
   const [loading, setLoading] = useState(false);
+  const [tableUnavailableMessage, setTableUnavailableMessage] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [formData, setFormData] = useState<Partial<Parameter>>({
@@ -51,17 +60,21 @@ const ParametersModule: React.FC = () => {
     { id: 'payment_statuses' as ParameterType, label: 'Estados de Pago', icon: CreditCard },
     { id: 'item_types' as ParameterType, label: 'Tipos de Item', icon: Package },
     { id: 'payment_methods' as ParameterType, label: 'Métodos de Pago', icon: CreditCard },
-    { id: 'invoice_statuses' as ParameterType, label: 'Estados de Factura', icon: FileText }
+    { id: 'invoice_statuses' as ParameterType, label: 'Estados de Factura', icon: FileText },
+    { id: 'ticket_statuses' as ParameterType, label: 'Estados de Ticket', icon: Ticket },
+    { id: 'ticket_categories' as ParameterType, label: 'Categorías de Ticket', icon: Ticket }
   ];
 
   useEffect(() => {
+    setParameters([]);
+    setTableUnavailableMessage(null);
     loadParameters();
   }, [activeTab]);
 
   const loadParameters = async () => {
     setLoading(true);
     try {
-      const hasSortOrder = ['order_statuses', 'payment_statuses', 'invoice_statuses'].includes(activeTab);
+      const hasSortOrder = ['order_statuses', 'payment_statuses', 'invoice_statuses', 'ticket_statuses', 'ticket_categories'].includes(activeTab);
       const orderBy = hasSortOrder ? 'sort_order' : 'code';
 
       const { data, error } = await supabase
@@ -72,22 +85,37 @@ const ParametersModule: React.FC = () => {
       if (error) throw error;
       setParameters(data || []);
     } catch (error: any) {
-      toast.error('Error al cargar parámetros: ' + error.message);
+      const message = String(error?.message || 'Error desconocido');
+      const missingTable = error?.code === 'PGRST205' || message.toLowerCase().includes('could not find the table');
+
+      if (missingTable && (activeTab === 'ticket_statuses' || activeTab === 'ticket_categories')) {
+        setParameters([]);
+        const missingLabel = activeTab === 'ticket_categories' ? 'categorías de ticket' : 'estados de ticket';
+        setTableUnavailableMessage(`La tabla de ${missingLabel} aún no existe en la base de datos activa. Ejecuta las migraciones pendientes para habilitar este catálogo.`);
+        toast.warning(`Catálogo de ${missingLabel} no disponible: ejecuta migraciones pendientes`);
+      } else {
+        toast.error('Error al cargar parámetros: ' + message);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleSave = async () => {
+    if (tableUnavailableMessage) {
+      toast.warning('No se puede guardar mientras la tabla no exista en la base de datos');
+      return;
+    }
+
     if (!formData.code || !formData.name) {
       toast.error('Por favor completa los campos requeridos');
       return;
     }
 
     try {
-      const hasColor = ['order_statuses', 'payment_statuses', 'invoice_statuses'].includes(activeTab);
+      const hasColor = ['order_statuses', 'payment_statuses', 'invoice_statuses', 'ticket_statuses', 'ticket_categories'].includes(activeTab);
       const hasSymbol = activeTab === 'currencies';
-      const hasSortOrder = ['order_statuses', 'payment_statuses', 'invoice_statuses'].includes(activeTab);
+      const hasSortOrder = ['order_statuses', 'payment_statuses', 'invoice_statuses', 'ticket_statuses', 'ticket_categories'].includes(activeTab);
       const hasDefault = activeTab === 'currencies';
 
       const dataToSave: any = {
@@ -161,6 +189,11 @@ const ParametersModule: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
+    if (tableUnavailableMessage) {
+      toast.warning('No se puede eliminar mientras la tabla no exista en la base de datos');
+      return;
+    }
+
     setConfirmDialog({
       isOpen: true,
       title: '¿Eliminar parámetro?',
@@ -184,6 +217,11 @@ const ParametersModule: React.FC = () => {
   };
 
   const handleToggleActive = async (param: Parameter) => {
+    if (tableUnavailableMessage) {
+      toast.warning('No se puede actualizar mientras la tabla no exista en la base de datos');
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from(activeTab)
@@ -214,9 +252,9 @@ const ParametersModule: React.FC = () => {
   };
 
   const renderFormFields = () => {
-    const hasColor = ['order_statuses', 'payment_statuses', 'invoice_statuses'].includes(activeTab);
+    const hasColor = ['order_statuses', 'payment_statuses', 'invoice_statuses', 'ticket_statuses', 'ticket_categories'].includes(activeTab);
     const hasSymbol = activeTab === 'currencies';
-    const hasSortOrder = ['order_statuses', 'payment_statuses', 'invoice_statuses'].includes(activeTab);
+    const hasSortOrder = ['order_statuses', 'payment_statuses', 'invoice_statuses', 'ticket_statuses', 'ticket_categories'].includes(activeTab);
     const hasDefault = activeTab === 'currencies';
 
     return (
@@ -405,6 +443,12 @@ const ParametersModule: React.FC = () => {
             </div>
           )}
 
+          {tableUnavailableMessage && (
+            <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {tableUnavailableMessage}
+            </div>
+          )}
+
           {loading ? (
             <div className="text-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
@@ -422,7 +466,7 @@ const ParametersModule: React.FC = () => {
                         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">ISO (DGI)</th>
                       </>
                     )}
-                    {['order_statuses', 'payment_statuses', 'invoice_statuses'].includes(activeTab) && (
+                    {['order_statuses', 'payment_statuses', 'invoice_statuses', 'ticket_statuses', 'ticket_categories'].includes(activeTab) && (
                       <>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Color</th>
                         <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase">Orden</th>
@@ -443,7 +487,7 @@ const ParametersModule: React.FC = () => {
                           <td className="px-4 py-3 text-sm text-slate-900 font-mono">{param.iso_code}</td>
                         </>
                       )}
-                      {['order_statuses', 'payment_statuses', 'invoice_statuses'].includes(activeTab) && (
+                      {['order_statuses', 'payment_statuses', 'invoice_statuses', 'ticket_statuses', 'ticket_categories'].includes(activeTab) && (
                         <>
                           <td className="px-4 py-3">
                             <div className="flex items-center space-x-2">

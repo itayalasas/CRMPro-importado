@@ -9,6 +9,8 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useDialer } from '../../contexts/DialerContext';
+import { useNavigation } from '../../contexts/NavigationContext';
+import { saveTicketCreateDraft } from '../../lib/ticketDraft';
 
 interface Call {
   id: string;
@@ -55,6 +57,7 @@ export function CallsModule() {
   const { user } = useAuth();
   const toast = useToast();
   const { openDialerWithNumber } = useDialer();
+  const { setActiveModule } = useNavigation();
 
   const [formData, setFormData] = useState({
     client_id: '',
@@ -149,8 +152,23 @@ export function CallsModule() {
   };
 
   const loadCategories = async () => {
-    const { data } = await supabase.from('ticket_categories').select('*');
-    if (data) setCategories(data);
+    const { data, error } = await supabase
+      .from('ticket_categories')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+
+    if (!error && data) {
+      setCategories(data);
+      return;
+    }
+
+    const { data: fallbackData } = await supabase
+      .from('ticket_categories')
+      .select('*')
+      .order('name');
+
+    if (fallbackData) setCategories(fallbackData);
   };
 
   const loadUsers = async (query: string = '') => {
@@ -267,14 +285,25 @@ export function CallsModule() {
   };
 
   const openCreateTicketModal = (call: Call) => {
-    setSelectedCall(call);
-    setTicketFormData({
-      subject: `Seguimiento de llamada - ${call.clients?.company_name || call.clients?.contact_name || call.phone_number}`,
-      description: `Llamada ${call.direction === 'inbound' ? 'entrante' : 'saliente'} con duración de ${formatDuration(call.duration)}.\n\nNotas de la llamada:\n${call.notes || 'Sin notas'}`,
+    const subject = `Seguimiento de llamada - ${call.clients?.company_name || call.clients?.contact_name || call.phone_number}`;
+    const description = `Llamada ${call.direction === 'inbound' ? 'entrante' : 'saliente'} con duración de ${formatDuration(call.duration)}.\n\nNotas de la llamada:\n${call.notes || 'Sin notas'}`;
+
+    saveTicketCreateDraft({
+      client_id: call.client_id || undefined,
+      subject,
+      description,
       priority: 'medium',
-      category_id: ''
+      source_module: 'llamadas',
+      source_name: call.clients?.contact_name || call.clients?.company_name || undefined,
+      source_email: call.clients?.email || undefined,
+      source_phone: call.clients?.phone || call.phone_number || undefined
     });
-    setShowTicketModal(true);
+
+    setShowRetryListModal(false);
+    setShowTicketModal(false);
+    setSelectedCall(null);
+    setActiveModule('tickets');
+    toast.success('Completá el ticket en el formulario unificado');
   };
 
   const handleCreateTicket = async (e: React.FormEvent) => {
@@ -287,6 +316,7 @@ export function CallsModule() {
       const { error } = await supabase.from('tickets').insert({
         ticket_number: ticketNumber,
         client_id: selectedCall.client_id,
+        source_module: 'llamadas',
         subject: ticketFormData.subject,
         description: ticketFormData.description,
         priority: ticketFormData.priority,
@@ -1401,18 +1431,7 @@ export function CallsModule() {
                             Llamar
                           </button>
                           <button
-                            onClick={() => {
-                              setSelectedCall(call);
-                              setShowRetryListModal(false);
-                              setShowTicketModal(true);
-                              setTicketFormData({
-                                subject: `Reintento de llamada - ${call.clients?.company_name || call.phone_number}`,
-                                description: `Llamada ${call.status === 'failed' ? 'fallida' : call.status === 'busy' ? 'ocupada' : 'sin respuesta'} el ${new Date(call.created_at).toLocaleString()}.\n\nNotas: ${call.notes || 'Sin notas'}`,
-                                priority: 'medium',
-                                category_id: '',
-                                assigned_to: ''
-                              });
-                            }}
+                            onClick={() => openCreateTicketModal(call)}
                             className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition text-sm font-medium whitespace-nowrap"
                           >
                             <Ticket className="w-4 h-4" />

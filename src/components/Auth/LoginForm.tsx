@@ -26,7 +26,7 @@ export function LoginForm() {
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-600 via-blue-700 to-blue-900 p-12 flex-col justify-between min-h-screen">
         <div className="flex items-center space-x-3">
           <Calendar className="w-8 h-8 text-white" />
-          <span className="text-2xl font-bold text-white">CRM Pro</span>
+          <span className="text-2xl font-bold text-white">Calve CRM</span>
         </div>
 
         <div className="space-y-8">
@@ -71,7 +71,7 @@ export function LoginForm() {
         </div>
 
         <div className="text-blue-100 text-sm">
-          © 2024 CRM Pro. Todos los derechos reservados.
+          © 2026 Calve CRM. Todos los derechos reservados.
         </div>
       </div>
 

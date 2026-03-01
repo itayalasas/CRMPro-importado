@@ -3,19 +3,15 @@ import {
   LayoutDashboard,
   Users,
   Mail,
-  ShoppingCart,
-  FileText,
   Phone,
   Ticket,
   Inbox,
   MessageCircle,
   Settings,
   LogOut,
-  DollarSign,
   Menu,
   X,
-  User,
-  Shield
+  User
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -31,12 +27,10 @@ const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, moduleKey: 'dashboard' as ModuleKey },
   { id: 'clients', label: 'Clientes', icon: Users, moduleKey: 'clientes' as ModuleKey },
   { id: 'campaigns', label: 'Campañas', icon: Mail, moduleKey: 'campanas' as ModuleKey },
-  { id: 'orders', label: 'Órdenes', icon: ShoppingCart, moduleKey: 'ordenes' as ModuleKey },
   { id: 'calls', label: 'Llamadas', icon: Phone, moduleKey: 'llamadas' as ModuleKey },
   { id: 'tickets', label: 'Tickets', icon: Ticket, moduleKey: 'tickets' as ModuleKey },
   { id: 'inbox', label: 'Buzón', icon: Inbox, moduleKey: 'buzon' as ModuleKey },
   { id: 'webchat', label: 'Chat Web', icon: MessageCircle, moduleKey: 'chat_web' as ModuleKey },
-  { id: 'validation', label: 'Validación Ext.', icon: Shield, moduleKey: 'validacion_ext' as ModuleKey },
   { id: 'parameters', label: 'Parámetros', icon: Settings, moduleKey: 'parametros' as ModuleKey },
   { id: 'settings', label: 'Configuración', icon: Settings, moduleKey: 'configuracion' as ModuleKey },
 ];
@@ -146,11 +140,11 @@ export function Sidebar({ activeModule, onModuleChange }: SidebarProps) {
         <div className="flex items-center space-x-3">
           <img
             src="/logo.svg"
-            alt="CRM Pro Logo"
+            alt="Calve CRM Logo"
             className="w-12 h-12 rounded-xl shadow-lg"
           />
           <div>
-            <h1 className="text-xl font-bold bg-gradient-to-r from-white to-blue-200 bg-clip-text text-transparent">CRM Pro</h1>
+            <h1 className="text-xl font-bold bg-gradient-to-r from-white to-blue-200 bg-clip-text text-transparent">Calve CRM</h1>
             <p className="text-xs text-slate-400">Sistema Integral</p>
           </div>
         </div>

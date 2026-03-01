@@ -1,0 +1,43 @@
+services:
+  - type: worker
+    name: crmpro-imap-sync-worker
+    runtime: node
+    rootDir: workers/imap-sync-worker
+    buildCommand: npm install
+    startCommand: npm run start
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SYNC_CRON
+        value: "*/2 * * * *"
+      - key: FETCH_LIMIT
+        value: "50"
+      - key: DRY_RUN
+        value: "false"
+      - key: ACCOUNT_EMAIL
+        value: ""
+      - key: ACCOUNT_ID
+        value: ""
+
+  - type: cron
+    name: crmpro-imap-sync-cron
+    runtime: node
+    rootDir: workers/imap-sync-worker
+    schedule: "*/10 * * * *"
+    buildCommand: npm install
+    startCommand: npm run once
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: FETCH_LIMIT
+        value: "50"
+      - key: DRY_RUN
+        value: "false"
+      - key: ACCOUNT_EMAIL
+        value: ""
+      - key: ACCOUNT_ID
+        value: ""

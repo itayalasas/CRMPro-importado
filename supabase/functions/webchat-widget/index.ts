@@ -160,9 +160,30 @@ Deno.serve(async (req: Request) => {
         return 'visitor';
       };
 
-      const inferLegacySenderType = (base: unknown, messageValue: unknown): 'visitor' | 'bot' | 'system' => {
+      const inferLegacySenderType = (
+        base: unknown,
+        messageValue: unknown,
+        senderNameValue: unknown,
+        messageTypeValue: unknown
+      ): 'visitor' | 'bot' | 'system' => {
         const normalizedBase = normalizeSenderTypeForQueue(base);
+
+        // Treat agent request events as system messages (they are a workflow event,
+        // not something the visitor "said" in the chat transcript).
+        const messageType = normalizeEnumText(messageTypeValue);
+        if (messageType === 'request_agent') return 'system';
+
         if (normalizedBase !== 'visitor') return normalizedBase;
+
+        const senderName = normalizeText(senderNameValue);
+        const visitorName = normalizeText(visitor?.name);
+
+        // If a legacy widget sent sender_type incorrectly, we can often recover
+        // from sender_name (e.g., "Dotty").
+        if (senderName) {
+          if (senderName === 'dotty' || senderName.includes('dotty')) return 'bot';
+          if (visitorName && senderName !== visitorName) return 'bot';
+        }
 
         const text = normalizeText(messageValue);
         if (!text) return normalizedBase;
@@ -209,15 +230,18 @@ Deno.serve(async (req: Request) => {
           );
         }
 
-        const inferredSenderType = inferLegacySenderType(normalizedSenderType, message);
+        const inferredSenderType = inferLegacySenderType(normalizedSenderType, message, sender_name, message_type);
         const queueSenderType = normalizeSenderTypeForQueue(inferredSenderType);
+        const queueSenderName = queueSenderType === 'visitor'
+          ? (sender_name || visitor?.name || null)
+          : (sender_name || null);
 
         const { error: queueError } = await supabase
           .from('webchat_message_queue')
           .insert({
             session_id,
             sender_type: queueSenderType,
-            sender_name: sender_name || visitor?.name || null,
+            sender_name: queueSenderName,
             message: message || null,
             created_at: createdAtValue || new Date().toISOString(),
             source_domain: source_domain || null,
@@ -397,13 +421,21 @@ Deno.serve(async (req: Request) => {
       // NOTE: We intentionally keep queued transcript messages in webchat_message_queue.
       // They will be synced into webchat_messages when an agent takes the conversation.
 
+      const messageSenderType = normalizeSenderTypeForMessages(
+        inferLegacySenderType(normalizedSenderType, message, sender_name, message_type)
+      );
+
+      const messageSenderName = messageSenderType === 'visitor'
+        ? (sender_name || visitor?.name || null)
+        : (sender_name || null);
+
       const { error: messageError } = await supabase
         .from('webchat_messages')
         .insert({
           conversation_id: conversationId,
-          sender_type: normalizeSenderTypeForMessages(inferLegacySenderType(normalizedSenderType, message)),
+          sender_type: messageSenderType,
           sender_id: session_id,
-          sender_name: sender_name || visitor?.name || null,
+          sender_name: messageSenderName,
           message: message || null,
           attachments: uploadedAttachments,
           ...(createdAtValue ? { created_at: createdAtValue } : {}),

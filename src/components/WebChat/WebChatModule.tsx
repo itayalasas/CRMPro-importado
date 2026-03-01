@@ -19,12 +19,15 @@ import {
   FileText,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { getEnvVar } from '../../lib/envLoader';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { useNavigation } from '../../contexts/NavigationContext';
 import { useDialer } from '../../contexts/DialerContext';
+import { useNavigation } from '../../contexts/NavigationContext';
 import { searchUsers } from '../../lib/userService';
 import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
+import { externalAuth } from '../../lib/externalAuth';
+import { saveTicketCreateDraft } from '../../lib/ticketDraft';
 import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
 import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
 import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
@@ -268,7 +271,7 @@ export function WebChatModule() {
   const [messageText, setMessageText] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active');
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferQuery, setTransferQuery] = useState('');
   const [transferResults, setTransferResults] = useState<{ id: string; name: string; email: string }[]>([]);
@@ -402,6 +405,7 @@ export function WebChatModule() {
   const isAssignedToUser = selectedConversation?.assigned_user_id && selectedConversation.assigned_user_id === user?.id;
   const isConversationLocked = !!selectedConversation?.assigned_user_id && !isAssignedToUser;
   const isClosed = selectedConversation?.status === 'closed';
+  const isFormConversation = selectedConversation?.source_channel === 'form';
 
   const causeOptions = [
     'Consulta general',
@@ -475,26 +479,10 @@ export function WebChatModule() {
     container.scrollTop = container.scrollHeight;
   }, []);
 
-  useLayoutEffect(() => {
-    if (autoScrollRef.current) {
-      scrollToBottom();
-    }
-  }, [messages, scrollToBottom]);
-
-  const scrollToBottom = useCallback(() => {
-    const container = messageListRef.current;
-    if (!container) return;
-    container.scrollTop = container.scrollHeight;
-  }, []);
-
+  // Always keep the latest message visible.
   useLayoutEffect(() => {
     scrollToBottom();
-  }, [messages, scrollToBottom]);
-
-  useEffect(() => {
-    if (!messageListRef.current) return;
-    messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
-  }, [messages]);
+  }, [messages, selectedConversationId, scrollToBottom]);
 
   const markConversationViewed = useCallback((conversationId: string, timestamp?: string | null) => {
     const value = timestamp || new Date().toISOString();
@@ -560,7 +548,7 @@ export function WebChatModule() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar conversación..."
+                placeholder="Buscar por nombre, correo, teléfono o fecha..."
                 className="w-full rounded-xl border border-slate-200 bg-white/80 py-2.5 pl-9 pr-3 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
               />
             </div>
@@ -1533,8 +1521,27 @@ export function WebChatModule() {
       openLinkedTicket(linkedTicketNumber);
       return;
     }
-    openTicketPanel();
-  }, [linkedTicketNumber, openLinkedTicket, openTicketPanel]);
+
+    if (!selectedConversation) return;
+
+    const lastVisitorMessage = [...messages]
+      .reverse()
+      .find((msg) => msg.sender_type === 'visitor')?.message || '';
+
+    localStorage.setItem('ticket_create_draft', JSON.stringify({
+      client_id: createdClientId || undefined,
+      subject: `Chat web - ${selectedConversation.visitor_name || selectedConversation.visitor_email || selectedConversation.visitor_phone || 'Visitante'}`,
+      description: `Solicitud desde Chat Web\n\n${lastVisitorMessage}`.trim(),
+      priority: 'medium',
+      conversation_id: selectedConversation.id,
+      source_module: 'chat_web',
+      source_name: selectedConversation.visitor_name || undefined,
+      source_email: selectedConversation.visitor_email || undefined,
+      source_phone: selectedConversation.visitor_phone || undefined
+    }));
+
+    setActiveModule('tickets');
+  }, [linkedTicketNumber, openLinkedTicket, selectedConversation, messages, createdClientId, setActiveModule]);
 
   const handleSaveClient = async () => {
     if (!user?.id) return;
@@ -1657,57 +1664,51 @@ export function WebChatModule() {
       return;
     }
 
-    const ticketNumber = `TKT-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
-    setSidePanelSaving(true);
-    const { error } = await supabase
-      .from('tickets')
-      .insert({
-        ticket_number: ticketNumber,
-        client_id: ticketDraft.client_id || null,
-        subject: ticketDraft.subject,
-        description: ticketDraft.description,
-        priority: ticketDraft.priority,
-        status: 'open',
-        assigned_to: user.id,
-        created_by: user.id
-      });
-
-    setSidePanelSaving(false);
-    if (error) {
-      toast.error('Error al crear ticket');
-      return;
-    }
-
-    await supabase.from('webchat_messages').insert({
+    localStorage.setItem('ticket_create_draft', JSON.stringify({
+      client_id: ticketDraft.client_id || undefined,
+      subject: ticketDraft.subject,
+      description: ticketDraft.description,
+      priority: ticketDraft.priority,
+      assigned_to: user.id,
       conversation_id: selectedConversation.id,
-      sender_type: 'agent',
-      sender_id: user.id,
-      sender_name: user.name,
-      message: `Ticket creado: ${ticketNumber}`,
-      attachments: []
-    });
+      source_module: 'chat_web',
+      source_name: selectedConversation.visitor_name || undefined,
+      source_email: selectedConversation.visitor_email || undefined,
+      source_phone: selectedConversation.visitor_phone || undefined
+    }));
 
-    await supabase
-      .from('webchat_conversations')
-      .update({ result: 'Derivado a ticket', updated_at: new Date().toISOString() })
-      .eq('id', selectedConversation.id);
-
-    toast.success('Ticket creado');
+    toast.success('Completá el ticket en el formulario unificado');
     setSidePanelMode(null);
-    loadConversations();
-    loadMessages(selectedConversation.id);
+    setActiveModule('tickets');
   };
 
   const filteredConversations = conversations.filter(conv => {
-    if (!searchQuery.trim()) return true;
-    const search = searchQuery.toLowerCase();
-    return (
-      conv.visitor_name?.toLowerCase().includes(search) ||
-      conv.visitor_email?.toLowerCase().includes(search) ||
-      conv.visitor_phone?.toLowerCase().includes(search) ||
-      conv.source_domain?.toLowerCase().includes(search)
-    );
+    const search = searchQuery.trim().toLowerCase();
+    if (!search) return true;
+
+    const createdAt = conv.created_at ? new Date(conv.created_at) : null;
+    const lastMessageAt = conv.last_message_at ? new Date(conv.last_message_at) : null;
+
+    const searchableText = [
+      conv.visitor_name,
+      conv.visitor_email,
+      conv.visitor_phone,
+      conv.source_domain,
+      conv.source_detail,
+      conv.page_url,
+      conv.status,
+      createdAt?.toLocaleDateString('es-ES'),
+      createdAt?.toISOString().slice(0, 10),
+      lastMessageAt?.toLocaleDateString('es-ES'),
+      lastMessageAt?.toISOString().slice(0, 10)
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    return searchableText.includes(search);
   }).filter(conv => {
+    if (statusFilter === 'active') return conv.status !== 'closed';
     if (statusFilter === 'all') return true;
     return conv.status === statusFilter;
   }).filter(conv => {
@@ -1733,7 +1734,32 @@ export function WebChatModule() {
 
   const openEmailComposer = () => {
     if (selectedConversation?.visitor_email) {
-      navigateToInbox(selectedConversation.visitor_email);
+      const latestVisitorMessage = [...messages]
+        .reverse()
+        .find((message) => message.sender_type === 'visitor' && message.message?.trim())
+        ?.message?.trim();
+
+      const contactName = selectedConversation.visitor_name || selectedConversation.visitor_email;
+      const emailSubject = `Re: Consulta desde formulario - ${contactName}`;
+      const emailBody = [
+        `Hola ${selectedConversation.visitor_name || ''},`,
+        '',
+        'Gracias por contactarnos. Te respondemos por este medio:',
+        '',
+        '',
+        '---',
+        'Datos del contacto:',
+        `Nombre: ${selectedConversation.visitor_name || 'N/A'}`,
+        `Email: ${selectedConversation.visitor_email}`,
+        latestVisitorMessage ? `Mensaje original: ${latestVisitorMessage}` : 'Mensaje original: N/A',
+      ].join('\n');
+
+      navigateToInbox(selectedConversation.visitor_email, {
+        webchatConversationId: selectedConversation.id,
+        sourceChannel: selectedConversation.source_channel || undefined,
+        emailSubject,
+        emailBody,
+      });
     } else {
       toast.error('No hay email del visitante');
     }
@@ -1959,7 +1985,7 @@ export function WebChatModule() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar conversación..."
+                placeholder="Buscar por nombre, correo, teléfono o fecha..."
                 className="w-full rounded-xl border border-slate-200 bg-white/80 py-2.5 pl-9 pr-3 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
               <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50">
                         value={clientDraft.phone}
@@ -2634,7 +2660,7 @@ function ResultBadge({ result }: { result?: string | null }) {
 
 */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   MessageCircle,
   UserCheck,
@@ -2654,12 +2680,15 @@ import {
   FileText,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { getEnvVar } from '../../lib/envLoader';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { useNavigation } from '../../contexts/NavigationContext';
 import { useDialer } from '../../contexts/DialerContext';
+import { useNavigation } from '../../contexts/NavigationContext';
 import { searchUsers } from '../../lib/userService';
 import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
+import { externalAuth } from '../../lib/externalAuth';
+import { saveTicketCreateDraft } from '../../lib/ticketDraft';
 
 interface WebChatConversation {
   id: string;
@@ -2761,8 +2790,8 @@ interface ClientLookup {
 export function WebChatModule() {
   const { user } = useAuth();
   const toast = useToast();
-  const { navigateToInbox } = useNavigation();
   const { initiateCall } = useDialer();
+  const { setActiveModule } = useNavigation();
 
   const [conversations, setConversations] = useState<WebChatConversation[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
@@ -2772,8 +2801,12 @@ export function WebChatModule() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [emailComposerOpen, setEmailComposerOpen] = useState(false);
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailBody, setEmailBody] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active');
   const [channelFilter, _setChannelFilter] = useState('all');
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferQuery, setTransferQuery] = useState('');
@@ -2810,6 +2843,8 @@ export function WebChatModule() {
   const [clientViewClient, setClientViewClient] = useState<ClientLookup | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messageListRef = useRef<HTMLDivElement | null>(null);
+  const conversationsReloadTimerRef = useRef<number | null>(null);
+  const skipAutoSelectOnceRef = useRef(false);
   const lastConvoErrorRef = useRef<number>(0);
   const loadingConversationsRef = useRef(false);
   const lastViewedStorageKey = 'crm_webchat_last_viewed';
@@ -2894,6 +2929,99 @@ export function WebChatModule() {
   const isAssignedToUser = selectedConversation?.assigned_user_id && selectedConversation.assigned_user_id === user?.id;
   const isConversationLocked = !!selectedConversation?.assigned_user_id && !isAssignedToUser;
   const isClosed = selectedConversation?.status === 'closed';
+  const isFormConversation = selectedConversation?.source_channel === 'form';
+
+  const latestVisitorMessage = useMemo(() => {
+    return [...messages]
+      .reverse()
+      .find((message) => message.sender_type === 'visitor' && message.message?.trim())
+      ?.message?.trim() || '';
+  }, [messages]);
+
+  const initialVisitorMessage = useMemo(() => {
+    return messages
+      .find((message) => message.sender_type === 'visitor' && message.message?.trim())
+      ?.message?.trim() || '';
+  }, [messages]);
+
+  const buildFormEmailPrefill = useCallback(() => {
+    if (!selectedConversation) return { subject: '', body: '' };
+
+    const contactName = selectedConversation.visitor_name || selectedConversation.visitor_email || 'Contacto';
+    const subject = `Re: Consulta desde formulario - ${contactName}`;
+    const originalFormData = initialVisitorMessage || latestVisitorMessage;
+    const body = [
+      `Hola ${selectedConversation.visitor_name || ''},`,
+      '',
+      'Gracias por contactarnos. Te respondemos por este medio:',
+      '',
+      '',
+      '---',
+      'Datos del contacto:',
+      `Nombre: ${selectedConversation.visitor_name || 'N/A'}`,
+      `Email: ${selectedConversation.visitor_email || 'N/A'}`,
+      selectedConversation.visitor_phone ? `Teléfono: ${selectedConversation.visitor_phone}` : 'Teléfono: N/A',
+      selectedConversation.source_domain ? `Dominio: ${selectedConversation.source_domain}` : 'Dominio: N/A',
+      selectedConversation.source_detail ? `Origen: ${selectedConversation.source_detail}` : 'Origen: N/A',
+      selectedConversation.page_url ? `Página: ${selectedConversation.page_url}` : 'Página: N/A',
+      '',
+      'Datos recibidos del formulario:',
+      originalFormData || 'N/A',
+    ].join('\n');
+
+    return { subject, body };
+  }, [initialVisitorMessage, latestVisitorMessage, selectedConversation]);
+
+  useEffect(() => {
+    if (!selectedConversation) {
+      setEmailComposerOpen(false);
+      setEmailSubject('');
+      setEmailBody('');
+      return;
+    }
+
+    setEmailComposerOpen(false);
+    setEmailSubject('');
+    setEmailBody('');
+  }, [selectedConversation?.id]);
+
+  const inferSenderType = useCallback((row: any): WebChatMessage['sender_type'] => {
+    const base = String(row?.sender_type ?? '').trim().toLowerCase();
+    if (base === 'agent' || base === 'bot' || base === 'system' || base === 'visitor') return base as any;
+
+    return 'visitor';
+  }, []);
+
+  const inferLegacySenderTypeForDisplay = useCallback((row: any): WebChatMessage['sender_type'] => {
+    const base = String(row?.sender_type ?? '').trim().toLowerCase();
+    if (base && base !== 'visitor') return (base as any);
+
+    const senderName = String(row?.sender_name ?? '').trim().toLowerCase();
+    const text = String(row?.message ?? '').trim().toLowerCase();
+
+    if (senderName.includes('dotty')) return 'bot';
+
+    // Recover common bot/system phrases that older payloads stored as visitor.
+    if (text.startsWith('¡hola! soy dotty') || text.includes('soy dotty') || text.includes('asistente virtual')) {
+      return 'bot';
+    }
+    if (text.includes('estamos contactando a un agente disponible') || text.includes('la conversación ha finalizado')) {
+      return 'system';
+    }
+
+    return inferSenderType(row);
+  }, [inferSenderType]);
+
+  const scrollToBottom = useCallback(() => {
+    const container = messageListRef.current;
+    if (!container) return;
+    container.scrollTop = container.scrollHeight;
+  }, []);
+
+  // Always keep the latest message visible (matches widget behavior).
+  useLayoutEffect(() => {
+    scrollToBottom();
+  }, [messages, selectedConversationId, scrollToBottom]);
 
   const causeOptions = [
     'Consulta general',
@@ -2966,7 +3094,11 @@ export function WebChatModule() {
     setConversations(data || []);
     setConversationLoadError(null);
     if (!selectedConversationId && data && data.length > 0) {
-      setSelectedConversationId(data[0].id);
+      if (skipAutoSelectOnceRef.current) {
+        skipAutoSelectOnceRef.current = false;
+      } else {
+        setSelectedConversationId(data[0].id);
+      }
     }
     setLoadingConversations(false);
     loadingConversationsRef.current = false;
@@ -2986,9 +3118,23 @@ export function WebChatModule() {
       return;
     }
 
-    setMessages(data || []);
+    const normalized = (data || []).map((row: any) => ({
+      ...row,
+      sender_type: inferLegacySenderTypeForDisplay(row),
+    }));
+    setMessages(normalized as WebChatMessage[]);
     setLoadingMessages(false);
-  }, [toast]);
+  }, [inferLegacySenderTypeForDisplay, toast]);
+
+  const scheduleLoadConversations = useCallback(() => {
+    if (conversationsReloadTimerRef.current) {
+      window.clearTimeout(conversationsReloadTimerRef.current);
+    }
+    conversationsReloadTimerRef.current = window.setTimeout(() => {
+      conversationsReloadTimerRef.current = null;
+      loadConversations();
+    }, 250);
+  }, [loadConversations]);
 
   useEffect(() => {
     if (!selectedConversationId) return;
@@ -3006,13 +3152,15 @@ export function WebChatModule() {
           const newMessage = payload.new as WebChatMessage | null;
           if (!newMessage) return;
 
+          const effectiveSenderType = inferLegacySenderTypeForDisplay(newMessage);
+
           const conversationId = newMessage.conversation_id;
           const isActive = conversationId === selectedConversationIdRef.current && !document.hidden;
 
           if (isActive) {
             markConversationViewed(conversationId, newMessage.created_at);
             loadMessages(conversationId);
-          } else if (newMessage.sender_type === 'visitor') {
+          } else if (effectiveSenderType === 'visitor') {
             const lastNotified = lastNotifyRef.current[conversationId] || 0;
             const now = Date.now();
             if (now - lastNotified > 5000) {
@@ -3022,7 +3170,7 @@ export function WebChatModule() {
             }
           }
 
-          loadConversations();
+          scheduleLoadConversations();
         }
       )
       .subscribe();
@@ -3030,7 +3178,16 @@ export function WebChatModule() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [loadConversations, loadMessages, markConversationViewed, toast]);
+  }, [inferLegacySenderTypeForDisplay, loadMessages, markConversationViewed, scheduleLoadConversations, toast]);
+
+  useEffect(() => {
+    return () => {
+      if (conversationsReloadTimerRef.current) {
+        window.clearTimeout(conversationsReloadTimerRef.current);
+        conversationsReloadTimerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const channel = supabase
@@ -3121,16 +3278,20 @@ export function WebChatModule() {
 
     if (!queued || queued.length === 0) return;
 
-    const mapSenderType = (value: unknown): 'visitor' | 'agent' | 'system' => {
+    const mapSenderType = (value: unknown, senderNameValue: unknown): 'visitor' | 'agent' | 'system' => {
       const normalized = String(value ?? '').trim().toLowerCase();
       if (normalized === 'bot') return 'agent';
+      if (normalized === 'visitor') {
+        const name = String(senderNameValue ?? '').trim().toLowerCase();
+        if (name === 'dotty' || name.includes('dotty')) return 'agent';
+      }
       if (normalized === 'agent' || normalized === 'system' || normalized === 'visitor') return normalized as any;
       return 'visitor';
     };
 
     const insertPayload = queued.map((row: any) => ({
       conversation_id: conversationId,
-      sender_type: mapSenderType(row.sender_type),
+      sender_type: mapSenderType(row.sender_type, row.sender_name),
       sender_id: sessionId,
       sender_name: row.sender_name || null,
       message: row.message || null,
@@ -3342,15 +3503,45 @@ export function WebChatModule() {
 
     toast.success('Conversación cerrada');
     setShowCloseModal(false);
+
+    // After closing, clear the current history selection.
+    skipAutoSelectOnceRef.current = true;
+    setSelectedConversationId(null);
+    setMessages([]);
+    setMessageText('');
+    setAttachments([]);
+    setSidePanelMode(null);
+    setMobileTab('list');
+    setCauseSelection('');
+    setCauseCustom('');
+    setResultSelection('');
+    setResultNotes('');
     loadConversations();
   };
 
   const openEmailComposer = () => {
-    if (selectedConversation?.visitor_email) {
-      navigateToInbox(selectedConversation.visitor_email);
-    } else {
+    if (!selectedConversation?.visitor_email) {
       toast.error('No hay email del visitante');
+      return;
     }
+
+    if (selectedConversation.source_channel === 'form') {
+      if (!selectedConversation.assigned_user_id) {
+        toast.info('Primero toma el chat para preparar la respuesta por email.');
+        return;
+      }
+      const prefill = buildFormEmailPrefill();
+      setEmailSubject(prefill.subject);
+      setEmailBody(prefill.body);
+      setEmailComposerOpen(true);
+      return;
+    }
+
+    if (!emailSubject.trim()) {
+      const contactName = selectedConversation.visitor_name || selectedConversation.visitor_email || 'Contacto';
+      setEmailSubject(`Re: Consulta de ${contactName}`);
+    }
+    setEmailComposerOpen(true);
   };
 
   const openDialer = () => {
@@ -3629,8 +3820,29 @@ export function WebChatModule() {
       openTicketViewPanel(linkedTicketNumber);
       return;
     }
-    openTicketPanel();
-  }, [linkedTicketNumber, openTicketPanel, openTicketViewPanel]);
+
+    if (!selectedConversation || !user?.id) return;
+
+    const lastVisitorMessage = [...messages]
+      .reverse()
+      .find((msg) => msg.sender_type === 'visitor')?.message || '';
+
+    saveTicketCreateDraft({
+      client_id: createdClientId || undefined,
+      subject: `Chat web - ${selectedConversation.visitor_name || selectedConversation.visitor_email || selectedConversation.visitor_phone || 'Visitante'}`,
+      description: `Solicitud desde Chat Web\n\n${lastVisitorMessage}`.trim(),
+      priority: 'medium',
+      assigned_to: user.id,
+      conversation_id: selectedConversation.id,
+      source_module: 'chat_web',
+      source_name: selectedConversation.visitor_name || undefined,
+      source_email: selectedConversation.visitor_email || undefined,
+      source_phone: selectedConversation.visitor_phone || undefined,
+    });
+
+    toast.success('Completá el ticket en el formulario unificado');
+    setActiveModule('tickets');
+  }, [linkedTicketNumber, openTicketViewPanel, selectedConversation, user?.id, messages, createdClientId, toast, setActiveModule]);
 
   const handleSaveClient = async () => {
     if (!user?.id) return;
@@ -3760,49 +3972,31 @@ export function WebChatModule() {
       return;
     }
 
-    const ticketNumber = `TKT-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
-    setSidePanelSaving(true);
-    const { error } = await supabase
-      .from('tickets')
-      .insert({
-        ticket_number: ticketNumber,
-        client_id: ticketDraft.client_id || null,
-        subject: ticketDraft.subject,
-        description: ticketDraft.description,
-        priority: ticketDraft.priority,
-        status: 'open',
-        assigned_to: user.id,
-        created_by: user.id
-      });
-
-    setSidePanelSaving(false);
-    if (error) {
-      toast.error('Error al crear ticket');
-      return;
-    }
-
-    await supabase.from('webchat_messages').insert({
+    saveTicketCreateDraft({
+      client_id: ticketDraft.client_id || undefined,
+      subject: ticketDraft.subject,
+      description: ticketDraft.description,
+      priority: ticketDraft.priority,
+      assigned_to: user.id,
       conversation_id: selectedConversation.id,
-      sender_type: 'agent',
-      sender_id: user.id,
-      sender_name: user.name,
-      message: `Ticket creado: ${ticketNumber}`,
-      attachments: []
+      source_module: 'chat_web',
+      source_name: selectedConversation.visitor_name || undefined,
+      source_email: selectedConversation.visitor_email || undefined,
+      source_phone: selectedConversation.visitor_phone || undefined
     });
 
-    await supabase
-      .from('webchat_conversations')
-      .update({ result: 'Derivado a ticket', updated_at: new Date().toISOString() })
-      .eq('id', selectedConversation.id);
-
-    toast.success('Ticket creado');
+    toast.success('Completá el ticket en el formulario unificado');
     setSidePanelMode(null);
-    loadConversations();
-    loadMessages(selectedConversation.id);
+    setActiveModule('tickets');
   };
 
   const handleSendMessage = async () => {
     if (!selectedConversation || !user?.id) return;
+    if (isFormConversation) {
+      toast.info('Esta conversación se responde por email desde este panel.');
+      setEmailComposerOpen(true);
+      return;
+    }
     if (isConversationLocked) {
       toast.error('La conversación está asignada a otro usuario');
       return;
@@ -3881,16 +4075,97 @@ export function WebChatModule() {
     loadConversations();
   };
 
+  const handleSendEmailFromChat = async () => {
+    if (!selectedConversation || !user?.id) return;
+    if (!selectedConversation.visitor_email) {
+      toast.error('No hay email del visitante');
+      return;
+    }
+    if (!emailSubject.trim()) {
+      toast.error('Ingresa un asunto');
+      return;
+    }
+    if (!emailBody.trim()) {
+      toast.error('Ingresa un mensaje');
+      return;
+    }
+
+    setSendingEmail(true);
+    try {
+      const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
+      const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
+      const bodyHtml = emailBody
+        .split('\n')
+        .map((line) => line.trim())
+        .join('<br>');
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/send-inbox-email`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          to_emails: [selectedConversation.visitor_email],
+          cc_emails: [],
+          bcc_emails: [],
+          subject: emailSubject,
+          body_html: bodyHtml,
+          body_text: emailBody,
+          webchat_conversation_id: selectedConversation.id,
+          webchat_source_channel: selectedConversation.source_channel || null,
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || result.details || 'Error al enviar email');
+      }
+
+      toast.success('Email enviado correctamente');
+      if (isFormConversation) {
+        const prefill = buildFormEmailPrefill();
+        setEmailBody(prefill.body);
+      } else {
+        setEmailBody('');
+      }
+      await loadMessages(selectedConversation.id);
+      await loadConversations();
+    } catch (error: any) {
+      toast.error(`Error al enviar email: ${error.message}`);
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   const filteredConversations = conversations.filter(conv => {
-    if (!searchQuery.trim()) return true;
-    const search = searchQuery.toLowerCase();
-    return (
-      conv.visitor_name?.toLowerCase().includes(search) ||
-      conv.visitor_email?.toLowerCase().includes(search) ||
-      conv.visitor_phone?.toLowerCase().includes(search) ||
-      conv.source_domain?.toLowerCase().includes(search)
-    );
+    const search = searchQuery.trim().toLowerCase();
+    if (!search) return true;
+
+    const createdAt = conv.created_at ? new Date(conv.created_at) : null;
+    const lastMessageAt = conv.last_message_at ? new Date(conv.last_message_at) : null;
+
+    const searchableText = [
+      conv.visitor_name,
+      conv.visitor_email,
+      conv.visitor_phone,
+      conv.source_domain,
+      conv.source_detail,
+      conv.page_url,
+      conv.status,
+      createdAt?.toLocaleDateString('es-ES'),
+      createdAt?.toISOString().slice(0, 10),
+      lastMessageAt?.toLocaleDateString('es-ES'),
+      lastMessageAt?.toISOString().slice(0, 10)
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    return searchableText.includes(search);
   }).filter(conv => {
+    if (statusFilter === 'active') return conv.status !== 'closed';
     if (statusFilter === 'all') return true;
     return conv.status === statusFilter;
   }).filter(conv => {
@@ -3911,11 +4186,13 @@ export function WebChatModule() {
     return new Date(conv.last_message_at).getTime() > new Date(lastViewed).getTime();
   }).length;
 
+  const normalizeResult = (value: unknown) => String(value ?? '').trim().toLowerCase();
+
   const kpi = {
     total: conversations.length,
     open: conversations.filter(c => c.status === 'open').length,
     assigned: conversations.filter(c => c.status === 'assigned' || c.status === 'taken').length,
-    resolved: conversations.filter(c => c.status === 'resolved').length,
+    resolved: conversations.filter(c => c.status === 'resolved' || normalizeResult(c.result) === 'resuelto').length,
     closed: conversations.filter(c => c.status === 'closed').length,
     unassigned: conversations.filter(c => !c.assigned_user_id && c.status !== 'closed' && c.status !== 'resolved').length,
   };
@@ -4010,7 +4287,7 @@ export function WebChatModule() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar conversación..."
+                placeholder="Buscar por nombre, correo, teléfono o fecha..."
                 className="w-full rounded-xl border border-slate-200 bg-white/80 py-2.5 pl-9 pr-3 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
               />
             </div>
@@ -4029,6 +4306,7 @@ export function WebChatModule() {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="w-full rounded-xl border border-slate-200 bg-white/80 py-2 text-sm text-slate-700 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
             >
+              <option value="active">Activas (sin cerrados)</option>
               <option value="all">Todos los estados</option>
               <option value="open">Abierto</option>
               <option value="assigned">Asignado</option>
@@ -4179,10 +4457,15 @@ export function WebChatModule() {
                 <button
                   onClick={openEmailComposer}
                   className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={isConversationLocked || isClosed}
+                  disabled={
+                    isConversationLocked ||
+                    isClosed ||
+                    (!selectedConversation.visitor_email && isFormConversation) ||
+                    (isFormConversation && !selectedConversation.assigned_user_id)
+                  }
                 >
                   <Mail className="h-4 w-4" />
-                  <span>Email</span>
+                  <span>{isFormConversation ? 'Responder por Email' : 'Email'}</span>
                 </button>
                 <button
                   onClick={openDialer}
@@ -4315,52 +4598,112 @@ export function WebChatModule() {
               </div>
 
               <div className="border-t border-slate-200/80 bg-white p-5">
-                <div className="mb-3 flex items-center gap-3">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept="image/*,application/pdf"
-                    onChange={(e) => setAttachments(Array.from(e.target.files || []))}
-                    className="hidden"
-                  />
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={isConversationLocked || isClosed}
-                  >
-                    <Paperclip className="h-4 w-4" />
-                  </button>
-                  <div className="text-xs text-slate-500">
-                    {attachments.length > 0 ? `${attachments.length} adjunto(s)` : 'Sin adjuntos'}
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <textarea
-                    value={messageText}
-                    onChange={(e) => setMessageText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        if (!isConversationLocked && !isClosed) {
-                          handleSendMessage();
+                {emailComposerOpen ? (
+                  <div className="space-y-3">
+                    <div className="text-xs font-medium text-slate-500">Respuesta por correo</div>
+                    <input
+                      value={selectedConversation.visitor_email || ''}
+                      readOnly
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600"
+                    />
+                    <input
+                      value={emailSubject}
+                      onChange={(e) => setEmailSubject(e.target.value)}
+                      placeholder="Asunto"
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                      disabled={isConversationLocked || isClosed || sendingEmail}
+                    />
+                    <textarea
+                      value={emailBody}
+                      onChange={(e) => setEmailBody(e.target.value)}
+                      rows={5}
+                      placeholder="Escribe tu respuesta por correo..."
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-50"
+                      disabled={isConversationLocked || isClosed || sendingEmail}
+                    />
+                    <div className="flex items-center justify-end gap-2">
+                      {!isFormConversation && (
+                        <button
+                          onClick={() => setEmailComposerOpen(false)}
+                          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm transition hover:-translate-y-0.5"
+                          disabled={sendingEmail}
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                      <button
+                        onClick={handleSendEmailFromChat}
+                        className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-600 px-5 py-3 text-white shadow-lg transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={
+                          isConversationLocked ||
+                          isClosed ||
+                          sendingEmail ||
+                          !selectedConversation.visitor_email ||
+                          !emailSubject.trim() ||
+                          !emailBody.trim()
                         }
-                      }
-                    }}
-                    rows={2}
-                    placeholder="Escribe un mensaje..."
-                    className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-50"
-                    disabled={isConversationLocked || isClosed}
-                  />
-                  <button
-                    onClick={handleSendMessage}
-                    className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-600 px-5 py-3 text-white shadow-lg transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={isConversationLocked || isClosed}
-                  >
-                    <Send className="h-4 w-4" />
-                    <span>Enviar</span>
-                  </button>
-                </div>
+                      >
+                        <Send className="h-4 w-4" />
+                        <span>{sendingEmail ? 'Enviando...' : 'Enviar email'}</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : isFormConversation ? (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                    {!selectedConversation.assigned_user_id
+                      ? 'Toma el chat para habilitar la respuesta por email.'
+                      : 'Haz clic en “Responder por Email” para preparar y enviar una sola respuesta completa.'}
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-3 flex items-center gap-3">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        accept="image/*,application/pdf"
+                        onChange={(e) => setAttachments(Array.from(e.target.files || []))}
+                        className="hidden"
+                      />
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isConversationLocked || isClosed}
+                      >
+                        <Paperclip className="h-4 w-4" />
+                      </button>
+                      <div className="text-xs text-slate-500">
+                        {attachments.length > 0 ? `${attachments.length} adjunto(s)` : 'Sin adjuntos'}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <textarea
+                        value={messageText}
+                        onChange={(e) => setMessageText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            if (!isConversationLocked && !isClosed) {
+                              handleSendMessage();
+                            }
+                          }
+                        }}
+                        rows={2}
+                        placeholder="Escribe un mensaje..."
+                        className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-50"
+                        disabled={isConversationLocked || isClosed}
+                      />
+                      <button
+                        onClick={handleSendMessage}
+                        className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-600 px-5 py-3 text-white shadow-lg transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isConversationLocked || isClosed}
+                      >
+                        <Send className="h-4 w-4" />
+                        <span>Enviar</span>
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </>
           ) : (

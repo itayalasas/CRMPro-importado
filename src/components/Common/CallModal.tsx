@@ -3,6 +3,8 @@ import { X, PhoneCall, Clock, User, FileText, Ticket, Save, Phone, PhoneOff, Mic
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
+import { useNavigation } from '../../contexts/NavigationContext';
+import { saveTicketCreateDraft } from '../../lib/ticketDraft';
 import { twilioService } from '../../lib/twilioService';
 import type { Call } from '@twilio/voice-sdk';
 
@@ -25,6 +27,7 @@ interface CallModalProps {
 export function CallModal({ isOpen, onClose, phoneNumber, callSid, contactInfo, isIncoming = false, twilioCall, onCallSaved }: CallModalProps) {
   const { user } = useAuth();
   const toast = useToast();
+  const { setActiveModule } = useNavigation();
 
   const [callStartTime] = useState<Date>(new Date());
   const [callDuration, setCallDuration] = useState(0);
@@ -394,22 +397,24 @@ export function CallModal({ isOpen, onClose, phoneNumber, callSid, contactInfo, 
       if (callError) throw callError;
 
       if (createTicket && ticketTitle) {
-        const { error: ticketError } = await supabase
-          .from('tickets')
-          .insert({
-            title: ticketTitle,
-            description: ticketDescription || `Ticket generado desde llamada a ${phoneNumber}\n\nNotas de la llamada:\n${callNotes}`,
-            priority: ticketPriority,
-            status: 'open',
-            client_id: currentContactInfo?.id || null,
-            created_by: user?.id,
-            assigned_to: user?.id
-          });
-
-        if (ticketError) throw ticketError;
+        saveTicketCreateDraft({
+          client_id: currentContactInfo?.id || undefined,
+          subject: ticketTitle,
+          description: ticketDescription || `Ticket generado desde llamada a ${phoneNumber}\n\nNotas de la llamada:\n${callNotes}`,
+          priority: ticketPriority,
+          assigned_to: user?.id || undefined,
+          source_module: 'llamada_modal',
+          source_name: currentContactInfo?.contact_name || currentContactInfo?.company_name || undefined,
+          source_email: currentContactInfo?.email || undefined,
+          source_phone: phoneNumber
+        });
       }
 
       toast.success('Llamada guardada exitosamente');
+      if (createTicket && ticketTitle) {
+        setActiveModule('tickets');
+        toast.info('Completá el ticket en el formulario unificado');
+      }
       if (onCallSaved) {
         onCallSaved();
       }

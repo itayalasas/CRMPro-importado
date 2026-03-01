@@ -47,6 +47,17 @@ export function SettingsModule() {
     date_format: 'DD/MM/YYYY'
   });
 
+  const [ticketSlaSettings, setTicketSlaSettings] = useState({
+    low_hours: 72,
+    medium_hours: 24,
+    high_hours: 8,
+    urgent_hours: 4,
+    low_estimated_hours: 2,
+    medium_estimated_hours: 4,
+    high_estimated_hours: 8,
+    urgent_estimated_hours: 12
+  });
+
   const [twilioConfig, setTwilioConfig] = useState({
     id: '',
     account_sid: '',
@@ -156,6 +167,11 @@ export function SettingsModule() {
           setEmailSettings(setting.setting_value as any);
         } else if (setting.setting_key === 'general_settings') {
           setGeneralSettings(setting.setting_value as any);
+        } else if (setting.setting_key === 'ticket_sla_settings') {
+          setTicketSlaSettings((prev) => ({
+            ...prev,
+            ...(setting.setting_value as any)
+          }));
         } else if (setting.setting_key === 'webchat_settings') {
           setWebchatSettings((prev) => {
             const next = {
@@ -247,13 +263,48 @@ export function SettingsModule() {
     setSaveStatus('saving');
 
     try {
+      const metadataByKey: Record<string, { setting_type: 'smtp' | 'email' | 'general' | 'integration'; description: string }> = {
+        smtp_config: {
+          setting_type: 'smtp',
+          description: 'SMTP server configuration for sending emails'
+        },
+        email_settings: {
+          setting_type: 'email',
+          description: 'Email sending limits and settings'
+        },
+        general_settings: {
+          setting_type: 'general',
+          description: 'General system settings'
+        },
+        ticket_sla_settings: {
+          setting_type: 'general',
+          description: 'SLA de tickets por prioridad (horas de vencimiento + horas hombre estimadas)'
+        },
+        webchat_settings: {
+          setting_type: 'integration',
+          description: 'Webchat integration settings'
+        },
+        integration_settings: {
+          setting_type: 'integration',
+          description: 'Integration and API settings'
+        }
+      };
+
+      const metadata = metadataByKey[key] || {
+        setting_type: 'general' as const,
+        description: 'System setting'
+      };
+
       const { error } = await supabase
         .from('system_settings')
-        .update({
+        .upsert({
+          setting_key: key,
           setting_value: value,
+          setting_type: metadata.setting_type,
+          description: metadata.description,
+          updated_by: user?.id || null,
           updated_at: new Date().toISOString()
-        })
-        .eq('setting_key', key);
+        }, { onConflict: 'setting_key' });
 
       if (error) {
         setSaveStatus('error');
@@ -280,6 +331,10 @@ export function SettingsModule() {
 
   const handleSaveGeneral = () => {
     saveSettings('general_settings', generalSettings);
+  };
+
+  const handleSaveTicketSla = () => {
+    saveSettings('ticket_sla_settings', ticketSlaSettings);
   };
 
   const handleSaveWebchat = () => {
@@ -383,20 +438,32 @@ export function SettingsModule() {
 
       const inboxData = {
         user_id: user.id,
-        email_address: inboxConfig.email_address,
-        display_name: inboxConfig.display_name,
-        imap_host: inboxConfig.imap_host,
-        imap_port: inboxConfig.imap_port,
-        imap_username: inboxConfig.imap_username,
+        email_address: inboxConfig.email_address.trim(),
+        display_name: inboxConfig.display_name.trim(),
+        imap_host: inboxConfig.imap_host.trim(),
+        imap_port: Number(inboxConfig.imap_port) || (inboxConfig.use_ssl ? 993 : 143),
+        imap_username: inboxConfig.imap_username.trim(),
         imap_password: inboxConfig.imap_password,
-        smtp_host: inboxConfig.smtp_host,
-        smtp_port: inboxConfig.smtp_port,
-        smtp_username: inboxConfig.smtp_username,
+        smtp_host: inboxConfig.smtp_host.trim(),
+        smtp_port: Number(inboxConfig.smtp_port) || (inboxConfig.use_ssl ? 465 : 587),
+        smtp_username: inboxConfig.smtp_username.trim(),
         smtp_password: inboxConfig.smtp_password,
         use_ssl: inboxConfig.use_ssl,
         is_active: inboxConfig.is_active,
         created_by: user.id
       };
+
+      if (!inboxData.email_address || !inboxData.imap_host || !inboxData.imap_username || !inboxData.imap_password) {
+        setSaveStatus('error');
+        toast.error('Completa la configuración IMAP obligatoria antes de guardar');
+        return;
+      }
+
+      if (!inboxData.smtp_host || !inboxData.smtp_username || !inboxData.smtp_password) {
+        setSaveStatus('error');
+        toast.error('Completa la configuración SMTP obligatoria antes de guardar');
+        return;
+      }
 
       let error;
 
@@ -880,6 +947,114 @@ export function SettingsModule() {
               </div>
             </div>
 
+            <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
+              <h3 className="text-base font-semibold text-slate-800 mb-1">SLA de Tickets por Prioridad</h3>
+              <p className="text-sm text-slate-600 mb-4">Define por prioridad el vencimiento (SLA) y las horas hombre para cálculo automático.</p>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Baja (horas)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={ticketSlaSettings.low_hours}
+                    onChange={(e) => setTicketSlaSettings({ ...ticketSlaSettings, low_hours: Math.max(1, Number(e.target.value) || 1) })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Media (horas)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={ticketSlaSettings.medium_hours}
+                    onChange={(e) => setTicketSlaSettings({ ...ticketSlaSettings, medium_hours: Math.max(1, Number(e.target.value) || 1) })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Alta (horas)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={ticketSlaSettings.high_hours}
+                    onChange={(e) => setTicketSlaSettings({ ...ticketSlaSettings, high_hours: Math.max(1, Number(e.target.value) || 1) })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Urgente (horas)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={ticketSlaSettings.urgent_hours}
+                    onChange={(e) => setTicketSlaSettings({ ...ticketSlaSettings, urgent_hours: Math.max(1, Number(e.target.value) || 1) })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-slate-200">
+                <h4 className="text-sm font-semibold text-slate-800 mb-1">Horas hombre estimadas por prioridad</h4>
+                <p className="text-xs text-slate-600 mb-3">Se usan para completar automáticamente "Horas estimadas" al crear tickets.</p>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Baja (hh)</label>
+                    <input
+                      type="number"
+                      min={0.5}
+                      step={0.5}
+                      value={ticketSlaSettings.low_estimated_hours}
+                      onChange={(e) => setTicketSlaSettings({ ...ticketSlaSettings, low_estimated_hours: Math.max(0.5, Number(e.target.value) || 0.5) })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Media (hh)</label>
+                    <input
+                      type="number"
+                      min={0.5}
+                      step={0.5}
+                      value={ticketSlaSettings.medium_estimated_hours}
+                      onChange={(e) => setTicketSlaSettings({ ...ticketSlaSettings, medium_estimated_hours: Math.max(0.5, Number(e.target.value) || 0.5) })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Alta (hh)</label>
+                    <input
+                      type="number"
+                      min={0.5}
+                      step={0.5}
+                      value={ticketSlaSettings.high_estimated_hours}
+                      onChange={(e) => setTicketSlaSettings({ ...ticketSlaSettings, high_estimated_hours: Math.max(0.5, Number(e.target.value) || 0.5) })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Urgente (hh)</label>
+                    <input
+                      type="number"
+                      min={0.5}
+                      step={0.5}
+                      value={ticketSlaSettings.urgent_estimated_hours}
+                      onChange={(e) => setTicketSlaSettings({ ...ticketSlaSettings, urgent_estimated_hours: Math.max(0.5, Number(e.target.value) || 0.5) })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 flex justify-end">
+                <button
+                  onClick={handleSaveTicketSla}
+                  className="flex items-center space-x-2 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-5 py-2.5 rounded-lg hover:from-emerald-700 hover:to-emerald-600 transition shadow"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Guardar SLA de Tickets</span>
+                </button>
+              </div>
+            </div>
+
             <div className="pt-4 flex justify-end">
               <button
                 onClick={handleSaveGeneral}
@@ -936,6 +1111,11 @@ export function SettingsModule() {
                       <p className="font-medium">Outlook:</p>
                       <p className="text-xs">IMAP: outlook.office365.com:993</p>
                       <p className="text-xs">SMTP: smtp.office365.com:587</p>
+                    </div>
+                    <div>
+                      <p className="font-medium">GoDaddy:</p>
+                      <p className="text-xs">IMAP: imap.secureserver.net:993</p>
+                      <p className="text-xs">SMTP: smtpout.secureserver.net:465</p>
                     </div>
                   </div>
                 </div>

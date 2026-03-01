@@ -13,13 +13,11 @@ import { CallModal } from './components/Common/CallModal';
 import { DashboardModule } from './components/Dashboard/DashboardModule';
 import { ClientsModule } from './components/Clients/ClientsModule';
 import { CampaignsModule } from './components/Campaigns/CampaignsModule';
-import { OrdersModule } from './components/Orders/OrdersModule';
 import { CallsModule } from './components/Calls/CallsModule';
 import { TicketsModule } from './components/Tickets/TicketsModule';
 import { InboxModule } from './components/Inbox/InboxModule';
 import { SettingsModule } from './components/Settings/SettingsModule';
 import ParametersModule from './components/Settings/ParametersModule';
-import { ExternalValidationModule } from './components/Settings/ExternalValidationModule';
 import { WebChatModule } from './components/WebChat/WebChatModule';
 import { useTwilioDevice } from './hooks/useTwilioDevice';
 import { useInvoiceAutoValidation } from './hooks/useInvoiceAutoValidation';
@@ -71,8 +69,6 @@ function MainApp() {
         return <ClientsModule />;
       case 'campaigns':
         return <CampaignsModule />;
-      case 'orders':
-        return <OrdersModule />;
       case 'calls':
         return <CallsModule />;
       case 'tickets':
@@ -85,8 +81,6 @@ function MainApp() {
         return <SettingsModule />;
       case 'parameters':
         return <ParametersModule />;
-      case 'validation':
-        return <ExternalValidationModule />;
       default:
         return <DashboardModule />;
     }

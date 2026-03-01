@@ -38,6 +38,7 @@ Deno.serve(async (req: Request) => {
 
     const {
       userId,
+      outbox_email_id,
       to_emails,
       cc_emails,
       bcc_emails,
@@ -46,12 +47,25 @@ Deno.serve(async (req: Request) => {
       body_text,
       reply_to_id,
       forward_from_id,
-      attachments = []
+      attachments = [],
+      webchat_conversation_id,
+      webchat_source_channel,
     } = await req.json();
 
+    const isFormConversation =
+      typeof webchat_conversation_id === 'string' &&
+      webchat_conversation_id.length > 0 &&
+      webchat_source_channel === 'form';
+
+    const conversationToken = isFormConversation ? `[CRM-CHAT:${webchat_conversation_id}]` : '';
+    const finalSubject = isFormConversation && typeof subject === 'string' && !subject.includes(conversationToken)
+      ? `${subject} ${conversationToken}`.trim()
+      : subject;
+
     console.log(`[SEND-EMAIL] ✓ Sending email for user: ${userId}`);
+    console.log(`[SEND-EMAIL] Outbox email ID: ${outbox_email_id || 'none'}`);
     console.log(`[SEND-EMAIL] To: ${to_emails.join(', ')}`);
-    console.log(`[SEND-EMAIL] Subject: ${subject}`);
+    console.log(`[SEND-EMAIL] Subject: ${finalSubject}`);
     console.log(`[SEND-EMAIL] CC: ${cc_emails?.join(', ') || 'none'}`);
     console.log(`[SEND-EMAIL] BCC: ${bcc_emails?.join(', ') || 'none'}`);
     console.log(`[SEND-EMAIL] Attachments: ${attachments.length}`);
@@ -62,7 +76,7 @@ Deno.serve(async (req: Request) => {
     const { data: account, error: accountError } = await supabase
       .from('email_accounts')
       .select('*')
-      .eq('created_by', userId)
+      .or(`created_by.eq.${userId},user_id.eq.${userId}`)
       .eq('is_active', true)
       .maybeSingle();
 
@@ -125,7 +139,7 @@ Deno.serve(async (req: Request) => {
       to: to_emails.join(', '),
       cc: cc_emails?.join(', ') || undefined,
       bcc: bcc_emails?.join(', ') || undefined,
-      subject: subject,
+      subject: finalSubject,
       text: body_text || body_html.replace(/<[^>]*>/g, ''),
       html: body_html,
       attachments: mailAttachments,
@@ -149,7 +163,7 @@ Deno.serve(async (req: Request) => {
       to_emails: to_emails.map((email: string) => ({ email })),
       cc_emails: cc_emails ? cc_emails.map((email: string) => ({ email })) : [],
       bcc_emails: bcc_emails ? bcc_emails.map((email: string) => ({ email })) : [],
-      subject,
+      subject: finalSubject,
       body_text: body_text || body_html.replace(/<[^>]*>/g, ''),
       body_html: body_html,
       attachments: attachments.map((att: any) => ({
@@ -172,21 +186,74 @@ Deno.serve(async (req: Request) => {
     console.log('[SEND-EMAIL] User ID:', sentEmail.user_id);
     console.log('[SEND-EMAIL] Account ID:', sentEmail.account_id);
 
-    const { data: savedEmail, error: insertError } = await supabase
-      .from('inbox_emails')
-      .insert(sentEmail)
-      .select()
-      .single();
+    let savedEmail: any = null;
 
-    if (insertError) {
-      console.error('[SEND-EMAIL] ❌ Error saving sent email:', insertError);
-      console.error('[SEND-EMAIL] Error code:', insertError.code);
-      console.error('[SEND-EMAIL] Error message:', insertError.message);
-      console.error('[SEND-EMAIL] Error details:', JSON.stringify(insertError, null, 2));
-      throw insertError;
+    if (outbox_email_id) {
+      console.log('[SEND-EMAIL] Updating queued outbox email to sent:', outbox_email_id);
+      const { data: updatedEmail, error: updateError } = await supabase
+        .from('inbox_emails')
+        .update(sentEmail)
+        .eq('id', outbox_email_id)
+        .eq('account_id', account.id)
+        .select()
+        .single();
+
+      if (updateError) {
+        console.error('[SEND-EMAIL] ❌ Error updating outbox email:', updateError);
+        console.error('[SEND-EMAIL] Error code:', updateError.code);
+        console.error('[SEND-EMAIL] Error message:', updateError.message);
+        console.error('[SEND-EMAIL] Error details:', JSON.stringify(updateError, null, 2));
+        throw updateError;
+      }
+
+      savedEmail = updatedEmail;
+    } else {
+      const { data: insertedEmail, error: insertError } = await supabase
+        .from('inbox_emails')
+        .insert(sentEmail)
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('[SEND-EMAIL] ❌ Error saving sent email:', insertError);
+        console.error('[SEND-EMAIL] Error code:', insertError.code);
+        console.error('[SEND-EMAIL] Error message:', insertError.message);
+        console.error('[SEND-EMAIL] Error details:', JSON.stringify(insertError, null, 2));
+        throw insertError;
+      }
+
+      savedEmail = insertedEmail;
     }
 
     console.log(`[SEND-EMAIL] ✓ Email saved to sent folder with ID: ${savedEmail.id}`);
+
+    if (isFormConversation) {
+      const textForChat = (body_text || body_html.replace(/<[^>]*>/g, '') || '').trim();
+      const snippet = textForChat.length > 2000 ? `${textForChat.slice(0, 1997)}...` : textForChat;
+
+      const { error: webchatInsertError } = await supabase
+        .from('webchat_messages')
+        .insert({
+          conversation_id: webchat_conversation_id,
+          sender_type: 'agent',
+          sender_id: userId,
+          sender_name: account.display_name || account.email_address,
+          message: snippet || `(Email enviado) ${finalSubject}`,
+          attachments: [],
+        });
+
+      if (webchatInsertError) {
+        console.error('[SEND-EMAIL] ❌ Error mirroring email to webchat_messages:', webchatInsertError);
+      } else {
+        await supabase
+          .from('webchat_conversations')
+          .update({
+            last_message_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', webchat_conversation_id);
+      }
+    }
 
     if (reply_to_id) {
       console.log(`[SEND-EMAIL] Marking original email ${reply_to_id} as read`);

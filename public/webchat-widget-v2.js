@@ -935,9 +935,8 @@
     }
 
     quickWrap.style.display = (cachedMessages.length <= 1 && !agentRequested) ? 'block' : 'none';
-    if (shouldStickToBottom) {
-      body.scrollTop = body.scrollHeight;
-    }
+    // Always keep the latest message visible.
+    body.scrollTop = body.scrollHeight;
   };
 
   const withSessionId = (baseUrl) => {
@@ -1157,8 +1156,8 @@
       await sendMessageOrdered({
         session_id: sessionId,
         message: 'Solicitud de agente',
-        sender_type: 'visitor',
-        sender_name: visitor?.name || null,
+        sender_type: 'system',
+        sender_name: null,
         created_at: nextCreatedAtIso(afterTime ? new Date(afterTime + 2).toISOString() : null),
         message_type: 'request_agent',
         visitor,

@@ -1,104 +1,223 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Activity, BarChart3, CheckCircle2, Mail, PhoneCall, RefreshCw, Ticket, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
-import {
-  Users,
-  Mail,
-  Ticket,
-  DollarSign,
-  TrendingUp,
-  TrendingDown,
-  Phone,
-  ShoppingCart,
-  Activity,
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  Target,
-  Zap,
-  BarChart3
-} from 'lucide-react';
 
-interface Stats {
-  totalClients: number;
-  activeClients: number;
-  newClientsThisMonth: number;
-  clientGrowth: number;
-  totalRevenue: number;
-  revenueGrowth: number;
-  pendingRevenue: number;
-  totalCommissions: number;
-  paidCommissions: number;
-  openTickets: number;
-  avgResolutionTime: number;
-  ticketSatisfaction: number;
-  totalCalls: number;
-  avgCallDuration: number;
-  campaignsActive: number;
-  emailOpenRate: number;
-  ordersThisMonth: number;
-  conversionRate: number;
+interface TopClient {
+  id: string;
+  company_name: string;
+  contact_name: string;
+  revenue: number;
 }
 
-interface RecentActivity {
+interface ClientRecord {
   id: string;
-  type: string;
-  description: string;
-  time: string;
-  icon: any;
-  color: string;
+  company_name: string;
+  contact_name: string;
+  status: string;
+}
+
+interface TicketRecord {
+  id: string;
+  ticket_number: string;
+  subject: string;
+  status: 'open' | 'in_progress' | 'waiting' | 'resolved' | 'closed';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  created_at: string;
+}
+
+interface InvoiceRecord {
+  client_id: string;
+  total_amount: number | string;
+  status: string;
+}
+
+interface IncomingCallRecord {
+  id: string;
+  status: string;
+}
+
+interface OutboundCallRecord {
+  id: string;
+  status: string;
+}
+
+interface InboxEmailRecord {
+  id: string;
+  folder: string;
+  is_read: boolean;
+  is_deleted: boolean;
+  is_archived: boolean;
+}
+
+interface ChatConversationRecord {
+  id: string;
+  status: 'open' | 'assigned' | 'taken' | 'resolved' | 'closed' | string;
+}
+
+interface WeeklyPoint {
+  label: string;
+  value: number;
 }
 
 export function DashboardModule() {
-  const [stats, setStats] = useState<Stats>({
+  const [loading, setLoading] = useState(true);
+  const [topClients, setTopClients] = useState<TopClient[]>([]);
+  const [recentTickets, setRecentTickets] = useState<TicketRecord[]>([]);
+  const [weeklyTickets, setWeeklyTickets] = useState<WeeklyPoint[]>([]);
+  const [statusBreakdown, setStatusBreakdown] = useState({
+    open: 0,
+    in_progress: 0,
+    waiting: 0,
+    resolved: 0,
+    closed: 0,
+  });
+  const [metrics, setMetrics] = useState({
     totalClients: 0,
     activeClients: 0,
-    newClientsThisMonth: 0,
-    clientGrowth: 0,
-    totalRevenue: 0,
-    revenueGrowth: 15.3,
-    pendingRevenue: 0,
-    totalCommissions: 0,
-    paidCommissions: 0,
+    totalTickets: 0,
     openTickets: 0,
-    avgResolutionTime: 0,
-    ticketSatisfaction: 94,
+    resolvedTickets: 0,
+    incomingCalls: 0,
+    missedCalls: 0,
     totalCalls: 0,
-    avgCallDuration: 0,
-    campaignsActive: 0,
-    emailOpenRate: 68.5,
-    ordersThisMonth: 0,
-    conversionRate: 23.4
+    totalEmails: 0,
+    unreadEmails: 0,
+    totalChats: 0,
+    openChats: 0,
   });
 
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
-  const [topClients, setTopClients] = useState<any[]>([]);
+  const loadDashboardData = useCallback(async () => {
+    setLoading(true);
+
+    const [
+      { data: clients },
+      { data: tickets },
+      { data: invoices },
+      { data: incomingCalls },
+      { data: outboundCalls },
+      { data: inboxEmails },
+      { data: chatConversations },
+    ] = await Promise.all([
+      supabase
+        .from('clients')
+        .select('id, company_name, contact_name, status'),
+      supabase
+        .from('tickets')
+        .select('id, ticket_number, subject, status, priority, created_at')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('invoices')
+        .select('client_id, total_amount, status'),
+      supabase
+        .from('incoming_calls')
+        .select('id, status'),
+      supabase
+        .from('calls')
+        .select('id, status'),
+      supabase
+        .from('inbox_emails')
+        .select('id, folder, is_read, is_deleted, is_archived'),
+      supabase
+        .from('webchat_conversations')
+        .select('id, status'),
+    ]);
+
+    const clientsData = (clients || []) as ClientRecord[];
+    const ticketsData = (tickets || []) as TicketRecord[];
+    const invoicesData = (invoices || []) as InvoiceRecord[];
+    const incomingCallsData = (incomingCalls || []) as IncomingCallRecord[];
+    const outboundCallsData = (outboundCalls || []) as OutboundCallRecord[];
+    const inboxEmailsData = (inboxEmails || []) as InboxEmailRecord[];
+    const chatConversationsData = (chatConversations || []) as ChatConversationRecord[];
+
+    const activeClients = clientsData.filter((item) => item.status === 'active').length;
+    const openTickets = ticketsData.filter((item) => ['open', 'in_progress', 'waiting'].includes(item.status)).length;
+    const resolvedTickets = ticketsData.filter((item) => ['resolved', 'closed'].includes(item.status)).length;
+
+    const incomingCallsCount = incomingCallsData.length;
+    const missedCallsCount = incomingCallsData.filter((item) => ['missed', 'no-answer', 'busy', 'failed'].includes(String(item.status || '').toLowerCase())).length;
+    const totalCallsCount = incomingCallsCount + outboundCallsData.length;
+
+    const activeInboxEmails = inboxEmailsData.filter((item) => item.folder === 'inbox' && !item.is_deleted && !item.is_archived);
+    const totalEmailsCount = activeInboxEmails.length;
+    const unreadEmailsCount = activeInboxEmails.filter((item) => !item.is_read).length;
+
+    const totalChatsCount = chatConversationsData.length;
+    const openChatsCount = chatConversationsData.filter((item) => ['open', 'assigned', 'taken'].includes(String(item.status || '').toLowerCase())).length;
+
+    const paidInvoices = invoicesData.filter((item) => item.status === 'paid');
+
+    const breakdown = {
+      open: ticketsData.filter((item) => item.status === 'open').length,
+      in_progress: ticketsData.filter((item) => item.status === 'in_progress').length,
+      waiting: ticketsData.filter((item) => item.status === 'waiting').length,
+      resolved: ticketsData.filter((item) => item.status === 'resolved').length,
+      closed: ticketsData.filter((item) => item.status === 'closed').length,
+    };
+
+    const last7Days: WeeklyPoint[] = Array.from({ length: 7 }).map((_, index) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6 - index));
+      const dayLabel = date.toLocaleDateString('es-ES', { weekday: 'short' });
+      const dayKey = date.toISOString().slice(0, 10);
+      const dayTotal = ticketsData.filter((ticket) => ticket.created_at?.slice(0, 10) === dayKey).length;
+      return {
+        label: `${dayLabel[0].toUpperCase()}${dayLabel.slice(1, 3)}`,
+        value: dayTotal,
+      };
+    });
+
+    const revenueByClient = new Map<string, number>();
+    paidInvoices.forEach((invoice) => {
+      const currentValue = revenueByClient.get(invoice.client_id) || 0;
+      revenueByClient.set(invoice.client_id, currentValue + Number(invoice.total_amount || 0));
+    });
+
+    const topClientsData = clientsData
+      .map((client) => ({
+        id: client.id,
+        company_name: client.company_name,
+        contact_name: client.contact_name,
+        revenue: revenueByClient.get(client.id) || 0,
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 8);
+
+    setMetrics({
+      totalClients: clientsData.length,
+      activeClients,
+      totalTickets: ticketsData.length,
+      openTickets,
+      resolvedTickets,
+      incomingCalls: incomingCallsCount,
+      missedCalls: missedCallsCount,
+      totalCalls: totalCallsCount,
+      totalEmails: totalEmailsCount,
+      unreadEmails: unreadEmailsCount,
+      totalChats: totalChatsCount,
+      openChats: openChatsCount,
+    });
+    setStatusBreakdown(breakdown);
+    setWeeklyTickets(last7Days);
+    setTopClients(topClientsData);
+    setRecentTickets(ticketsData.slice(0, 8));
+    setLoading(false);
+  }, []);
+
+  const maxWeeklyValue = useMemo(() => Math.max(...weeklyTickets.map((item) => item.value), 1), [weeklyTickets]);
 
   useEffect(() => {
     const initializeDashboard = async () => {
       await ensureCurrentUserInSystemUsers();
-      loadDashboardData();
+      await loadDashboardData();
     };
+
     initializeDashboard();
 
     const interval = setInterval(() => {
       loadDashboardData();
     }, 30000);
-
-    const campaignsChannel = supabase
-      .channel('dashboard-campaigns')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'campaigns'
-        },
-        () => {
-          loadDashboardData();
-        }
-      )
-      .subscribe();
 
     const clientsChannel = supabase
       .channel('dashboard-clients')
@@ -115,14 +234,14 @@ export function DashboardModule() {
       )
       .subscribe();
 
-    const ordersChannel = supabase
-      .channel('dashboard-orders')
+    const ticketsChannel = supabase
+      .channel('dashboard-tickets')
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'orders'
+          table: 'tickets'
         },
         () => {
           loadDashboardData();
@@ -145,477 +264,306 @@ export function DashboardModule() {
       )
       .subscribe();
 
+    const callsChannel = supabase
+      .channel('dashboard-calls')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'calls'
+        },
+        () => {
+          loadDashboardData();
+        }
+      )
+      .subscribe();
+
+    const incomingCallsChannel = supabase
+      .channel('dashboard-incoming-calls')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'incoming_calls'
+        },
+        () => {
+          loadDashboardData();
+        }
+      )
+      .subscribe();
+
+    const inboxChannel = supabase
+      .channel('dashboard-inbox-emails')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'inbox_emails'
+        },
+        () => {
+          loadDashboardData();
+        }
+      )
+      .subscribe();
+
+    const chatChannel = supabase
+      .channel('dashboard-webchat-conversations')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'webchat_conversations'
+        },
+        () => {
+          loadDashboardData();
+        }
+      )
+      .subscribe();
+
     return () => {
       clearInterval(interval);
-      supabase.removeChannel(campaignsChannel);
       supabase.removeChannel(clientsChannel);
-      supabase.removeChannel(ordersChannel);
+      supabase.removeChannel(ticketsChannel);
       supabase.removeChannel(invoicesChannel);
+      supabase.removeChannel(callsChannel);
+      supabase.removeChannel(incomingCallsChannel);
+      supabase.removeChannel(inboxChannel);
+      supabase.removeChannel(chatChannel);
     };
-  }, []);
-
-  const loadDashboardData = async () => {
-    const now = new Date();
-    const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-
-    const [
-      clients,
-      activeClients,
-      newClientsThisMonth,
-      newClientsLastMonth,
-      invoices,
-      pendingInvoices,
-      commissionInvoices,
-      paidCommissionInvoices,
-      tickets,
-      calls,
-      campaigns,
-      campaignsThisMonth,
-      orders,
-      campaignLogs
-    ] = await Promise.all([
-      supabase.from('clients').select('*', { count: 'exact', head: true }),
-      supabase.from('clients').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-      supabase.from('clients').select('*', { count: 'exact', head: true }).gte('created_at', firstDayThisMonth.toISOString()),
-      supabase.from('clients').select('*', { count: 'exact', head: true }).gte('created_at', firstDayLastMonth.toISOString()).lte('created_at', lastDayLastMonth.toISOString()),
-      supabase.from('invoices').select('total_amount').eq('status', 'paid'),
-      supabase.from('invoices').select('total_amount').in('status', ['sent', 'overdue', 'validated', 'sent-error']),
-      supabase.from('invoices').select('commission_amount').not('commission_amount', 'is', null).gt('commission_amount', 0),
-      supabase.from('invoices').select('commission_amount').eq('status', 'paid').not('commission_amount', 'is', null).gt('commission_amount', 0),
-      supabase.from('tickets').select('*', { count: 'exact', head: true }).in('status', ['open', 'in_progress']),
-      supabase.from('calls').select('duration'),
-      supabase.from('campaigns').select('*', { count: 'exact', head: true }).in('status', ['scheduled', 'sending']),
-      supabase.from('campaigns').select('sent_count, failed_count').gte('created_at', firstDayThisMonth.toISOString()),
-      supabase.from('orders').select('*', { count: 'exact', head: true }).gte('created_at', firstDayThisMonth.toISOString()),
-      supabase.from('campaign_email_logs').select('status, sent_at, created_at').gte('created_at', firstDayThisMonth.toISOString())
-    ]);
-
-    const totalRevenue = invoices.data?.reduce((sum, inv) => sum + Number(inv.total_amount), 0) || 0;
-    const pendingRevenue = pendingInvoices.data?.reduce((sum, inv) => sum + Number(inv.total_amount), 0) || 0;
-    const totalCommissions = commissionInvoices.data?.reduce((sum, inv) => sum + Number(inv.commission_amount), 0) || 0;
-    const paidCommissions = paidCommissionInvoices.data?.reduce((sum, inv) => sum + Number(inv.commission_amount), 0) || 0;
-
-    const totalCallDuration = calls.data?.reduce((sum, call) => sum + call.duration, 0) || 0;
-    const avgCallDuration = calls.data?.length ? Math.floor(totalCallDuration / calls.data.length) : 0;
-
-    const clientGrowth = newClientsLastMonth.count && newClientsLastMonth.count > 0
-      ? ((newClientsThisMonth.count! - newClientsLastMonth.count) / newClientsLastMonth.count) * 100
-      : 0;
-
-    const totalEmailsSent = campaignLogs.data?.filter(log => log.status === 'sent').length || 0;
-    const totalEmailsThisMonth = campaignLogs.data?.length || 0;
-    const emailOpenRate = totalEmailsThisMonth > 0 ? (totalEmailsSent / totalEmailsThisMonth) * 100 : 0;
-
-    const totalCampaignsThisMonth = campaignsThisMonth.data?.length || 0;
-
-    setStats({
-      totalClients: clients.count || 0,
-      activeClients: activeClients.count || 0,
-      newClientsThisMonth: newClientsThisMonth.count || 0,
-      clientGrowth,
-      totalRevenue,
-      revenueGrowth: 15.3,
-      pendingRevenue,
-      totalCommissions,
-      paidCommissions,
-      openTickets: tickets.count || 0,
-      avgResolutionTime: 4.5,
-      ticketSatisfaction: 94,
-      totalCalls: calls.data?.length || 0,
-      avgCallDuration,
-      campaignsActive: totalCampaignsThisMonth,
-      emailOpenRate,
-      ordersThisMonth: orders.count || 0,
-      conversionRate: 23.4
-    });
-
-    await loadRecentActivity();
-    await loadTopClients();
-  };
-
-  const loadRecentActivity = async () => {
-    const activities: RecentActivity[] = [];
-
-    const { data: recentClients } = await supabase
-      .from('clients')
-      .select('company_name, created_at')
-      .order('created_at', { ascending: false })
-      .limit(2);
-
-    const { data: recentOrders } = await supabase
-      .from('orders')
-      .select('order_number, created_at')
-      .order('created_at', { ascending: false })
-      .limit(2);
-
-    const { data: recentTickets } = await supabase
-      .from('tickets')
-      .select('ticket_number, status, updated_at')
-      .order('updated_at', { ascending: false })
-      .limit(2);
-
-    recentClients?.forEach(client => {
-      activities.push({
-        id: crypto.randomUUID(),
-        type: 'client',
-        description: `Nuevo cliente: ${client.company_name}`,
-        time: new Date(client.created_at).toLocaleString(),
-        icon: Users,
-        color: 'blue'
-      });
-    });
-
-    recentOrders?.forEach(order => {
-      activities.push({
-        id: crypto.randomUUID(),
-        type: 'order',
-        description: `Nueva orden: ${order.order_number}`,
-        time: new Date(order.created_at).toLocaleString(),
-        icon: ShoppingCart,
-        color: 'green'
-      });
-    });
-
-    recentTickets?.forEach(ticket => {
-      activities.push({
-        id: crypto.randomUUID(),
-        type: 'ticket',
-        description: `Ticket ${ticket.ticket_number} - ${ticket.status}`,
-        time: new Date(ticket.updated_at).toLocaleString(),
-        icon: Ticket,
-        color: 'orange'
-      });
-    });
-
-    activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-    setRecentActivity(activities.slice(0, 8));
-  };
-
-  const loadTopClients = async () => {
-    const { data } = await supabase
-      .from('clients')
-      .select('id, company_name, contact_name')
-      .eq('status', 'active')
-      .limit(5);
-
-    if (data) {
-      const clientsWithRevenue = await Promise.all(
-        data.map(async (client) => {
-          const { data: invoices } = await supabase
-            .from('invoices')
-            .select('total_amount')
-            .eq('client_id', client.id)
-            .eq('status', 'paid');
-
-          const revenue = invoices?.reduce((sum, inv) => sum + Number(inv.total_amount), 0) || 0;
-          return { ...client, revenue };
-        })
-      );
-
-      setTopClients(clientsWithRevenue.sort((a, b) => b.revenue - a.revenue));
-    }
-  };
-
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+  }, [loadDashboardData]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
-      <div className="mb-6 sm:mb-8">
-        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
-          Dashboard Ejecutivo
-        </h1>
-        <p className="text-slate-600 mt-2 text-sm sm:text-base lg:text-lg">Vista completa del rendimiento de tu negocio</p>
+      <div className="mb-6 sm:mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+            Dashboard CRM
+          </h1>
+          <p className="text-slate-600 mt-2 text-sm sm:text-base lg:text-lg">Vista general de operación comercial y soporte</p>
+        </div>
+        <button
+          onClick={loadDashboardData}
+          className="inline-flex items-center gap-2 self-start md:self-auto px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          Actualizar
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-xl p-6 text-white transform hover:scale-105 transition-transform">
-          <div className="flex items-center justify-between mb-4">
-            <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm">
-              <Users className="w-8 h-8" />
-            </div>
-            <div className="text-right">
-              <div className="flex items-center space-x-1">
-                {stats.clientGrowth >= 0 ? (
-                  <TrendingUp className="w-4 h-4" />
-                ) : (
-                  <TrendingDown className="w-4 h-4" />
-                )}
-                <span className="text-sm font-medium">{Math.abs(stats.clientGrowth).toFixed(1)}%</span>
-              </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-slate-500">Clientes Totales</span>
+            <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+              <Users className="w-4 h-4" />
             </div>
           </div>
-          <div className="space-y-1">
-            <p className="text-blue-100 text-sm font-medium">Total Clientes</p>
-            <p className="text-4xl font-bold">{stats.totalClients}</p>
-            <p className="text-blue-100 text-xs">
-              {stats.newClientsThisMonth} nuevos este mes
-            </p>
-          </div>
+          <p className="text-3xl font-bold text-slate-900">{metrics.totalClients.toLocaleString()}</p>
+          <p className="text-xs text-slate-500 mt-2">Activos: {metrics.activeClients.toLocaleString()}</p>
         </div>
 
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-xl p-6 text-white transform hover:scale-105 transition-transform">
-          <div className="flex items-center justify-between mb-4">
-            <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm">
-              <DollarSign className="w-8 h-8" />
-            </div>
-            <div className="text-right">
-              <div className="flex items-center space-x-1">
-                <TrendingUp className="w-4 h-4" />
-                <span className="text-sm font-medium">{stats.revenueGrowth.toFixed(1)}%</span>
-              </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-slate-500">Tickets Totales</span>
+            <div className="w-9 h-9 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+              <Ticket className="w-4 h-4" />
             </div>
           </div>
-          <div className="space-y-1">
-            <p className="text-green-100 text-sm font-medium">Ingresos Totales</p>
-            <p className="text-4xl font-bold">${stats.totalRevenue.toLocaleString()}</p>
-            <p className="text-green-100 text-xs">
-              ${stats.pendingRevenue.toLocaleString()} pendiente
-            </p>
-          </div>
+          <p className="text-3xl font-bold text-slate-900">{metrics.totalTickets.toLocaleString()}</p>
+          <p className="text-xs text-slate-500 mt-2">Abiertos: {metrics.openTickets.toLocaleString()}</p>
         </div>
 
-        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl shadow-xl p-6 text-white transform hover:scale-105 transition-transform">
-          <div className="flex items-center justify-between mb-4">
-            <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm">
-              <Ticket className="w-8 h-8" />
-            </div>
-            <div className="text-right">
-              <div className="flex items-center space-x-1">
-                <Target className="w-4 h-4" />
-                <span className="text-sm font-medium">{stats.ticketSatisfaction}%</span>
-              </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-slate-500">Resueltos</span>
+            <div className="w-9 h-9 rounded-lg bg-green-50 text-green-600 flex items-center justify-center">
+              <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
-          <div className="space-y-1">
-            <p className="text-orange-100 text-sm font-medium">Tickets Abiertos</p>
-            <p className="text-4xl font-bold">{stats.openTickets}</p>
-            <p className="text-orange-100 text-xs">
-              Tiempo promedio: {stats.avgResolutionTime}h
-            </p>
-          </div>
+          <p className="text-3xl font-bold text-slate-900">{metrics.resolvedTickets.toLocaleString()}</p>
+          <p className="text-xs text-slate-500 mt-2">
+            Tasa resolución: {metrics.totalTickets > 0 ? Math.round((metrics.resolvedTickets / metrics.totalTickets) * 100) : 0}%
+          </p>
         </div>
 
-        <div className="bg-gradient-to-br from-cyan-500 to-teal-600 rounded-2xl shadow-xl p-6 text-white transform hover:scale-105 transition-transform">
-          <div className="flex items-center justify-between mb-4">
-            <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm">
-              <Mail className="w-8 h-8" />
-            </div>
-            <div className="text-right">
-              <div className="flex items-center space-x-1">
-                <Activity className="w-4 h-4" />
-                <span className="text-sm font-medium">{stats.emailOpenRate.toFixed(1)}%</span>
-              </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-slate-500">Llamadas Recibidas</span>
+            <div className="w-9 h-9 rounded-lg bg-cyan-50 text-cyan-600 flex items-center justify-center">
+              <PhoneCall className="w-4 h-4" />
             </div>
           </div>
-          <div className="space-y-1">
-            <p className="text-cyan-100 text-sm font-medium">Campañas Este Mes</p>
-            <p className="text-4xl font-bold">{stats.campaignsActive}</p>
-            <p className="text-cyan-100 text-xs">
-              {stats.emailOpenRate.toFixed(1)}% tasa de éxito
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-amber-500 to-yellow-600 rounded-2xl shadow-xl p-6 text-white transform hover:scale-105 transition-transform">
-          <div className="flex items-center justify-between mb-4">
-            <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm">
-              <TrendingUp className="w-8 h-8" />
-            </div>
-            <div className="text-right">
-              <div className="flex items-center space-x-1">
-                <CheckCircle className="w-4 h-4" />
-                <span className="text-sm font-medium">Ganancias</span>
-              </div>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <p className="text-amber-100 text-sm font-medium">Comisiones Totales</p>
-            <p className="text-4xl font-bold">${stats.totalCommissions.toFixed(2)}</p>
-            <p className="text-amber-100 text-xs">
-              ${stats.paidCommissions.toFixed(2)} cobradas
-            </p>
-          </div>
+          <p className="text-3xl font-bold text-slate-900">{metrics.incomingCalls.toLocaleString()}</p>
+          <p className="text-xs text-slate-500 mt-2">Perdidas: {metrics.missedCalls.toLocaleString()}</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200">
-          <div className="flex items-center space-x-3 mb-4">
-            <div className="bg-blue-100 p-2 rounded-lg">
-              <Phone className="w-5 h-5 text-blue-600" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-900">Actividad de Llamadas</h3>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <PhoneCall className="w-4 h-4 text-slate-600" />
+            <span className="text-sm font-semibold text-slate-700">Estadísticas de Llamadas</span>
           </div>
+          <p className="text-2xl font-bold text-slate-900">{metrics.totalCalls.toLocaleString()}</p>
+          <p className="text-xs text-slate-500 mt-1">Totales (entrantes + salientes)</p>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <Mail className="w-4 h-4 text-slate-600" />
+            <span className="text-sm font-semibold text-slate-700">Estadísticas de Correos</span>
+          </div>
+          <p className="text-2xl font-bold text-slate-900">{metrics.totalEmails.toLocaleString()}</p>
+          <p className="text-xs text-slate-500 mt-1">No leídos: {metrics.unreadEmails.toLocaleString()}</p>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <Activity className="w-4 h-4 text-slate-600" />
+            <span className="text-sm font-semibold text-slate-700">Estadísticas de Chat</span>
+          </div>
+          <p className="text-2xl font-bold text-slate-900">{metrics.totalChats.toLocaleString()}</p>
+          <p className="text-xs text-slate-500 mt-1">Activos: {metrics.openChats.toLocaleString()}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+          <div className="flex items-center gap-2 mb-5">
+            <Activity className="w-5 h-5 text-slate-600" />
+            <h2 className="text-lg font-semibold text-slate-900">Análisis de Tickets por Estado</h2>
+          </div>
+
           <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-slate-600">Total de Llamadas</span>
-              <span className="text-2xl font-bold text-slate-900">{stats.totalCalls}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-slate-600">Duración Promedio</span>
-              <span className="text-2xl font-bold text-blue-600">{formatDuration(stats.avgCallDuration)}</span>
-            </div>
-            <div className="pt-3 border-t border-slate-200">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-500">Efectividad</span>
-                <span className="text-green-600 font-semibold">85%</span>
-              </div>
-              <div className="w-full bg-slate-200 rounded-full h-2 mt-2">
-                <div className="bg-green-500 h-2 rounded-full" style={{ width: '85%' }}></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200">
-          <div className="flex items-center space-x-3 mb-4">
-            <div className="bg-green-100 p-2 rounded-lg">
-              <ShoppingCart className="w-5 h-5 text-green-600" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-900">Órdenes del Mes</h3>
-          </div>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-slate-600">Total Órdenes</span>
-              <span className="text-2xl font-bold text-slate-900">{stats.ordersThisMonth}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-slate-600">Tasa de Conversión</span>
-              <span className="text-2xl font-bold text-green-600">{stats.conversionRate}%</span>
-            </div>
-            <div className="pt-3 border-t border-slate-200">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-500">Meta Mensual</span>
-                <span className="text-blue-600 font-semibold">75/100</span>
-              </div>
-              <div className="w-full bg-slate-200 rounded-full h-2 mt-2">
-                <div className="bg-blue-500 h-2 rounded-full" style={{ width: '75%' }}></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200">
-          <div className="flex items-center space-x-3 mb-4">
-            <div className="bg-purple-100 p-2 rounded-lg">
-              <Zap className="w-5 h-5 text-purple-600" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-900">Métricas Clave</h3>
-          </div>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg">
-              <span className="text-slate-600 text-sm">Clientes Activos</span>
-              <span className="text-lg font-bold text-slate-900">{stats.activeClients}</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg">
-              <span className="text-slate-600 text-sm">Satisfacción</span>
-              <span className="text-lg font-bold text-green-600">{stats.ticketSatisfaction}%</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg">
-              <span className="text-slate-600 text-sm">Tasa Éxito Emails</span>
-              <span className="text-lg font-bold text-purple-600">{stats.emailOpenRate.toFixed(1)}%</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
-          <div className="bg-gradient-to-r from-slate-800 to-slate-700 p-6">
-            <div className="flex items-center space-x-3">
-              <Activity className="w-6 h-6 text-white" />
-              <h2 className="text-xl font-bold text-white">Actividad Reciente</h2>
-            </div>
-          </div>
-          <div className="p-6">
-            <div className="space-y-4 max-h-96 overflow-y-auto">
-              {recentActivity.map((activity) => {
-                const Icon = activity.icon;
-                const colorClasses = {
-                  blue: 'bg-blue-100 text-blue-600',
-                  green: 'bg-green-100 text-green-600',
-                  orange: 'bg-orange-100 text-orange-600',
-                  purple: 'bg-purple-100 text-purple-600'
-                };
-
-                return (
-                  <div key={activity.id} className="flex items-start space-x-3 p-3 hover:bg-slate-50 rounded-lg transition">
-                    <div className={`${colorClasses[activity.color as keyof typeof colorClasses]} p-2 rounded-lg`}>
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900">{activity.description}</p>
-                      <p className="text-xs text-slate-500 mt-1">{activity.time}</p>
-                    </div>
+            {[
+              { key: 'open', label: 'Abiertos', color: 'bg-blue-500' },
+              { key: 'in_progress', label: 'En progreso', color: 'bg-purple-500' },
+              { key: 'waiting', label: 'En espera', color: 'bg-amber-500' },
+              { key: 'resolved', label: 'Resueltos', color: 'bg-green-500' },
+              { key: 'closed', label: 'Cerrados', color: 'bg-slate-500' },
+            ].map((item) => {
+              const value = statusBreakdown[item.key as keyof typeof statusBreakdown] || 0;
+              const percentage = metrics.totalTickets > 0 ? Math.round((value / metrics.totalTickets) * 100) : 0;
+              return (
+                <div key={item.key}>
+                  <div className="flex items-center justify-between text-sm mb-1.5">
+                    <span className="text-slate-700 font-medium">{item.label}</span>
+                    <span className="text-slate-500">{value} ({percentage}%)</span>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
-          <div className="bg-gradient-to-r from-blue-600 to-blue-500 p-6">
-            <div className="flex items-center space-x-3">
-              <BarChart3 className="w-6 h-6 text-white" />
-              <h2 className="text-xl font-bold text-white">Top Clientes</h2>
-            </div>
-          </div>
-          <div className="p-6">
-            <div className="space-y-4">
-              {topClients.map((client, index) => (
-                <div key={client.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-slate-50 to-white rounded-xl border border-slate-200 hover:shadow-md transition">
-                  <div className="flex items-center space-x-4">
-                    <div className="bg-blue-600 text-white w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg">
-                      {index + 1}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-slate-900">{client.company_name}</p>
-                      <p className="text-sm text-slate-500">{client.contact_name}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-green-600">${client.revenue.toLocaleString()}</p>
-                    <p className="text-xs text-slate-500">Ingresos</p>
+                  <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                    <div className={`${item.color} h-full rounded-full`} style={{ width: `${percentage}%` }} />
                   </div>
                 </div>
-              ))}
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+          <div className="flex items-center gap-2 mb-5">
+            <BarChart3 className="w-5 h-5 text-slate-600" />
+            <h2 className="text-lg font-semibold text-slate-900">Actividad de Tickets (7 días)</h2>
+          </div>
+
+          <div className="h-64 flex items-end justify-between gap-3 border border-slate-100 rounded-xl p-4 bg-slate-50/60">
+            {weeklyTickets.map((point) => {
+              const heightPercent = Math.max(Math.round((point.value / maxWeeklyValue) * 100), point.value > 0 ? 12 : 4);
+              return (
+                <div key={point.label} className="flex-1 flex flex-col items-center justify-end gap-2">
+                  <span className="text-xs text-slate-500 font-medium">{point.value}</span>
+                  <div className="w-full max-w-[36px] rounded-t-md bg-blue-600/90" style={{ height: `${heightPercent}%` }} />
+                  <span className="text-xs text-slate-500">{point.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-900">Top Clientes y Últimos Tickets</h2>
+          <span className="text-sm text-slate-500">Actualizado en tiempo real</span>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-0">
+          <div className="p-6 border-b xl:border-b-0 xl:border-r border-slate-200">
+            <h3 className="text-sm font-semibold text-slate-700 mb-4">Clientes con mayor facturación</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-slate-500 border-b border-slate-100">
+                    <th className="pb-3 font-medium">#</th>
+                    <th className="pb-3 font-medium">Empresa</th>
+                    <th className="pb-3 font-medium">Contacto</th>
+                    <th className="pb-3 font-medium text-right">Ingresos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topClients.map((client, index) => (
+                    <tr key={client.id} className="border-b border-slate-100 last:border-b-0">
+                      <td className="py-3 text-slate-700 font-semibold">{index + 1}</td>
+                      <td className="py-3 text-slate-900 font-medium">{client.company_name}</td>
+                      <td className="py-3 text-slate-600">{client.contact_name || '—'}</td>
+                      <td className="py-3 text-right text-green-600 font-semibold">${client.revenue.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                  {topClients.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="py-8 text-center text-slate-500">Sin datos de facturación disponibles</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="p-6">
+            <h3 className="text-sm font-semibold text-slate-700 mb-4">Últimos tickets creados</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-slate-500 border-b border-slate-100">
+                    <th className="pb-3 font-medium">Ticket</th>
+                    <th className="pb-3 font-medium">Asunto</th>
+                    <th className="pb-3 font-medium">Estado</th>
+                    <th className="pb-3 font-medium">Prioridad</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentTickets.map((ticket) => (
+                    <tr key={ticket.id} className="border-b border-slate-100 last:border-b-0">
+                      <td className="py-3 text-slate-900 font-medium">{ticket.ticket_number || '—'}</td>
+                      <td className="py-3 text-slate-700 max-w-[220px] truncate">{ticket.subject || '(Sin asunto)'}</td>
+                      <td className="py-3">
+                        <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-slate-100 text-slate-700">
+                          {ticket.status}
+                        </span>
+                      </td>
+                      <td className="py-3 text-slate-600">{ticket.priority}</td>
+                    </tr>
+                  ))}
+                  {recentTickets.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="py-8 text-center text-slate-500">No hay tickets recientes</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-2xl shadow-xl p-6 text-white">
-          <div className="flex items-center justify-between mb-3">
-            <CheckCircle className="w-8 h-8" />
-            <span className="text-3xl font-bold">92%</span>
-          </div>
-          <p className="text-cyan-100">Tasa de Retención</p>
+      {loading && (
+        <div className="fixed bottom-4 right-4 bg-slate-900 text-white px-4 py-2 rounded-lg shadow-lg text-sm">
+          Actualizando dashboard...
         </div>
-
-        <div className="bg-gradient-to-br from-pink-500 to-pink-600 rounded-2xl shadow-xl p-6 text-white">
-          <div className="flex items-center justify-between mb-3">
-            <Clock className="w-8 h-8" />
-            <span className="text-3xl font-bold">2.3h</span>
-          </div>
-          <p className="text-pink-100">Tiempo Respuesta Prom.</p>
-        </div>
-
-        <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl shadow-xl p-6 text-white">
-          <div className="flex items-center justify-between mb-3">
-            <AlertCircle className="w-8 h-8" />
-            <span className="text-3xl font-bold">3</span>
-          </div>
-          <p className="text-amber-100">Tickets Urgentes</p>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

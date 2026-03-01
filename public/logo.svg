@@ -1,27 +1,24 @@
 <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Fondo con gradiente azul -->
   <defs>
-    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#2563EB;stop-opacity:1" />
+    <linearGradient id="calveBg" x1="10" y1="8" x2="112" y2="116" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3B82F6" />
+      <stop offset="1" stop-color="#1D4ED8" />
+    </linearGradient>
+    <linearGradient id="calveAccent" x1="37" y1="37" x2="85" y2="85" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="1" />
+      <stop offset="1" stop-color="#DBEAFE" stop-opacity="0.95" />
     </linearGradient>
   </defs>
 
-  <!-- Rectángulo redondeado de fondo -->
-  <rect width="120" height="120" rx="24" fill="url(#bgGradient)"/>
+  <rect width="120" height="120" rx="24" fill="url(#calveBg)"/>
 
-  <!-- Grid de 4 cuadrados (2x2) representando el CRM -->
-  <g transform="translate(30, 30)">
-    <!-- Cuadrado superior izquierdo -->
-    <rect x="0" y="0" width="24" height="24" rx="4" fill="white" opacity="0.95"/>
+  <path
+    d="M74 36C61.8497 36 52 45.8497 52 58V62C52 74.1503 61.8497 84 74 84H83V74H74C67.3726 74 62 68.6274 62 62V58C62 51.3726 67.3726 46 74 46H83V36H74Z"
+    fill="url(#calveAccent)"
+  />
 
-    <!-- Cuadrado superior derecho -->
-    <rect x="36" y="0" width="24" height="24" rx="4" fill="white" opacity="0.95"/>
+  <rect x="34" y="44" width="8" height="32" rx="4" fill="#FFFFFF" fill-opacity="0.95"/>
+  <rect x="42" y="44" width="6" height="32" rx="3" fill="#BFDBFE" fill-opacity="0.9"/>
 
-    <!-- Cuadrado inferior izquierdo -->
-    <rect x="0" y="36" width="24" height="24" rx="4" fill="white" opacity="0.95"/>
-
-    <!-- Cuadrado inferior derecho -->
-    <rect x="36" y="36" width="24" height="24" rx="4" fill="white" opacity="0.95"/>
-  </g>
+  <circle cx="88" cy="36" r="5" fill="#93C5FD" fill-opacity="0.9"/>
 </svg>

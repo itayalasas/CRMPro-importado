@@ -3,17 +3,19 @@ import { supabase } from '../../lib/supabase';
 import { getEnvVar } from '../../lib/envLoader';
 import {
   Mail, Send, Inbox as InboxIcon, Plus, Ticket, Star, Archive, Trash2,
-  Reply, Forward, RefreshCw, Search, Paperclip, MoreHorizontal, Check,
-  X, Tag, Folder, Clock, Flag, Download, Eye, AlertCircle, Settings, Save
+  Reply, Forward, RefreshCw, Search, Paperclip,
+  X, Clock, Download, AlertCircle, Settings, Save
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { externalAuth } from '../../lib/externalAuth';
+import { saveTicketCreateDraft } from '../../lib/ticketDraft';
 
 interface InboxEmail {
   id: string;
   account_id: string;
+  user_id?: string;
   message_id: string;
   thread_id: string | null;
   from_email: string;
@@ -41,28 +43,333 @@ interface EmailDraft {
   bcc_emails: string[];
   subject: string;
   body_html: string;
+  original_quoted_html?: string;
   reply_to_id?: string;
   forward_from_id?: string;
+  webchat_conversation_id?: string;
+  webchat_source_channel?: string;
 }
+
+type InboxFolder = 'inbox' | 'outbox' | 'sent' | 'drafts' | 'starred' | 'archived' | 'trash';
+
+type InboxCache = {
+  activeFolder: InboxFolder;
+  emailsByFolder: Partial<Record<InboxFolder, InboxEmail[]>>;
+  latestEmailDateByFolder: Partial<Record<InboxFolder, string>>;
+};
+
+const inboxCacheByUser = new Map<string, InboxCache>();
+
+const getOrCreateUserInboxCache = (userId: string): InboxCache => {
+  const cached = inboxCacheByUser.get(userId);
+  if (cached) return cached;
+
+  const initialCache: InboxCache = {
+    activeFolder: 'inbox',
+    emailsByFolder: {},
+    latestEmailDateByFolder: {},
+  };
+
+  inboxCacheByUser.set(userId, initialCache);
+  return initialCache;
+};
+
+const looksLikeRawMimeSource = (value: string): boolean => {
+  if (!value) return false;
+  const normalized = value.toLowerCase();
+  return (
+    normalized.includes('return-path:') &&
+    normalized.includes('content-type:') &&
+    normalized.includes('mime-version:')
+  );
+};
+
+const looksLikeHtmlContent = (value: string): boolean => {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized.startsWith('<!doctype html') ||
+    normalized.startsWith('<html') ||
+    (normalized.includes('<body') && normalized.includes('</body>')) ||
+    /<\/?[a-z][\s\S]*>/i.test(normalized)
+  );
+};
+
+const decodeQuotedPrintable = (input: string): string => {
+  if (!input) return '';
+  const normalized = input.replace(/=\r?\n/g, '');
+  const bytes: number[] = [];
+
+  for (let index = 0; index < normalized.length; index++) {
+    if (normalized[index] === '=' && /^[A-Fa-f0-9]{2}$/.test(normalized.slice(index + 1, index + 3))) {
+      bytes.push(Number.parseInt(normalized.slice(index + 1, index + 3), 16));
+      index += 2;
+      continue;
+    }
+    bytes.push(normalized.charCodeAt(index));
+  }
+
+  try {
+    return new TextDecoder('utf-8').decode(new Uint8Array(bytes));
+  } catch {
+    return normalized;
+  }
+};
+
+const extractMimePart = (raw: string, mimeType: 'text/plain' | 'text/html'): string => {
+  const regex = new RegExp(`Content-Type:\\s*${mimeType}[^\\n]*[\\s\\S]*?\\r?\\n\\r?\\n([\\s\\S]*?)(?:\\r?\\n--[^\\r\\n]+|$)`, 'i');
+  const match = raw.match(regex);
+  if (!match?.[1]) return '';
+
+  const transferEncodingMatch = match[0].match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i);
+  const encoding = transferEncodingMatch?.[1]?.trim().toLowerCase() || '';
+  const part = match[1].trim();
+
+  if (encoding.includes('quoted-printable')) {
+    return decodeQuotedPrintable(part);
+  }
+
+  return part;
+};
+
+const getReadableEmailBody = (email: InboxEmail): { text: string; html: string } => {
+  const bodyText = email.body_text || '';
+  const bodyHtml = email.body_html || '';
+
+  if (!looksLikeRawMimeSource(bodyText)) {
+    if (!bodyHtml && looksLikeHtmlContent(bodyText)) {
+      return {
+        text: htmlToPlainText(bodyText),
+        html: bodyText,
+      };
+    }
+
+    return {
+      text: bodyText,
+      html: bodyHtml,
+    };
+  }
+
+  const rawSource = bodyText || bodyHtml || '';
+  const extractedHtml = extractMimePart(rawSource, 'text/html');
+  const extractedText = extractMimePart(rawSource, 'text/plain');
+
+  if (extractedHtml) {
+    return {
+      text: extractedText || htmlToPlainText(extractedHtml),
+      html: extractedHtml,
+    };
+  }
+
+  if (looksLikeHtmlContent(rawSource)) {
+    return {
+      text: htmlToPlainText(rawSource),
+      html: rawSource,
+    };
+  }
+
+  return {
+    text: extractedText || email.subject || '(Sin contenido legible)',
+    html: '',
+  };
+};
+
+const htmlToPlainText = (html: string): string =>
+  html
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const textToHtml = (value: string): string =>
+  escapeHtml(value || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\n/g, '<br>');
+
+const isValidEmail = (value: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(value.trim());
+
+const parseRecipientInput = (value: string): string[] => {
+  if (!value) return [];
+
+  const uniqueRecipients = new Set<string>();
+
+  value
+    .split(/[;,]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .forEach((entry) => {
+      uniqueRecipients.add(entry);
+    });
+
+  return Array.from(uniqueRecipients);
+};
+
+const getInvalidRecipients = (value: string): string[] =>
+  parseRecipientInput(value).filter((email) => !isValidEmail(email));
+
+const composeFontFamilyOptions = [
+  { label: 'Inter', value: 'Inter, system-ui, sans-serif' },
+  { label: 'Arial', value: 'Arial, sans-serif' },
+  { label: 'Georgia', value: 'Georgia, serif' },
+  { label: 'Courier New', value: '"Courier New", monospace' },
+];
+
+const composeFontSizeOptions = [12, 14, 16, 18];
+
+const getComposePreferencesKey = (userId: string) => `inbox_compose_preferences_${userId}`;
+
+const buildQuotedOriginalHtml = (email: InboxEmail): string => {
+  const readable = getReadableEmailBody(email);
+  const originalHtml = (readable.html || '').trim()
+    ? readable.html
+    : `<pre style="white-space:pre-wrap; margin:0;">${escapeHtml(readable.text || '(Sin contenido)')}</pre>`;
+
+  return [
+    '<div style="border-left:3px solid #d1d5db; padding-left:12px; margin-top:20px;">',
+    `<p><strong>De:</strong> ${escapeHtml(email.from_name || email.from_email)}</p>`,
+    `<p><strong>Fecha:</strong> ${escapeHtml(new Date(email.email_date).toLocaleString())}</p>`,
+    `<p><strong>Asunto:</strong> ${escapeHtml(email.subject || '(Sin asunto)')}</p>`,
+    '<br>',
+    originalHtml,
+    '</div>'
+  ].join('');
+};
+
+const getTicketDescriptionFromEmail = (email: InboxEmail): string => {
+  const readable = getReadableEmailBody(email);
+  const plainText = (readable.text || '').trim();
+  if (plainText) return plainText;
+  if (readable.html) return htmlToPlainText(readable.html);
+  return '(Sin contenido legible)';
+};
+
+const dedupeEmails = (emailList: InboxEmail[]): InboxEmail[] => {
+  const seen = new Set<string>();
+
+  return emailList.filter((email) => {
+    const key = (email.message_id || '').trim() || email.id;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+const mapDraftToInboxEmail = (
+  draft: {
+    id: string;
+    account_id?: string | null;
+    to_emails?: string[] | Array<{ email: string; name?: string }>;
+    cc_emails?: string[] | Array<{ email: string; name?: string }>;
+    subject?: string | null;
+    body_html?: string | null;
+    created_at?: string | null;
+  },
+  currentUser: { email?: string; name?: string }
+): InboxEmail => {
+  const normalizeRecipients = (value: string[] | Array<{ email: string; name?: string }> | undefined) => {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((entry) => {
+        if (typeof entry === 'string') return { email: entry };
+        return { email: entry?.email || '', name: entry?.name };
+      })
+      .filter((entry) => !!entry.email);
+  };
+
+  const createdAt = draft.created_at || new Date().toISOString();
+
+  return {
+    id: draft.id,
+    account_id: draft.account_id || '',
+    message_id: `draft-${draft.id}`,
+    thread_id: null,
+    from_email: currentUser.email || '',
+    from_name: currentUser.name || currentUser.email || 'Borrador',
+    to_emails: normalizeRecipients(draft.to_emails),
+    cc_emails: normalizeRecipients(draft.cc_emails),
+    subject: draft.subject || '(Sin asunto)',
+    body_text: htmlToPlainText(draft.body_html || ''),
+    body_html: draft.body_html || '',
+    attachments: [],
+    is_read: true,
+    is_starred: false,
+    is_archived: false,
+    is_deleted: false,
+    folder: 'drafts',
+    labels: [],
+    email_date: createdAt,
+    created_at: createdAt,
+  };
+};
+
+const buildTemporaryOutboxEmail = (args: {
+  accountId: string;
+  userId: string;
+  userEmail?: string;
+  userName?: string;
+  toEmails: string[];
+  ccEmails: string[];
+  subject: string;
+  bodyHtml: string;
+}): Omit<InboxEmail, 'id'> => {
+  const now = new Date().toISOString();
+  return {
+    account_id: args.accountId,
+    user_id: args.userId,
+    message_id: `outbox-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    thread_id: null,
+    from_email: args.userEmail || '',
+    from_name: args.userName || args.userEmail || 'Usuario',
+    to_emails: args.toEmails.map((email) => ({ email })),
+    cc_emails: args.ccEmails.map((email) => ({ email })),
+    subject: args.subject || '(Sin asunto)',
+    body_text: htmlToPlainText(args.bodyHtml || ''),
+    body_html: args.bodyHtml || '',
+    attachments: [],
+    is_read: true,
+    is_starred: false,
+    is_archived: false,
+    is_deleted: false,
+    folder: 'outbox',
+    labels: ['sending'],
+    email_date: now,
+    created_at: now,
+  };
+};
 
 export function InboxModule() {
   const { user } = useAuth();
   const toast = useToast();
-  const { inboxRecipient, clearInboxRecipient } = useNavigation();
+  const { inboxRecipient, inboxContext, clearInboxRecipient, setActiveModule } = useNavigation();
   const [emails, setEmails] = useState<InboxEmail[]>([]);
   const [selectedEmail, setSelectedEmail] = useState<InboxEmail | null>(null);
-  const [activeFolder, setActiveFolder] = useState<'inbox' | 'sent' | 'drafts' | 'starred' | 'archived' | 'trash'>('inbox');
+  const [activeFolder, setActiveFolder] = useState<InboxFolder>('inbox');
   const [showCompose, setShowCompose] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [hasEmailAccount, setHasEmailAccount] = useState(false);
+  const [checkingEmailAccount, setCheckingEmailAccount] = useState(true);
+  const [emailAccountId, setEmailAccountId] = useState<string | null>(null);
+  const [unreadInboxCount, setUnreadInboxCount] = useState(0);
+  const [outboxCount, setOutboxCount] = useState(0);
+  const [draftsCount, setDraftsCount] = useState(0);
 
   const [composeData, setComposeData] = useState<EmailDraft>({
     to_emails: [],
     cc_emails: [],
     bcc_emails: [],
     subject: '',
-    body_html: ''
+    body_html: '',
+    original_quoted_html: undefined,
   });
 
   const [toInput, setToInput] = useState('');
@@ -71,12 +378,86 @@ export function InboxModule() {
   const [showCc, setShowCc] = useState(false);
   const [showBcc, setShowBcc] = useState(false);
   const [composeMode, setComposeMode] = useState<'new' | 'reply' | 'forward'>('new');
-  const [showCreateTicket, setShowCreateTicket] = useState(false);
+  const [showEmailViewer, setShowEmailViewer] = useState(false);
+  const [composeFontFamily, setComposeFontFamily] = useState('Inter, system-ui, sans-serif');
+  const [composeFontSize, setComposeFontSize] = useState(14);
+  const [composeTextColor, setComposeTextColor] = useState('#0f172a');
 
   useEffect(() => {
+    if (!user?.id) {
+      setHasEmailAccount(false);
+      setCheckingEmailAccount(false);
+      return;
+    }
+
+    const cache = getOrCreateUserInboxCache(user.id);
+    setActiveFolder(cache.activeFolder);
+    setEmails(dedupeEmails(cache.emailsByFolder[cache.activeFolder] || []));
+    setSelectedEmail(null);
+
     checkEmailAccount();
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    try {
+      const rawPreferences = localStorage.getItem(getComposePreferencesKey(user.id));
+      if (!rawPreferences) return;
+
+      const preferences = JSON.parse(rawPreferences);
+
+      if (typeof preferences.fontFamily === 'string' && preferences.fontFamily.trim()) {
+        setComposeFontFamily(preferences.fontFamily);
+      }
+      if (typeof preferences.fontSize === 'number' && composeFontSizeOptions.includes(preferences.fontSize)) {
+        setComposeFontSize(preferences.fontSize);
+      }
+      if (typeof preferences.textColor === 'string' && preferences.textColor.trim()) {
+        setComposeTextColor(preferences.textColor);
+      }
+    } catch (error) {
+      console.warn('[INBOX] No se pudieron cargar preferencias del compositor:', error);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    try {
+      localStorage.setItem(
+        getComposePreferencesKey(user.id),
+        JSON.stringify({
+          fontFamily: composeFontFamily,
+          fontSize: composeFontSize,
+          textColor: composeTextColor,
+        })
+      );
+    } catch (error) {
+      console.warn('[INBOX] No se pudieron guardar preferencias del compositor:', error);
+    }
+  }, [user?.id, composeFontFamily, composeFontSize, composeTextColor]);
+
+  useEffect(() => {
+    if (!user?.id || !hasEmailAccount) return;
+
+    const cache = getOrCreateUserInboxCache(user.id);
+    const cachedEmails = dedupeEmails(cache.emailsByFolder[activeFolder] || []);
+
+    if (cachedEmails.length > 0) {
+      setEmails(cachedEmails);
+      loadEmails({ incrementalOnly: true });
+      return;
+    }
+
     loadEmails();
-  }, [activeFolder]);
+  }, [activeFolder, hasEmailAccount, user?.id]);
+
+  useEffect(() => {
+    if (selectedEmail && !emails.some((email) => email.id === selectedEmail.id)) {
+      setSelectedEmail(null);
+    }
+  }, [emails, selectedEmail]);
 
   useEffect(() => {
     if (inboxRecipient) {
@@ -85,56 +466,230 @@ export function InboxModule() {
         to_emails: [inboxRecipient],
         cc_emails: [],
         bcc_emails: [],
-        subject: '',
-        body_html: ''
+        subject: inboxContext?.emailSubject || '',
+        body_html: inboxContext?.emailBody || '',
+        original_quoted_html: undefined,
+        webchat_conversation_id: inboxContext?.webchatConversationId,
+        webchat_source_channel: inboxContext?.sourceChannel,
       });
       setToInput(inboxRecipient);
+      setComposeMode('new');
       clearInboxRecipient();
     }
-  }, [inboxRecipient, clearInboxRecipient]);
+  }, [inboxRecipient, inboxContext, clearInboxRecipient]);
 
   const checkEmailAccount = async () => {
     if (!user?.id) return;
 
     console.log('[INBOX] Checking email account for user:', user.id);
+    setCheckingEmailAccount(true);
 
     const { data, error } = await supabase
       .from('email_accounts')
       .select('id')
-      .eq('created_by', user.id)
+      .or(`user_id.eq.${user.id},created_by.eq.${user.id}`)
       .eq('is_active', true)
       .maybeSingle();
 
     if (error) {
       console.error('[INBOX] Error checking email account:', error);
+      setEmailAccountId(null);
     } else {
       console.log('[INBOX] Email account found:', !!data);
+      setEmailAccountId(data?.id || null);
     }
 
     setHasEmailAccount(!!data);
+    setCheckingEmailAccount(false);
   };
 
-  const loadEmails = async () => {
+  const refreshUnreadInboxCount = async (accountIdParam?: string | null) => {
+    const accountId = accountIdParam || emailAccountId;
+    if (!accountId) {
+      setUnreadInboxCount(0);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('inbox_emails')
+      .select('id, message_id')
+      .eq('account_id', accountId)
+      .eq('folder', 'inbox')
+      .eq('is_deleted', false)
+      .eq('is_archived', false)
+      .eq('is_read', false);
+
+    if (error) {
+      console.error('[INBOX] Error loading unread inbox count:', error);
+      return;
+    }
+
+    const uniqueUnread = new Set(
+      (data || [])
+        .map((row: { id?: string; message_id?: string }) => String(row?.message_id || row?.id || '').trim())
+        .filter(Boolean)
+    );
+
+    setUnreadInboxCount(uniqueUnread.size);
+  };
+
+  const refreshDraftsCount = async () => {
+    if (!user?.id) {
+      setDraftsCount(0);
+      return;
+    }
+
+    const { count, error } = await supabase
+      .from('email_drafts')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error('[INBOX] Error loading drafts count:', error);
+      return;
+    }
+
+    setDraftsCount(count || 0);
+  };
+
+  const refreshOutboxCount = async (accountIdParam?: string | null) => {
+    const accountId = accountIdParam || emailAccountId;
+    if (!accountId) {
+      setOutboxCount(0);
+      return;
+    }
+
+    const { count, error } = await supabase
+      .from('inbox_emails')
+      .select('id', { count: 'exact', head: true })
+      .eq('account_id', accountId)
+      .eq('folder', 'outbox')
+      .eq('is_deleted', false);
+
+    if (error) {
+      console.error('[INBOX] Error loading outbox count:', error);
+      return;
+    }
+
+    setOutboxCount(count || 0);
+  };
+
+  const processQueuedEmail = async (args: {
+    outboxEmailId: string;
+    toEmails: string[];
+    ccEmails: string[];
+    bccEmails: string[];
+    subject: string;
+    bodyHtml: string;
+    bodyText: string;
+    replyToId?: string;
+    forwardFromId?: string;
+    webchatConversationId?: string;
+    webchatSourceChannel?: string;
+  }) => {
+    if (!user?.id) return;
+
+    try {
+      const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
+      const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/send-inbox-email`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          outbox_email_id: args.outboxEmailId,
+          to_emails: args.toEmails,
+          cc_emails: args.ccEmails,
+          bcc_emails: args.bccEmails,
+          subject: args.subject,
+          body_html: args.bodyHtml,
+          body_text: args.bodyText,
+          reply_to_id: args.replyToId,
+          forward_from_id: args.forwardFromId,
+          webchat_conversation_id: args.webchatConversationId,
+          webchat_source_channel: args.webchatSourceChannel,
+        })
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Error al enviar email');
+      }
+
+      await refreshOutboxCount();
+      if (activeFolder === 'outbox' || activeFolder === 'sent') {
+        await loadEmails();
+      }
+      toast.success(result.message || 'Email enviado correctamente');
+    } catch (error: any) {
+      console.error('[INBOX] Queued send error:', error);
+      await supabase
+        .from('inbox_emails')
+        .update({ labels: ['failed'] })
+        .eq('id', args.outboxEmailId);
+      await refreshOutboxCount();
+      if (activeFolder === 'outbox') {
+        await loadEmails();
+      }
+      toast.error(`Error al enviar desde bandeja de salida: ${error.message}`);
+    }
+  };
+
+  const loadEmails = async ({ incrementalOnly = false }: { incrementalOnly?: boolean } = {}) => {
     if (!user?.id) return;
 
     console.log('[INBOX] Loading emails for folder:', activeFolder);
     setLoading(true);
     try {
+      const cache = getOrCreateUserInboxCache(user.id);
+
+      if (activeFolder === 'drafts') {
+        const { data: drafts, error: draftsError } = await supabase
+          .from('email_drafts')
+          .select('id, account_id, to_emails, cc_emails, subject, body_html, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (draftsError) {
+          console.error('[INBOX] Error loading drafts:', draftsError);
+          throw draftsError;
+        }
+
+        const mappedDrafts = (drafts || []).map((draft) => mapDraftToInboxEmail(draft, {
+          email: user.email,
+          name: user.name,
+        }));
+
+        cache.emailsByFolder[activeFolder] = mappedDrafts;
+        cache.latestEmailDateByFolder[activeFolder] = mappedDrafts[0]?.email_date;
+        cache.activeFolder = activeFolder;
+        setEmails(mappedDrafts);
+        await refreshDraftsCount();
+        return;
+      }
+
       const { data: account } = await supabase
         .from('email_accounts')
         .select('id')
-        .eq('created_by', user.id)
+        .or(`user_id.eq.${user.id},created_by.eq.${user.id}`)
         .eq('is_active', true)
         .maybeSingle();
 
       if (!account) {
         console.log('[INBOX] No email account found');
         setEmails([]);
+        setEmailAccountId(null);
+        await refreshDraftsCount();
         setLoading(false);
         return;
       }
 
       console.log('[INBOX] Using account ID:', account.id);
+      setEmailAccountId(account.id);
 
       let query = supabase
         .from('inbox_emails')
@@ -144,16 +699,22 @@ export function InboxModule() {
 
       if (activeFolder === 'inbox') {
         query = query.eq('folder', 'inbox').eq('is_deleted', false).eq('is_archived', false);
+      } else if (activeFolder === 'outbox') {
+        query = query.eq('folder', 'outbox').eq('is_deleted', false);
       } else if (activeFolder === 'sent') {
         query = query.eq('folder', 'sent').eq('is_deleted', false);
-      } else if (activeFolder === 'drafts') {
-        query = query.eq('folder', 'drafts');
       } else if (activeFolder === 'starred') {
         query = query.eq('is_starred', true).eq('is_deleted', false);
       } else if (activeFolder === 'archived') {
         query = query.eq('is_archived', true).eq('is_deleted', false);
       } else if (activeFolder === 'trash') {
         query = query.eq('is_deleted', true);
+      }
+
+      const latestCachedDate = cache.latestEmailDateByFolder[activeFolder];
+
+      if (incrementalOnly && latestCachedDate) {
+        query = query.gt('email_date', latestCachedDate);
       }
 
       const { data, error } = await query;
@@ -164,12 +725,108 @@ export function InboxModule() {
       }
 
       console.log(`[INBOX] Loaded ${data?.length || 0} emails for folder ${activeFolder}`);
-      setEmails(data || []);
+
+      if (incrementalOnly) {
+        if (!data || data.length === 0) return;
+
+        setEmails((previousEmails) => {
+          const merged = [...data, ...previousEmails];
+          const deduped = dedupeEmails(merged);
+          cache.emailsByFolder[activeFolder] = deduped;
+          cache.latestEmailDateByFolder[activeFolder] = deduped[0]?.email_date || latestCachedDate;
+          return deduped;
+        });
+        return;
+      }
+
+      const folderEmails = dedupeEmails(data || []);
+      cache.emailsByFolder[activeFolder] = folderEmails;
+      cache.latestEmailDateByFolder[activeFolder] = folderEmails[0]?.email_date;
+      cache.activeFolder = activeFolder;
+      setEmails(folderEmails);
+      await refreshUnreadInboxCount(account.id);
+      await refreshOutboxCount(account.id);
+      await refreshDraftsCount();
     } catch (error: any) {
       toast.error(`Error al cargar emails: ${error.message}`);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleFolderChange = (folder: InboxFolder) => {
+    if (user?.id) {
+      const cache = getOrCreateUserInboxCache(user.id);
+      cache.activeFolder = folder;
+    }
+    setActiveFolder(folder);
+    setSelectedEmail(null);
+  };
+
+  const handleOpenDraft = async (draftId: string) => {
+    if (!user?.id) return;
+
+    const { data: draft, error } = await supabase
+      .from('email_drafts')
+      .select('id, to_emails, cc_emails, bcc_emails, subject, body_html, reply_to_id, forward_from_id')
+      .eq('id', draftId)
+        .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (error || !draft) {
+      toast.error('No se pudo abrir el borrador');
+      return;
+    }
+
+    const toList = Array.isArray(draft.to_emails)
+      ? draft.to_emails.map((entry: unknown) => {
+          if (typeof entry === 'string') return entry;
+          if (entry && typeof entry === 'object' && 'email' in entry) {
+            return String((entry as { email?: string }).email || '');
+          }
+          return '';
+        }).filter(Boolean)
+      : [];
+
+    const ccList = Array.isArray(draft.cc_emails)
+      ? draft.cc_emails.map((entry: unknown) => {
+          if (typeof entry === 'string') return entry;
+          if (entry && typeof entry === 'object' && 'email' in entry) {
+            return String((entry as { email?: string }).email || '');
+          }
+          return '';
+        }).filter(Boolean)
+      : [];
+
+    const bccList = Array.isArray(draft.bcc_emails)
+      ? draft.bcc_emails.map((entry: unknown) => {
+          if (typeof entry === 'string') return entry;
+          if (entry && typeof entry === 'object' && 'email' in entry) {
+            return String((entry as { email?: string }).email || '');
+          }
+          return '';
+        }).filter(Boolean)
+      : [];
+
+    setComposeMode('new');
+    setComposeData({
+      id: draft.id,
+      to_emails: toList,
+      cc_emails: ccList,
+      bcc_emails: bccList,
+      subject: draft.subject || '',
+      body_html: draft.body_html || '',
+      original_quoted_html: undefined,
+      reply_to_id: draft.reply_to_id || undefined,
+      forward_from_id: draft.forward_from_id || undefined,
+    });
+    setToInput(toList.join(', '));
+    setCcInput(ccList.join(', '));
+    setBccInput(bccList.join(', '));
+    setShowCc(ccList.length > 0);
+    setShowBcc(bccList.length > 0);
+    setSelectedEmail(null);
+    setShowCompose(true);
   };
 
   const handleSyncEmails = async () => {
@@ -198,6 +855,9 @@ export function InboxModule() {
           'X-User-Id': user.id,
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          accountId: emailAccountId,
+        }),
       });
 
       const result = await response.json();
@@ -207,7 +867,14 @@ export function InboxModule() {
         throw new Error(result.error || 'Error al sincronizar');
       }
 
-      await loadEmails();
+      if ((result.totalSynced || 0) > 0) {
+        await loadEmails();
+      } else {
+        await loadEmails({ incrementalOnly: true });
+      }
+      await refreshUnreadInboxCount();
+      await refreshOutboxCount();
+      await refreshDraftsCount();
       toast.success(`${result.totalSynced || 0} emails sincronizados correctamente`);
     } catch (error: any) {
       console.error('[INBOX] Sync error:', error);
@@ -224,7 +891,10 @@ export function InboxModule() {
       .eq('id', emailId);
 
     if (!error) {
-      loadEmails();
+      setEmails((prevEmails) => prevEmails.map((email) => (
+        email.id === emailId ? { ...email, is_read: isRead } : email
+      )));
+      await refreshUnreadInboxCount();
       if (selectedEmail?.id === emailId) {
         setSelectedEmail({ ...selectedEmail, is_read: isRead });
       }
@@ -238,9 +908,20 @@ export function InboxModule() {
       .eq('id', emailId);
 
     if (!error) {
-      loadEmails();
+      const nextStarValue = !isStarred;
+      setEmails((prevEmails) => {
+        const updated = prevEmails.map((email) => (
+          email.id === emailId ? { ...email, is_starred: nextStarValue } : email
+        ));
+
+        if (activeFolder === 'starred') {
+          return updated.filter((email) => email.is_starred);
+        }
+
+        return updated;
+      });
       if (selectedEmail?.id === emailId) {
-        setSelectedEmail({ ...selectedEmail, is_starred: !isStarred });
+        setSelectedEmail({ ...selectedEmail, is_starred: nextStarValue });
       }
     }
   };
@@ -253,7 +934,7 @@ export function InboxModule() {
 
     if (!error) {
       toast.success('Email archivado');
-      loadEmails();
+      setEmails((prevEmails) => prevEmails.filter((email) => email.id !== emailId));
       if (selectedEmail?.id === emailId) {
         setSelectedEmail(null);
       }
@@ -261,28 +942,50 @@ export function InboxModule() {
   };
 
   const handleDelete = async (emailId: string) => {
+    if (activeFolder === 'drafts') {
+      const { error: draftDeleteError } = await supabase
+        .from('email_drafts')
+        .delete()
+        .eq('id', emailId);
+
+      if (draftDeleteError) {
+        toast.error(`Error al eliminar borrador: ${draftDeleteError.message}`);
+        return;
+      }
+
+      setEmails((prevEmails) => prevEmails.filter((email) => email.id !== emailId));
+      setSelectedEmail((prevSelected) => (prevSelected?.id === emailId ? null : prevSelected));
+      await refreshDraftsCount();
+      toast.success('Borrador eliminado');
+      return;
+    }
+
     const { error } = await supabase
       .from('inbox_emails')
       .update({ is_deleted: true })
       .eq('id', emailId);
 
-    if (!error) {
-      toast.success('Email movido a papelera');
-      loadEmails();
-      if (selectedEmail?.id === emailId) {
-        setSelectedEmail(null);
-      }
+    if (error) {
+      toast.error(`Error al mover a papelera: ${error.message}`);
+      return;
     }
+
+    setEmails((prevEmails) => prevEmails.filter((email) => email.id !== emailId));
+    setSelectedEmail((prevSelected) => (prevSelected?.id === emailId ? null : prevSelected));
+    await refreshUnreadInboxCount();
+    toast.success('Email movido a papelera');
   };
 
   const handleReply = (email: InboxEmail) => {
+    const greetingName = email.from_name || email.from_email;
     setComposeMode('reply');
     setComposeData({
       to_emails: [email.from_email],
       cc_emails: [],
       bcc_emails: [],
       subject: email.subject.startsWith('Re:') ? email.subject : `Re: ${email.subject}`,
-      body_html: `<br><br><div style="border-left: 3px solid #ccc; padding-left: 10px; margin-top: 20px;"><p><strong>De:</strong> ${email.from_name || email.from_email}</p><p><strong>Fecha:</strong> ${new Date(email.email_date).toLocaleString()}</p><p><strong>Asunto:</strong> ${email.subject}</p><br>${email.body_html || email.body_text}</div>`,
+      body_html: `Hola ${greetingName},\n\n`,
+      original_quoted_html: buildQuotedOriginalHtml(email),
       reply_to_id: email.id
     });
     setToInput(email.from_email);
@@ -290,13 +993,22 @@ export function InboxModule() {
   };
 
   const handleForward = (email: InboxEmail) => {
+    const toList = email.to_emails.map((recipient) => recipient.email).join(', ');
     setComposeMode('forward');
     setComposeData({
       to_emails: [],
       cc_emails: [],
       bcc_emails: [],
       subject: email.subject.startsWith('Fwd:') ? email.subject : `Fwd: ${email.subject}`,
-      body_html: `<br><br><div style="border-left: 3px solid #ccc; padding-left: 10px; margin-top: 20px;"><p><strong>---------- Forwarded message ---------</strong></p><p><strong>De:</strong> ${email.from_name || email.from_email}</p><p><strong>Fecha:</strong> ${new Date(email.email_date).toLocaleString()}</p><p><strong>Asunto:</strong> ${email.subject}</p><p><strong>Para:</strong> ${email.to_emails.map(t => t.email).join(', ')}</p><br>${email.body_html || email.body_text}</div>`,
+      body_html: [
+        '---------- Mensaje reenviado ----------',
+        `De: ${email.from_name || email.from_email}`,
+        `Fecha: ${new Date(email.email_date).toLocaleString()}`,
+        `Asunto: ${email.subject || '(Sin asunto)'}`,
+        `Para: ${toList || '(Sin destinatarios)'}`,
+        '',
+      ].join('\n'),
+      original_quoted_html: buildQuotedOriginalHtml(email),
       forward_from_id: email.id
     });
     setToInput('');
@@ -308,64 +1020,105 @@ export function InboxModule() {
 
     if (!user?.id) return;
 
-    if (composeData.to_emails.length === 0 && toInput) {
-      composeData.to_emails = toInput.split(',').map(e => e.trim()).filter(e => e);
-    }
-    if (composeData.cc_emails.length === 0 && ccInput) {
-      composeData.cc_emails = ccInput.split(',').map(e => e.trim()).filter(e => e);
-    }
-    if (composeData.bcc_emails.length === 0 && bccInput) {
-      composeData.bcc_emails = bccInput.split(',').map(e => e.trim()).filter(e => e);
-    }
+    const normalizedToEmails = parseRecipientInput(toInput);
+    const normalizedCcEmails = parseRecipientInput(ccInput);
+    const normalizedBccEmails = parseRecipientInput(bccInput);
+    const invalidToRecipients = normalizedToEmails.filter((email) => !isValidEmail(email));
+    const invalidCcRecipients = normalizedCcEmails.filter((email) => !isValidEmail(email));
+    const invalidBccRecipients = normalizedBccEmails.filter((email) => !isValidEmail(email));
 
-    if (composeData.to_emails.length === 0) {
+    if (normalizedToEmails.length === 0) {
       toast.error('Debes ingresar al menos un destinatario');
       return;
     }
 
+    if (invalidToRecipients.length > 0 || invalidCcRecipients.length > 0 || invalidBccRecipients.length > 0) {
+      toast.error('Hay correos inválidos en Para/Cc/Bcc. Corrígelos antes de enviar.');
+      return;
+    }
+
     console.log('[INBOX] Sending email:', {
-      to: composeData.to_emails,
+      to: normalizedToEmails,
       subject: composeData.subject
     });
 
-    toast.info('Enviando email...');
+    toast.info('Moviendo a bandeja de salida...');
 
     try {
-      const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
-      const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
+      const { data: account } = await supabase
+        .from('email_accounts')
+        .select('id')
+        .or(`user_id.eq.${user.id},created_by.eq.${user.id}`)
+        .eq('is_active', true)
+        .maybeSingle();
 
-      console.log('[INBOX] Calling send-inbox-email function');
-
-      const response = await fetch(`${supabaseUrl}/functions/v1/send-inbox-email`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${supabaseAnonKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: user.id,
-          to_emails: composeData.to_emails,
-          cc_emails: composeData.cc_emails,
-          bcc_emails: composeData.bcc_emails,
-          subject: composeData.subject,
-          body_html: composeData.body_html,
-          body_text: composeData.body_html.replace(/<[^>]*>/g, ''),
-          reply_to_id: composeData.reply_to_id,
-          forward_from_id: composeData.forward_from_id
-        })
-      });
-
-      const result = await response.json();
-      console.log('[INBOX] Send result:', result);
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Error al enviar email');
+      if (!account) {
+        toast.error('No tienes una cuenta de correo configurada');
+        return;
       }
 
-      toast.success(result.message || 'Email enviado correctamente');
+      const composerBodyRaw = composeData.body_html || '';
+      const composerBodyHtml = /<[^>]+>/.test(composerBodyRaw)
+        ? composerBodyRaw
+        : textToHtml(composerBodyRaw);
+      const styleWrappedBodyHtml = `<div style="font-family:${composeFontFamily}; font-size:${composeFontSize}px; color:${composeTextColor};">${composerBodyHtml}</div>`;
+      const finalBodyHtml = composeData.original_quoted_html
+        ? `${styleWrappedBodyHtml}<br><br>${composeData.original_quoted_html}`
+        : styleWrappedBodyHtml;
+
+      const queuedOutbox = buildTemporaryOutboxEmail({
+        accountId: account.id,
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        toEmails: normalizedToEmails,
+        ccEmails: normalizedCcEmails,
+        subject: composeData.subject,
+        bodyHtml: finalBodyHtml,
+      });
+
+      const { data: outboxEmail, error: outboxError } = await supabase
+        .from('inbox_emails')
+        .insert(queuedOutbox)
+        .select('id')
+        .single();
+
+      if (outboxError || !outboxEmail?.id) {
+        throw new Error(outboxError?.message || 'No se pudo encolar en bandeja de salida');
+      }
+
+      const queuedPayload = {
+        outboxEmailId: outboxEmail.id,
+        toEmails: normalizedToEmails,
+        ccEmails: normalizedCcEmails,
+        bccEmails: normalizedBccEmails,
+        subject: composeData.subject,
+        bodyHtml: finalBodyHtml,
+        bodyText: composerBodyRaw,
+        replyToId: composeData.reply_to_id,
+        forwardFromId: composeData.forward_from_id,
+        webchatConversationId: composeData.webchat_conversation_id,
+        webchatSourceChannel: composeData.webchat_source_channel,
+      };
+
+      if (composeData.id) {
+        await supabase
+          .from('email_drafts')
+          .delete()
+          .eq('id', composeData.id)
+          .eq('user_id', user.id);
+      }
+
       setShowCompose(false);
       resetCompose();
+      setActiveFolder('outbox');
+      setSelectedEmail(null);
+      await refreshDraftsCount();
+      await refreshOutboxCount(account.id);
       await loadEmails();
+      toast.success('Email en cola en bandeja de salida');
+
+      void processQueuedEmail(queuedPayload);
     } catch (error: any) {
       console.error('[INBOX] Send error:', error);
       toast.error(`Error al enviar: ${error.message}`);
@@ -379,7 +1132,7 @@ export function InboxModule() {
       const { data: account } = await supabase
         .from('email_accounts')
         .select('id')
-        .eq('user_id', user.id)
+        .or(`user_id.eq.${user.id},created_by.eq.${user.id}`)
         .eq('is_active', true)
         .maybeSingle();
 
@@ -392,18 +1145,25 @@ export function InboxModule() {
 
       const draftData = {
         account_id: account.id,
-        to_emails: composeData.to_emails,
-        cc_emails: composeData.cc_emails,
-        bcc_emails: composeData.bcc_emails,
+        user_id: user.id,
+        to_emails: parseRecipientInput(toInput),
+        cc_emails: parseRecipientInput(ccInput),
+        bcc_emails: parseRecipientInput(bccInput),
         subject: composeData.subject,
         body_html: composeData.body_html,
-        in_reply_to: composeData.reply_to_id,
-        created_by: user.id
+        reply_to_id: composeData.reply_to_id,
+        forward_from_id: composeData.forward_from_id,
       };
 
-      const { error } = await supabase
-        .from('email_drafts')
-        .insert(draftData);
+      const { error } = composeData.id
+        ? await supabase
+            .from('email_drafts')
+            .update({ ...draftData, updated_at: new Date().toISOString() })
+            .eq('id', composeData.id)
+          .eq('user_id', user.id)
+        : await supabase
+            .from('email_drafts')
+            .insert(draftData);
 
       if (error) {
         console.error('[INBOX] Error saving draft:', error);
@@ -411,9 +1171,10 @@ export function InboxModule() {
       }
 
       console.log('[INBOX] Draft saved successfully');
-      toast.success('Borrador guardado');
+      toast.success(composeData.id ? 'Borrador actualizado' : 'Borrador guardado');
       setShowCompose(false);
       resetCompose();
+      await refreshDraftsCount();
     } catch (error: any) {
       toast.error(`Error al guardar borrador: ${error.message}`);
     }
@@ -425,7 +1186,8 @@ export function InboxModule() {
       cc_emails: [],
       bcc_emails: [],
       subject: '',
-      body_html: ''
+      body_html: '',
+      original_quoted_html: undefined,
     });
     setToInput('');
     setCcInput('');
@@ -435,27 +1197,47 @@ export function InboxModule() {
     setComposeMode('new');
   };
 
-  const handleCreateTicket = async () => {
+  const handleOpenCreateTicketModal = () => {
     if (!selectedEmail) return;
 
-    try {
-      const ticketNumber = `TK-${Date.now()}`;
-      const { error } = await supabase.from('tickets').insert({
-        ticket_number: ticketNumber,
-        subject: selectedEmail.subject,
-        description: selectedEmail.body_text || selectedEmail.body_html,
-        status: 'open',
-        priority: 'medium',
-        created_by: user?.id
-      });
+    const senderEmail = String(selectedEmail.from_email || '').trim();
+    const readableBody = getReadableEmailBody(selectedEmail);
+    const plainDescription = (readableBody.text || '').trim() || getTicketDescriptionFromEmail(selectedEmail).trim();
+    const richDescription = (readableBody.html || '').trim()
+      ? readableBody.html
+      : `<pre style="white-space:pre-wrap; margin:0;">${escapeHtml(plainDescription || '(Sin contenido legible)')}</pre>`;
 
-      if (error) throw error;
+    saveTicketCreateDraft({
+      subject: selectedEmail.subject || '(Sin asunto)',
+      description: plainDescription || '(Sin contenido)',
+      description_html: richDescription,
+      priority: 'medium',
+      status: 'open',
+      source_module: 'email',
+      source_name: selectedEmail.from_name || undefined,
+      source_email: senderEmail || undefined,
+    });
 
-      toast.success(`Ticket ${ticketNumber} creado exitosamente`);
-      setShowCreateTicket(false);
-    } catch (error: any) {
-      toast.error(`Error al crear ticket: ${error.message}`);
+    setShowEmailViewer(false);
+    setActiveModule('tickets');
+  };
+
+  const handleSelectEmailFromList = (email: InboxEmail) => {
+    if (activeFolder === 'drafts') {
+      handleOpenDraft(email.id);
+      return;
     }
+
+    setSelectedEmail(email);
+    if (!email.is_read) {
+      handleMarkAsRead(email.id, true);
+    }
+  };
+
+  const handleOpenEmailViewerFromList = (email: InboxEmail) => {
+    if (activeFolder === 'drafts') return;
+    handleSelectEmailFromList(email);
+    setShowEmailViewer(true);
   };
 
   const filteredEmails = emails.filter(email => {
@@ -469,7 +1251,50 @@ export function InboxModule() {
     );
   });
 
-  const unreadCount = emails.filter(e => !e.is_read && !e.is_deleted).length;
+  const getEmailPreview = (email: InboxEmail) => {
+    const readableBody = getReadableEmailBody(email);
+    return (readableBody.text || '').replace(/\s+/g, ' ').trim();
+  };
+
+  const invalidToRecipients = getInvalidRecipients(toInput);
+  const invalidCcRecipients = getInvalidRecipients(ccInput);
+  const invalidBccRecipients = getInvalidRecipients(bccInput);
+
+  useEffect(() => {
+    if (!hasEmailAccount) {
+      setUnreadInboxCount(0);
+      setOutboxCount(0);
+      setDraftsCount(0);
+      return;
+    }
+    refreshUnreadInboxCount();
+    refreshOutboxCount();
+    refreshDraftsCount();
+  }, [emailAccountId, hasEmailAccount]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const cache = getOrCreateUserInboxCache(user.id);
+    cache.emailsByFolder[activeFolder] = emails;
+    cache.latestEmailDateByFolder[activeFolder] = emails[0]?.email_date;
+    cache.activeFolder = activeFolder;
+  }, [activeFolder, emails, user?.id]);
+
+  if (checkingEmailAccount) {
+    return (
+      <div className="flex h-screen bg-slate-50">
+        <div className="w-64 bg-white border-r border-slate-200" />
+        <div className="flex-1 p-8">
+          <div className="bg-white border border-slate-200 rounded-xl p-8 max-w-3xl mx-auto text-center">
+            <RefreshCw className="w-8 h-8 mx-auto mb-3 animate-spin text-blue-600" />
+            <p className="text-slate-900 font-medium">Cargando buzón...</p>
+            <p className="text-sm text-slate-500 mt-1">Validando configuración de correo</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!hasEmailAccount) {
     return (
@@ -529,7 +1354,7 @@ export function InboxModule() {
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           <button
-            onClick={() => setActiveFolder('inbox')}
+            onClick={() => handleFolderChange('inbox')}
             className={`w-full flex items-center justify-between space-x-3 px-4 py-3 rounded-lg transition ${
               activeFolder === 'inbox'
                 ? 'bg-blue-50 text-blue-700 font-medium'
@@ -538,17 +1363,17 @@ export function InboxModule() {
           >
             <div className="flex items-center space-x-3">
               <InboxIcon className="w-5 h-5" />
-              <span>Bandeja de entrada</span>
+              <span className="whitespace-nowrap">Bandeja de entrada</span>
             </div>
-            {unreadCount > 0 && (
+            {unreadInboxCount > 0 && (
               <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded-full">
-                {unreadCount}
+                {unreadInboxCount}
               </span>
             )}
           </button>
 
           <button
-            onClick={() => setActiveFolder('starred')}
+            onClick={() => handleFolderChange('starred')}
             className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
               activeFolder === 'starred'
                 ? 'bg-blue-50 text-blue-700 font-medium'
@@ -560,7 +1385,26 @@ export function InboxModule() {
           </button>
 
           <button
-            onClick={() => setActiveFolder('sent')}
+            onClick={() => handleFolderChange('outbox')}
+            className={`w-full flex items-center justify-between space-x-3 px-4 py-3 rounded-lg transition ${
+              activeFolder === 'outbox'
+                ? 'bg-blue-50 text-blue-700 font-medium'
+                : 'text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            <div className="flex items-center space-x-3">
+              <Send className="w-5 h-5" />
+              <span>Bandeja de salida</span>
+            </div>
+            {outboxCount > 0 && (
+              <span className="bg-amber-600 text-white text-xs px-2 py-1 rounded-full">
+                {outboxCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => handleFolderChange('sent')}
             className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
               activeFolder === 'sent'
                 ? 'bg-blue-50 text-blue-700 font-medium'
@@ -572,19 +1416,26 @@ export function InboxModule() {
           </button>
 
           <button
-            onClick={() => setActiveFolder('drafts')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
+            onClick={() => handleFolderChange('drafts')}
+            className={`w-full flex items-center justify-between space-x-3 px-4 py-3 rounded-lg transition ${
               activeFolder === 'drafts'
                 ? 'bg-blue-50 text-blue-700 font-medium'
                 : 'text-slate-700 hover:bg-slate-50'
             }`}
           >
-            <Mail className="w-5 h-5" />
-            <span>Borradores</span>
+            <div className="flex items-center space-x-3">
+              <Mail className="w-5 h-5" />
+              <span>Borradores</span>
+            </div>
+            {draftsCount > 0 && (
+              <span className="bg-slate-600 text-white text-xs px-2 py-1 rounded-full">
+                {draftsCount}
+              </span>
+            )}
           </button>
 
           <button
-            onClick={() => setActiveFolder('archived')}
+            onClick={() => handleFolderChange('archived')}
             className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
               activeFolder === 'archived'
                 ? 'bg-blue-50 text-blue-700 font-medium'
@@ -596,7 +1447,7 @@ export function InboxModule() {
           </button>
 
           <button
-            onClick={() => setActiveFolder('trash')}
+            onClick={() => handleFolderChange('trash')}
             className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
               activeFolder === 'trash'
                 ? 'bg-blue-50 text-blue-700 font-medium'
@@ -634,7 +1485,7 @@ export function InboxModule() {
         </div>
 
         <div className="flex-1 flex overflow-hidden">
-          <div className="w-96 bg-white border-r border-slate-200 overflow-y-auto">
+          <div className="w-[30rem] bg-white border-r border-slate-200 overflow-y-auto">
             {loading && emails.length === 0 ? (
               <div className="flex items-center justify-center h-full text-slate-500">
                 <div className="text-center">
@@ -655,12 +1506,8 @@ export function InboxModule() {
                 {filteredEmails.map((email) => (
                   <div
                     key={email.id}
-                    onClick={() => {
-                      setSelectedEmail(email);
-                      if (!email.is_read) {
-                        handleMarkAsRead(email.id, true);
-                      }
-                    }}
+                    onClick={() => handleSelectEmailFromList(email)}
+                    onDoubleClick={() => handleOpenEmailViewerFromList(email)}
                     className={`p-4 cursor-pointer transition ${
                       selectedEmail?.id === email.id
                         ? 'bg-blue-50 border-l-4 border-blue-600'
@@ -703,7 +1550,7 @@ export function InboxModule() {
                     >
                       {email.subject || '(Sin asunto)'}
                     </p>
-                    <p className="text-xs text-slate-500 line-clamp-2">{email.body_text}</p>
+                    <p className="text-xs text-slate-500 line-clamp-2">{getEmailPreview(email)}</p>
                     {email.attachments && email.attachments.length > 0 && (
                       <div className="flex items-center space-x-1 mt-2">
                         <Paperclip className="w-3 h-3 text-slate-400" />
@@ -718,125 +1565,134 @@ export function InboxModule() {
             )}
           </div>
 
-          <div className="flex-1 bg-white overflow-y-auto">
+          <div className="flex-1 bg-slate-50 overflow-y-auto min-w-0">
             {selectedEmail ? (
-              <div className="h-full flex flex-col">
-                <div className="border-b border-slate-200 p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <h2 className="text-2xl font-bold text-slate-900 flex-1">
-                      {selectedEmail.subject || '(Sin asunto)'}
-                    </h2>
-                    <div className="flex items-center space-x-2 ml-4">
-                      <button
-                        onClick={() => handleReply(selectedEmail)}
-                        className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition"
-                        title="Responder"
-                      >
-                        <Reply className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={() => handleForward(selectedEmail)}
-                        className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition"
-                        title="Reenviar"
-                      >
-                        <Forward className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={() => handleArchive(selectedEmail.id)}
-                        className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition"
-                        title="Archivar"
-                      >
-                        <Archive className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(selectedEmail.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                        title="Eliminar"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={() => setShowCreateTicket(true)}
-                        className="flex items-center space-x-1 px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition"
-                      >
-                        <Ticket className="w-4 h-4" />
-                        <span className="text-sm font-medium">Crear Ticket</span>
-                      </button>
+              <div className="h-full p-6 overflow-y-auto">
+                {(() => {
+                  const readableBody = getReadableEmailBody(selectedEmail);
+                  return (
+                <div className="max-w-6xl mx-auto bg-white border border-slate-200 rounded-xl shadow-sm min-h-full flex flex-col">
+                  <div className="border-b border-slate-200 p-6">
+                    <div className="flex items-start justify-between mb-4">
+                      <h2 className="text-2xl font-bold text-slate-900 flex-1 break-words pr-4">
+                        {selectedEmail.subject || '(Sin asunto)'}
+                      </h2>
+                      <div className="flex items-center space-x-2 ml-4 flex-shrink-0">
+                        <button
+                          onClick={() => handleReply(selectedEmail)}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition"
+                          title="Responder"
+                        >
+                          <Reply className="w-4 h-4" />
+                          <span>Responder</span>
+                        </button>
+                        <button
+                          onClick={() => handleForward(selectedEmail)}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition"
+                          title="Reenviar"
+                        >
+                          <Forward className="w-4 h-4" />
+                          <span>Reenviar</span>
+                        </button>
+                        <button
+                          onClick={() => handleArchive(selectedEmail.id)}
+                          className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition"
+                          title="Archivar"
+                        >
+                          <Archive className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(selectedEmail.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                          title={activeFolder === 'drafts' ? 'Eliminar borrador' : 'Eliminar'}
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={handleOpenCreateTicketModal}
+                          className="flex items-center space-x-1 px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition"
+                        >
+                          <Ticket className="w-4 h-4" />
+                          <span className="text-sm font-medium">Crear Ticket</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-medium text-slate-700">De:</span>
-                      <span className="text-slate-900">
-                        {selectedEmail.from_name ? `${selectedEmail.from_name} <${selectedEmail.from_email}>` : selectedEmail.from_email}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span className="font-medium text-slate-700">Para:</span>
-                      <span className="text-slate-900">
-                        {selectedEmail.to_emails.map((t: any) => t.email || t).join(', ')}
-                      </span>
-                    </div>
-                    {selectedEmail.cc_emails && selectedEmail.cc_emails.length > 0 && (
-                      <div className="flex items-center space-x-2">
-                        <span className="font-medium text-slate-700">CC:</span>
-                        <span className="text-slate-900">
-                          {selectedEmail.cc_emails.map((t: any) => t.email || t).join(', ')}
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center space-x-2 min-w-0">
+                        <span className="font-medium text-slate-700">De:</span>
+                        <span className="text-slate-900 break-all">
+                          {selectedEmail.from_name ? `${selectedEmail.from_name} <${selectedEmail.from_email}>` : selectedEmail.from_email}
                         </span>
                       </div>
-                    )}
-                    <div className="flex items-center space-x-2 text-slate-600">
-                      <Clock className="w-4 h-4" />
-                      <span>{new Date(selectedEmail.email_date).toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex-1 p-6 overflow-y-auto">
-                  {selectedEmail.body_html ? (
-                    <div
-                      className="prose max-w-none"
-                      dangerouslySetInnerHTML={{ __html: selectedEmail.body_html }}
-                    />
-                  ) : (
-                    <p className="text-slate-700 whitespace-pre-wrap">{selectedEmail.body_text}</p>
-                  )}
-
-                  {selectedEmail.attachments && selectedEmail.attachments.length > 0 && (
-                    <div className="mt-6 pt-6 border-t border-slate-200">
-                      <h3 className="text-sm font-semibold text-slate-900 mb-3 flex items-center space-x-2">
-                        <Paperclip className="w-4 h-4" />
-                        <span>Adjuntos ({selectedEmail.attachments.length})</span>
-                      </h3>
-                      <div className="grid grid-cols-2 gap-3">
-                        {selectedEmail.attachments.map((attachment: any, index: number) => (
-                          <div
-                            key={index}
-                            className="flex items-center space-x-3 p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition"
-                          >
-                            <Paperclip className="w-5 h-5 text-slate-400" />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-slate-900 truncate">
-                                {attachment.filename}
-                              </p>
-                              <p className="text-xs text-slate-500">
-                                {(attachment.size / 1024).toFixed(1)} KB
-                              </p>
-                            </div>
-                            <button className="p-1 text-blue-600 hover:text-blue-700">
-                              <Download className="w-4 h-4" />
-                            </button>
-                          </div>
-                        ))}
+                      <div className="flex items-center space-x-2 min-w-0">
+                        <span className="font-medium text-slate-700">Para:</span>
+                        <span className="text-slate-900 break-all">
+                          {selectedEmail.to_emails.map((t: { email?: string } | string) => (typeof t === 'string' ? t : t.email || '')).join(', ')}
+                        </span>
+                      </div>
+                      {selectedEmail.cc_emails && selectedEmail.cc_emails.length > 0 && (
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <span className="font-medium text-slate-700">CC:</span>
+                          <span className="text-slate-900 break-all">
+                            {selectedEmail.cc_emails.map((t: { email?: string } | string) => (typeof t === 'string' ? t : t.email || '')).join(', ')}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-center space-x-2 text-slate-600">
+                        <Clock className="w-4 h-4" />
+                        <span>{new Date(selectedEmail.email_date).toLocaleString()}</span>
                       </div>
                     </div>
-                  )}
+                  </div>
+
+                  <div className="flex-1 p-6 overflow-y-auto">
+                    {readableBody.html ? (
+                      <div
+                        className="prose max-w-none break-words"
+                        dangerouslySetInnerHTML={{ __html: readableBody.html }}
+                      />
+                    ) : (
+                      <p className="text-slate-700 whitespace-pre-wrap break-words">{readableBody.text}</p>
+                    )}
+
+                    {selectedEmail.attachments && selectedEmail.attachments.length > 0 && (
+                      <div className="mt-6 pt-6 border-t border-slate-200">
+                        <h3 className="text-sm font-semibold text-slate-900 mb-3 flex items-center space-x-2">
+                          <Paperclip className="w-4 h-4" />
+                          <span>Adjuntos ({selectedEmail.attachments.length})</span>
+                        </h3>
+                        <div className="grid grid-cols-2 gap-3">
+                          {selectedEmail.attachments.map((attachment: any, index: number) => (
+                            <div
+                              key={index}
+                              className="flex items-center space-x-3 p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition"
+                            >
+                              <Paperclip className="w-5 h-5 text-slate-400" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-slate-900 truncate">
+                                  {attachment.filename}
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  {(attachment.size / 1024).toFixed(1)} KB
+                                </p>
+                              </div>
+                              <button className="p-1 text-blue-600 hover:text-blue-700">
+                                <Download className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
+                  );
+                })()}
               </div>
             ) : (
               <div className="h-full flex items-center justify-center text-slate-500">
-                <div className="text-center">
+                <div className="text-center bg-white border border-slate-200 rounded-xl px-10 py-12 shadow-sm">
                   <Mail className="w-20 h-20 mx-auto mb-4 text-slate-300" />
                   <p className="text-lg font-medium mb-2">Selecciona un email</p>
                   <p className="text-sm">Elige un mensaje para ver su contenido</p>
@@ -893,6 +1749,11 @@ export function InboxModule() {
                       Bcc
                     </button>
                   </div>
+                  {invalidToRecipients.length > 0 && (
+                    <p className="text-xs text-red-600 ml-[4.5rem] mb-2 break-words">
+                      Correos inválidos en Para: {invalidToRecipients.join(', ')}
+                    </p>
+                  )}
                   {showCc && (
                     <div className="flex items-center space-x-2 mb-2">
                       <label className="text-sm font-medium text-slate-700 w-16">Cc:</label>
@@ -905,6 +1766,11 @@ export function InboxModule() {
                       />
                     </div>
                   )}
+                  {showCc && invalidCcRecipients.length > 0 && (
+                    <p className="text-xs text-red-600 ml-[4.5rem] mb-2 break-words">
+                      Correos inválidos en Cc: {invalidCcRecipients.join(', ')}
+                    </p>
+                  )}
                   {showBcc && (
                     <div className="flex items-center space-x-2 mb-2">
                       <label className="text-sm font-medium text-slate-700 w-16">Bcc:</label>
@@ -916,6 +1782,11 @@ export function InboxModule() {
                         className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
+                  )}
+                  {showBcc && invalidBccRecipients.length > 0 && (
+                    <p className="text-xs text-red-600 ml-[4.5rem] mb-2 break-words">
+                      Correos inválidos en Bcc: {invalidBccRecipients.join(', ')}
+                    </p>
                   )}
                 </div>
 
@@ -932,15 +1803,69 @@ export function InboxModule() {
                 </div>
 
                 <div>
+                  <div className="border border-slate-200 rounded-lg bg-slate-50 p-3 mb-3">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Fuente</label>
+                        <select
+                          value={composeFontFamily}
+                          onChange={(e) => setComposeFontFamily(e.target.value)}
+                          className="w-full px-2 py-2 border border-slate-300 rounded-lg bg-white text-sm"
+                        >
+                          {composeFontFamilyOptions.map((option) => (
+                            <option key={option.label} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Tamaño</label>
+                        <select
+                          value={composeFontSize}
+                          onChange={(e) => setComposeFontSize(Number(e.target.value))}
+                          className="w-full px-2 py-2 border border-slate-300 rounded-lg bg-white text-sm"
+                        >
+                          {composeFontSizeOptions.map((size) => (
+                            <option key={size} value={size}>{size}px</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Color</label>
+                        <input
+                          type="color"
+                          value={composeTextColor}
+                          onChange={(e) => setComposeTextColor(e.target.value)}
+                          className="w-full h-10 px-1 py-1 border border-slate-300 rounded-lg bg-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   <textarea
                     value={composeData.body_html}
                     onChange={(e) => setComposeData({ ...composeData, body_html: e.target.value })}
-                    rows={15}
+                    rows={10}
                     placeholder="Escribe tu mensaje aquí..."
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    className="w-full min-h-[220px] max-h-[320px] px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
                     required
                   />
                 </div>
+
+                {composeMode !== 'new' && composeData.original_quoted_html && (
+                  <div className="border border-slate-200 rounded-lg bg-slate-50">
+                    <div className="px-4 py-2 border-b border-slate-200 text-sm font-medium text-slate-700">
+                      Mensaje recibido
+                    </div>
+                    <div className="p-4 max-h-72 overflow-y-auto">
+                      <div
+                        className="prose max-w-none break-words"
+                        dangerouslySetInnerHTML={{ __html: composeData.original_quoted_html }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-between p-6 border-t border-slate-200 bg-slate-50">
@@ -977,50 +1902,74 @@ export function InboxModule() {
         </div>
       )}
 
-      {showCreateTicket && selectedEmail && (
+      {showEmailViewer && selectedEmail && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-8">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="bg-green-100 p-3 rounded-lg">
-                <Ticket className="w-6 h-6 text-green-600" />
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden">
+            <div className="border-b border-slate-200 px-6 py-4 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h2 className="text-xl font-bold text-slate-900 break-words">{selectedEmail.subject || '(Sin asunto)'}</h2>
+                <p className="text-sm text-slate-600 mt-1 break-all">
+                  {selectedEmail.from_name ? `${selectedEmail.from_name} <${selectedEmail.from_email}>` : selectedEmail.from_email}
+                </p>
               </div>
-              <div>
-                <h2 className="text-2xl font-bold text-slate-900">Crear Ticket desde Email</h2>
-                <p className="text-slate-600">Convertir este email en un ticket de soporte</p>
-              </div>
-            </div>
-
-            <div className="bg-slate-50 rounded-lg p-4 mb-6">
-              <p className="text-sm font-medium text-slate-700 mb-2">Vista previa:</p>
-              <p className="text-sm text-slate-600 mb-1">
-                <strong>Asunto:</strong> {selectedEmail.subject}
-              </p>
-              <p className="text-sm text-slate-600 mb-1">
-                <strong>De:</strong> {selectedEmail.from_email}
-              </p>
-              <p className="text-sm text-slate-600 line-clamp-3">
-                <strong>Mensaje:</strong> {selectedEmail.body_text}
-              </p>
-            </div>
-
-            <div className="flex justify-end space-x-3">
               <button
-                onClick={() => setShowCreateTicket(false)}
+                onClick={() => setShowEmailViewer(false)}
+                className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition"
+                title="Cerrar visor"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="px-6 py-3 border-b border-slate-100 text-sm text-slate-700 space-y-1">
+              <p className="break-all"><strong>Para:</strong> {selectedEmail.to_emails.map((t: { email?: string } | string) => (typeof t === 'string' ? t : t.email || '')).join(', ')}</p>
+              {selectedEmail.cc_emails && selectedEmail.cc_emails.length > 0 && (
+                <p className="break-all"><strong>CC:</strong> {selectedEmail.cc_emails.map((t: { email?: string } | string) => (typeof t === 'string' ? t : t.email || '')).join(', ')}</p>
+              )}
+              <p><strong>Fecha:</strong> {new Date(selectedEmail.email_date).toLocaleString()}</p>
+            </div>
+
+            <div className="flex-1 overflow-auto p-6 bg-slate-50">
+              <div className="bg-white border border-slate-200 rounded-lg p-4 min-h-full">
+                {(() => {
+                  const readableBody = getReadableEmailBody(selectedEmail);
+                  if ((readableBody.html || '').trim()) {
+                    return (
+                      <div
+                        className="prose max-w-none break-words"
+                        dangerouslySetInnerHTML={{ __html: readableBody.html }}
+                      />
+                    );
+                  }
+
+                  return (
+                    <p className="text-sm text-slate-700 whitespace-pre-wrap break-words">
+                      {readableBody.text || '(Sin contenido)'}
+                    </p>
+                  );
+                })()}
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200 px-6 py-4 flex justify-end gap-3 bg-white">
+              <button
+                onClick={() => setShowEmailViewer(false)}
                 className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition"
               >
-                Cancelar
+                Cerrar
               </button>
               <button
-                onClick={handleCreateTicket}
+                onClick={handleOpenCreateTicketModal}
                 className="flex items-center space-x-2 bg-gradient-to-r from-green-600 to-green-500 text-white px-6 py-2 rounded-lg hover:from-green-700 hover:to-green-600 transition shadow-lg"
               >
-                <Check className="w-5 h-5" />
+                <Ticket className="w-5 h-5" />
                 <span>Crear Ticket</span>
               </button>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }

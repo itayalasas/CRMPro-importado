@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNavigation } from '../../contexts/NavigationContext';
+import { saveTicketCreateDraft } from '../../lib/ticketDraft';
 
 interface Client {
   id: string;
@@ -112,6 +114,7 @@ export function OrdersModule() {
 
   const toast = useToast();
   const { user } = useAuth();
+  const { setActiveModule } = useNavigation();
 
   const convertCurrencyCode = (code: string | undefined): string => {
     if (!code) return 'UYU';
@@ -243,25 +246,42 @@ export function OrdersModule() {
   };
 
   const loadTicketCategories = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
+      .from('ticket_categories')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+
+    if (!error && data) {
+      setTicketCategories(data);
+      return;
+    }
+
+    const { data: fallbackData } = await supabase
       .from('ticket_categories')
       .select('*')
       .order('name');
 
-    if (data) {
-      setTicketCategories(data);
+    if (fallbackData) {
+      setTicketCategories(fallbackData);
     }
   };
 
   const handleCreateTicket = (order: Order) => {
-    setSelectedOrder(order);
-    setTicketFormData({
+    saveTicketCreateDraft({
+      client_id: order.client_id || undefined,
+      order_id: order.id,
       subject: `Soporte para Orden ${order.order_number}`,
       description: `Cliente: ${order.clients?.company_name || order.clients?.contact_name}\nOrden: ${order.order_number}\nMonto: $${order.total_amount}\n\nDescripción del problema:\n`,
       priority: 'medium',
-      category_id: ''
+      source_module: 'ordenes',
+      source_name: order.clients?.contact_name || order.clients?.company_name || undefined,
+      source_email: order.clients?.email || undefined
     });
-    setShowTicketModal(true);
+
+    setShowTicketModal(false);
+    setActiveModule('tickets');
+    toast.success('Completá el ticket en el formulario unificado');
   };
 
   const handleSubmitTicket = async (e: React.FormEvent) => {
