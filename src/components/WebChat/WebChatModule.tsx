@@ -58,6 +58,8 @@ interface WebChatConversation {
   source_channel?: string | null;
   source_detail?: string | null;
   page_url: string | null;
+  client_id?: string | null;
+  opportunity_id?: string | null;
   visitor_id: string | null;
   visitor_name: string | null;
   visitor_email: string | null;
@@ -406,6 +408,7 @@ export function WebChatModule() {
   const isConversationLocked = !!selectedConversation?.assigned_user_id && !isAssignedToUser;
   const isClosed = selectedConversation?.status === 'closed';
   const isFormConversation = selectedConversation?.source_channel === 'form';
+  const linkedClientId = createdClientId || selectedConversation?.client_id || null;
 
   const causeOptions = [
     'Consulta general',
@@ -701,6 +704,14 @@ export function WebChatModule() {
                 >
                   <UserPlus className="h-4 w-4" />
                   <span>{createdClientId ? 'Cliente asociado' : 'Crear Cliente'}</span>
+                </button>
+                <button
+                  onClick={handleQuoteButtonClick}
+                  className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isConversationLocked || isClosed}
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  <span>Cotizar</span>
                 </button>
                 <div className="ml-auto flex items-center gap-2">
                   {selectedConversation.status === 'closed' && !isConversationLocked && (
@@ -2678,6 +2689,7 @@ import {
   RefreshCw,
   UserPlus,
   FileText,
+  ShoppingCart,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { getEnvVar } from '../../lib/envLoader';
@@ -2697,6 +2709,8 @@ interface WebChatConversation {
   source_channel?: string | null;
   source_detail?: string | null;
   page_url: string | null;
+  client_id?: string | null;
+  opportunity_id?: string | null;
   visitor_id: string | null;
   visitor_name: string | null;
   visitor_email: string | null;
@@ -2930,6 +2944,7 @@ export function WebChatModule() {
   const isConversationLocked = !!selectedConversation?.assigned_user_id && !isAssignedToUser;
   const isClosed = selectedConversation?.status === 'closed';
   const isFormConversation = selectedConversation?.source_channel === 'form';
+  const linkedClientId = createdClientId || selectedConversation?.client_id || null;
 
   const latestVisitorMessage = useMemo(() => {
     return [...messages]
@@ -3844,6 +3859,44 @@ export function WebChatModule() {
     setActiveModule('tickets');
   }, [linkedTicketNumber, openTicketViewPanel, selectedConversation, user?.id, messages, createdClientId, toast, setActiveModule]);
 
+  const handleQuoteButtonClick = useCallback(() => {
+    if (!selectedConversation) return;
+
+    if (!linkedClientId) {
+      toast.info('Primero crea o vincula el cliente para poder cotizar');
+      setMobileTab('details');
+      openClientPanel();
+      return;
+    }
+
+    const quoteNotes = [
+      'Solicitud desde Chat Web',
+      `Contacto: ${selectedConversation.visitor_name || selectedConversation.visitor_email || selectedConversation.visitor_phone || 'Visitante'}`,
+      selectedConversation.source_domain ? `Dominio: ${selectedConversation.source_domain}` : '',
+      selectedConversation.source_detail ? `Origen: ${selectedConversation.source_detail}` : '',
+      selectedConversation.page_url ? `Página: ${selectedConversation.page_url}` : '',
+      latestVisitorMessage ? `Mensaje: ${latestVisitorMessage}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    localStorage.setItem('sales_quote_draft', JSON.stringify({
+      client_id: linkedClientId,
+      opportunity_id: selectedConversation.opportunity_id || undefined,
+      quote_date: new Date().toISOString().slice(0, 10),
+      notes: quoteNotes,
+      terms: 'Validez 15 días',
+      source_module: 'chat_web',
+      source_conversation_id: selectedConversation.id,
+      source_name: selectedConversation.visitor_name || undefined,
+      source_email: selectedConversation.visitor_email || undefined,
+      source_phone: selectedConversation.visitor_phone || undefined,
+    }));
+
+    toast.success('Llevamos la conversación a Ventas para completar la cotización');
+    setActiveModule('ventas');
+  }, [latestVisitorMessage, linkedClientId, openClientPanel, selectedConversation, setActiveModule, setMobileTab, toast]);
+
   const handleSaveClient = async () => {
     if (!user?.id) return;
     if (!clientDraft.contact_name.trim()) {
@@ -4505,6 +4558,17 @@ export function WebChatModule() {
                 >
                   <UserPlus className="h-4 w-4" />
                   <span>{createdClientId ? 'Cliente asociado' : 'Crear Cliente'}</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setMobileTab('details');
+                    handleQuoteButtonClick();
+                  }}
+                  className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isConversationLocked || isClosed}
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  <span>Cotizar</span>
                 </button>
                 <div className="ml-auto flex items-center gap-2">
                   {selectedConversation.status === 'closed' && !isConversationLocked && (

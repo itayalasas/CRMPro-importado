@@ -7,6 +7,8 @@ import {
   Ticket,
   Inbox,
   MessageCircle,
+  KanbanSquare,
+  ShoppingCart,
   Settings,
   LogOut,
   Menu,
@@ -26,6 +28,8 @@ interface SidebarProps {
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, moduleKey: 'dashboard' as ModuleKey },
   { id: 'clients', label: 'Clientes', icon: Users, moduleKey: 'clientes' as ModuleKey },
+  { id: 'pipeline', label: 'Pipeline', icon: KanbanSquare, moduleKey: 'clientes' as ModuleKey },
+  { id: 'ventas', label: 'Ventas', icon: ShoppingCart, moduleKey: 'ventas' as ModuleKey },
   { id: 'campaigns', label: 'Campañas', icon: Mail, moduleKey: 'campanas' as ModuleKey },
   { id: 'calls', label: 'Llamadas', icon: Phone, moduleKey: 'llamadas' as ModuleKey },
   { id: 'tickets', label: 'Tickets', icon: Ticket, moduleKey: 'tickets' as ModuleKey },

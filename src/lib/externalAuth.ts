@@ -19,8 +19,10 @@ interface AuthResponse {
     refresh_token: string;
     token_type: string;
     expires_in: number;
-    user: AuthUser;
-    application: {
+    user?: Partial<AuthUser> & { id?: string };
+    user_id?: string;
+    userId?: string;
+    application?: {
       id: string;
       name: string;
       domain: string;
@@ -39,6 +41,11 @@ interface TokenPayload {
   exp: number;
   iss: string;
   aud: string;
+}
+
+interface CallbackData {
+  code: string;
+  state: string | null;
 }
 
 import { getEnvVar } from './envLoader';
@@ -61,17 +68,19 @@ export const externalAuth = {
     window.location.href = loginUrl;
   },
 
-  parseCallbackUrl(url: string): { code: string } | null {
+  parseCallbackUrl(url: string): CallbackData | null {
     try {
       const urlObj = new URL(url);
       const code = urlObj.searchParams.get('code');
+      const state = urlObj.searchParams.get('state');
 
       if (!code) {
         return null;
       }
 
       return {
-        code: decodeURIComponent(code)
+        code: decodeURIComponent(code),
+        state
       };
     } catch (error) {
       return null;
@@ -106,10 +115,18 @@ export const externalAuth = {
       const data: AuthResponse = await response.json();
 
       if (data.success && data.data.access_token) {
+        const token = data.data.access_token;
+        const userId =
+          data.data.user?.id ||
+          data.data.user_id ||
+          data.data.userId ||
+          this.getUserFromToken(token)?.id ||
+          '';
+
         return {
-          token: data.data.access_token,
+          token,
           refreshToken: data.data.refresh_token || '',
-          userId: data.data.user.id
+          userId
         };
       }
 
@@ -232,12 +249,20 @@ export const externalAuth = {
 
       const data: AuthResponse = await response.json();
       if (data.success && data.data.access_token) {
+        const token = data.data.access_token;
+        const userId =
+          data.data.user?.id ||
+          data.data.user_id ||
+          data.data.userId ||
+          this.getUserFromToken(token)?.id ||
+          '';
+
         this.storeAuthData(
-          data.data.access_token,
+          token,
           data.data.refresh_token,
-          data.data.user.id
+          userId
         );
-        return data.data.access_token;
+        return token;
       }
 
       return null;

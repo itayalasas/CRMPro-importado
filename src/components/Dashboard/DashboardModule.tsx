@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, BarChart3, CheckCircle2, Mail, PhoneCall, RefreshCw, Ticket, Users } from 'lucide-react';
+import { Activity, BarChart3, CheckCircle2, Mail, PhoneCall, RefreshCw, ShoppingCart, Ticket, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
 
@@ -55,6 +55,23 @@ interface ChatConversationRecord {
   status: 'open' | 'assigned' | 'taken' | 'resolved' | 'closed' | string;
 }
 
+interface OpportunityRecord {
+  id: string;
+  status: 'open' | 'won' | 'lost' | 'archived' | string;
+  expected_amount: number | string;
+}
+
+interface ProductRecord {
+  id: string;
+  is_active: boolean;
+}
+
+interface QuoteRecord {
+  id: string;
+  status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | 'converted' | string;
+  total_amount: number | string;
+}
+
 interface WeeklyPoint {
   label: string;
   value: number;
@@ -85,6 +102,17 @@ export function DashboardModule() {
     unreadEmails: 0,
     totalChats: 0,
     openChats: 0,
+    totalOpportunities: 0,
+    openOpportunities: 0,
+    pipelineValue: 0,
+    totalProducts: 0,
+    activeProducts: 0,
+    totalQuotes: 0,
+    openQuotes: 0,
+    sentQuotes: 0,
+    acceptedQuotes: 0,
+    convertedQuotes: 0,
+    quotePipelineValue: 0,
   });
 
   const loadDashboardData = useCallback(async () => {
@@ -98,6 +126,9 @@ export function DashboardModule() {
       { data: outboundCalls },
       { data: inboxEmails },
       { data: chatConversations },
+      { data: opportunities },
+      { data: products },
+      { data: quotes },
     ] = await Promise.all([
       supabase
         .from('clients')
@@ -121,6 +152,15 @@ export function DashboardModule() {
       supabase
         .from('webchat_conversations')
         .select('id, status'),
+      supabase
+        .from('sales_opportunities')
+        .select('id, status, expected_amount'),
+      supabase
+        .from('sales_products')
+        .select('id, is_active'),
+      supabase
+        .from('sales_quotes')
+        .select('id, status, total_amount'),
     ]);
 
     const clientsData = (clients || []) as ClientRecord[];
@@ -130,6 +170,9 @@ export function DashboardModule() {
     const outboundCallsData = (outboundCalls || []) as OutboundCallRecord[];
     const inboxEmailsData = (inboxEmails || []) as InboxEmailRecord[];
     const chatConversationsData = (chatConversations || []) as ChatConversationRecord[];
+    const opportunitiesData = (opportunities || []) as OpportunityRecord[];
+    const productsData = (products || []) as ProductRecord[];
+    const quotesData = (quotes || []) as QuoteRecord[];
 
     const activeClients = clientsData.filter((item) => item.status === 'active').length;
     const openTickets = ticketsData.filter((item) => ['open', 'in_progress', 'waiting'].includes(item.status)).length;
@@ -145,6 +188,18 @@ export function DashboardModule() {
 
     const totalChatsCount = chatConversationsData.length;
     const openChatsCount = chatConversationsData.filter((item) => ['open', 'assigned', 'taken'].includes(String(item.status || '').toLowerCase())).length;
+    const openOpportunitiesCount = opportunitiesData.filter((item) => String(item.status || '').toLowerCase() === 'open').length;
+    const pipelineValue = opportunitiesData
+      .filter((item) => String(item.status || '').toLowerCase() === 'open')
+      .reduce((sum, item) => sum + Number(item.expected_amount || 0), 0);
+    const openQuotesCount = quotesData.filter((item) => ['draft', 'sent', 'accepted'].includes(String(item.status || '').toLowerCase())).length;
+    const sentQuotesCount = quotesData.filter((item) => String(item.status || '').toLowerCase() === 'sent').length;
+    const acceptedQuotesCount = quotesData.filter((item) => String(item.status || '').toLowerCase() === 'accepted').length;
+    const convertedQuotesCount = quotesData.filter((item) => String(item.status || '').toLowerCase() === 'converted').length;
+    const quotePipelineValue = quotesData
+      .filter((item) => ['draft', 'sent', 'accepted'].includes(String(item.status || '').toLowerCase()))
+      .reduce((sum, item) => sum + Number(item.total_amount || 0), 0);
+    const activeProductsCount = productsData.filter((item) => item.is_active).length;
 
     const paidInvoices = invoicesData.filter((item) => item.status === 'paid');
 
@@ -197,6 +252,17 @@ export function DashboardModule() {
       unreadEmails: unreadEmailsCount,
       totalChats: totalChatsCount,
       openChats: openChatsCount,
+      totalOpportunities: opportunitiesData.length,
+      openOpportunities: openOpportunitiesCount,
+      pipelineValue,
+      totalProducts: productsData.length,
+      activeProducts: activeProductsCount,
+      totalQuotes: quotesData.length,
+      openQuotes: openQuotesCount,
+      sentQuotes: sentQuotesCount,
+      acceptedQuotes: acceptedQuotesCount,
+      convertedQuotes: convertedQuotesCount,
+      quotePipelineValue,
     });
     setStatusBreakdown(breakdown);
     setWeeklyTickets(last7Days);
@@ -324,6 +390,51 @@ export function DashboardModule() {
       )
       .subscribe();
 
+    const opportunitiesChannel = supabase
+      .channel('dashboard-sales-opportunities')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sales_opportunities'
+        },
+        () => {
+          loadDashboardData();
+        }
+      )
+      .subscribe();
+
+    const productsChannel = supabase
+      .channel('dashboard-sales-products')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sales_products'
+        },
+        () => {
+          loadDashboardData();
+        }
+      )
+      .subscribe();
+
+    const quotesChannel = supabase
+      .channel('dashboard-sales-quotes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sales_quotes'
+        },
+        () => {
+          loadDashboardData();
+        }
+      )
+      .subscribe();
+
     return () => {
       clearInterval(interval);
       supabase.removeChannel(clientsChannel);
@@ -333,6 +444,9 @@ export function DashboardModule() {
       supabase.removeChannel(incomingCallsChannel);
       supabase.removeChannel(inboxChannel);
       supabase.removeChannel(chatChannel);
+      supabase.removeChannel(opportunitiesChannel);
+      supabase.removeChannel(productsChannel);
+      supabase.removeChannel(quotesChannel);
     };
   }, [loadDashboardData]);
 
@@ -402,7 +516,7 @@ export function DashboardModule() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
           <div className="flex items-center gap-2 mb-3">
             <PhoneCall className="w-4 h-4 text-slate-600" />
@@ -428,6 +542,28 @@ export function DashboardModule() {
           </div>
           <p className="text-2xl font-bold text-slate-900">{metrics.totalChats.toLocaleString()}</p>
           <p className="text-xs text-slate-500 mt-1">Activos: {metrics.openChats.toLocaleString()}</p>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <BarChart3 className="w-4 h-4 text-slate-600" />
+            <span className="text-sm font-semibold text-slate-700">Pipeline Comercial</span>
+          </div>
+          <p className="text-2xl font-bold text-slate-900">{metrics.totalOpportunities.toLocaleString()}</p>
+          <p className="text-xs text-slate-500 mt-1">
+            Abiertas: {metrics.openOpportunities.toLocaleString()} | Valor: {metrics.pipelineValue.toLocaleString()}
+          </p>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <ShoppingCart className="w-4 h-4 text-slate-600" />
+            <span className="text-sm font-semibold text-slate-700">Ventas</span>
+          </div>
+          <p className="text-2xl font-bold text-slate-900">{metrics.totalQuotes.toLocaleString()}</p>
+          <p className="text-xs text-slate-500 mt-1">
+            Activas: {metrics.openQuotes.toLocaleString()} | Convertidas: {metrics.convertedQuotes.toLocaleString()}
+          </p>
         </div>
       </div>
 

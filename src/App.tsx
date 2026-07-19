@@ -19,6 +19,8 @@ import { InboxModule } from './components/Inbox/InboxModule';
 import { SettingsModule } from './components/Settings/SettingsModule';
 import ParametersModule from './components/Settings/ParametersModule';
 import { WebChatModule } from './components/WebChat/WebChatModule';
+import { SalesPipelineModule } from './components/SalesPipeline/SalesPipelineModule';
+import { SalesModule } from './components/Sales/SalesModule';
 import { useTwilioDevice } from './hooks/useTwilioDevice';
 import { useInvoiceAutoValidation } from './hooks/useInvoiceAutoValidation';
 import { useInvoicePdfQueue } from './hooks/useInvoicePdfQueue';
@@ -72,6 +74,10 @@ function MainApp() {
         return <InboxModule />;
       case 'webchat':
         return <WebChatModule />;
+      case 'pipeline':
+        return <SalesPipelineModule />;
+      case 'ventas':
+        return <SalesModule />;
       case 'settings':
         return <SettingsModule />;
       case 'parameters':

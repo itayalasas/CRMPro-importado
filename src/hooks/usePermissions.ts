@@ -6,6 +6,7 @@ export type ModuleKey =
   | 'dashboard'
   | 'clientes'
   | 'campanas'
+  | 'ventas'
   | 'ordenes'
   | 'facturas'
   | 'contabilidad'
@@ -24,13 +25,21 @@ export interface ModulePermissions {
 export function usePermissions() {
   const { user } = useAuth();
 
+  const getAliasModules = (module: ModuleKey): ModuleKey[] => {
+    if (module === 'ventas') {
+      return ['ventas', 'ordenes', 'clientes'];
+    }
+
+    return [module];
+  };
+
   const hasPermission = (module: ModuleKey, permission: Permission): boolean => {
     if (!user?.permissions) return false;
 
-    const modulePermissions = user.permissions[module];
-    if (!modulePermissions) return false;
-
-    return modulePermissions.includes(permission);
+    return getAliasModules(module).some((moduleKey) => {
+      const modulePermissions = user.permissions[moduleKey];
+      return !!modulePermissions && modulePermissions.includes(permission);
+    });
   };
 
   const hasAnyPermission = (module: ModuleKey, permissions: Permission[]): boolean => {
@@ -59,13 +68,22 @@ export function usePermissions() {
 
   const hasModuleAccess = (module: ModuleKey): boolean => {
     if (!user?.permissions) return false;
-    const modulePermissions = user.permissions[module];
-    return !!modulePermissions && modulePermissions.length > 0;
+    return getAliasModules(module).some((moduleKey) => {
+      const modulePermissions = user.permissions[moduleKey];
+      return !!modulePermissions && modulePermissions.length > 0;
+    });
   };
 
   const getModulePermissions = (module: ModuleKey): Permission[] => {
     if (!user?.permissions) return [];
-    return user.permissions[module] || [];
+    for (const moduleKey of getAliasModules(module)) {
+      const modulePermissions = user.permissions[moduleKey];
+      if (modulePermissions && modulePermissions.length > 0) {
+        return modulePermissions;
+      }
+    }
+
+    return [];
   };
 
   return {

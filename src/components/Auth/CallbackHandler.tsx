@@ -8,6 +8,7 @@ export function CallbackHandler() {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string>('Procesando autenticación...');
+  const expectedState = 'authenticated';
 
   useEffect(() => {
     handleCallback();
@@ -20,6 +21,11 @@ export function CallbackHandler() {
 
       if (!callbackData) {
         setError('URL de callback inválida');
+        return;
+      }
+
+      if (callbackData.state !== expectedState) {
+        setError('Estado de callback inválido');
         return;
       }
 

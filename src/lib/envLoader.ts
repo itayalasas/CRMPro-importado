@@ -10,6 +10,8 @@ interface EnvConfig {
     VITE_AUTH_API_KEY: string;
     VITE_APP_URL: string;
     VITE_AUTH_CODE_EXCHANGE_URL: string;
+    VITE_EMAIL_URL: string;
+    VITE_EMAIL_KEY: string;
     VITE_WIDGET_URL: string;
     VITE_WIDGET_APIKEY: string; 
   };
@@ -47,7 +49,7 @@ class EnvironmentLoader {
   }
 
   private async fetchConfig(): Promise<void> {
-    const API_URL = 'https://ffihaeatoundrjzgtpzk.supabase.co/functions/v1/get-env';
+    const API_URL = 'https://apis-pets-app.proudmoss-ff0cfe85.northcentralus.azurecontainerapps.io/api/get-env';
     const ACCESS_KEY = '05c04864455effee17737adb494eb95db4e30fd7a41fe358eea0fe621b06c67b';
 
     try {
@@ -81,6 +83,12 @@ class EnvironmentLoader {
       }
       if (!this.config.VITE_WIDGET_APIKEY) {
         console.warn('⚠️ VITE_WIDGET_APIKEY no está configurado (API y local).');
+      }
+      if (!this.config.VITE_EMAIL_URL) {
+        console.warn('⚠️ VITE_EMAIL_URL no está configurado (API y local). El envío de cotizaciones no estará disponible.');
+      }
+      if (!this.config.VITE_EMAIL_KEY) {
+        console.warn('⚠️ VITE_EMAIL_KEY no está configurado (API y local).');
       }
 
       this.injectIntoImportMeta();
@@ -143,6 +151,8 @@ class EnvironmentLoader {
       VITE_AUTH_API_KEY: read('VITE_AUTH_API_KEY', 'vite_auth_api_key'),
       VITE_APP_URL: read('VITE_APP_URL', 'vite_app_url'),
       VITE_AUTH_CODE_EXCHANGE_URL: read('VITE_AUTH_CODE_EXCHANGE_URL', 'vite_auth_code_exchange_url'),
+      VITE_EMAIL_URL: read('VITE_EMAIL_URL', 'vite_email_url'),
+      VITE_EMAIL_KEY: read('VITE_EMAIL_KEY', 'vite_email_key'),
 
       // Widget/bot settings (support common naming variants)
       VITE_WIDGET_URL: read(
@@ -180,6 +190,8 @@ class EnvironmentLoader {
       VITE_AUTH_API_KEY: primary.VITE_AUTH_API_KEY || fallback.VITE_AUTH_API_KEY,
       VITE_APP_URL: primary.VITE_APP_URL || fallback.VITE_APP_URL,
       VITE_AUTH_CODE_EXCHANGE_URL: primary.VITE_AUTH_CODE_EXCHANGE_URL || fallback.VITE_AUTH_CODE_EXCHANGE_URL,
+      VITE_EMAIL_URL: primary.VITE_EMAIL_URL || fallback.VITE_EMAIL_URL,
+      VITE_EMAIL_KEY: primary.VITE_EMAIL_KEY || fallback.VITE_EMAIL_KEY,
       VITE_WIDGET_URL: primary.VITE_WIDGET_URL || fallback.VITE_WIDGET_URL,
       VITE_WIDGET_APIKEY: primary.VITE_WIDGET_APIKEY || fallback.VITE_WIDGET_APIKEY,
     };
