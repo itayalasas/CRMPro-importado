@@ -14,6 +14,11 @@ import { ConfirmDialog } from '../Common/ConfirmDialog';
 import { CampaignMonitorModal } from './CampaignMonitorModal';
 import { PermissionGate } from '../Common/PermissionGate';
 import { usePermissions } from '../../hooks/usePermissions';
+import { PageHeader } from '../ui/PageHeader';
+import { StatCard } from '../ui/StatCard';
+import { Card } from '../ui/Card';
+import { Badge, BadgeVariant } from '../ui/Badge';
+import { Button } from '../ui/Button';
 
 interface Campaign {
   id: string;
@@ -327,14 +332,25 @@ export function CampaignsModule() {
     setShowGroupModal(false);
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusVariant = (status: string): BadgeVariant => {
     switch (status) {
-      case 'sent': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-      case 'sending': return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'scheduled': return 'bg-purple-100 text-purple-700 border-purple-200';
-      case 'draft': return 'bg-slate-100 text-slate-700 border-slate-200';
-      case 'paused': return 'bg-orange-100 text-orange-700 border-orange-200';
-      default: return 'bg-slate-100 text-slate-700 border-slate-200';
+      case 'sent': return 'success';
+      case 'sending': return 'info';
+      case 'scheduled': return 'brand';
+      case 'draft': return 'neutral';
+      case 'paused': return 'warning';
+      default: return 'neutral';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'sent': return 'Enviada';
+      case 'sending': return 'Enviando';
+      case 'scheduled': return 'Programada';
+      case 'draft': return 'Borrador';
+      case 'paused': return 'Pausada';
+      default: return status;
     }
   };
 
@@ -431,143 +447,101 @@ export function CampaignsModule() {
   };
 
   return (
-    <div className="p-8 bg-gradient-to-br from-slate-50 via-purple-50 to-slate-50 min-h-screen">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
-          Campañas de Marketing
-        </h1>
-        <p className="text-slate-600 text-lg">Crea y gestiona tus campañas de email marketing</p>
-      </div>
+    <div className="p-4 sm:p-6 lg:p-8 min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+      <PageHeader
+        title="Campañas de Marketing"
+        subtitle="Crea y gestiona tus campañas de email marketing"
+      />
 
       {activeTab === 'overview' && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-2xl shadow-lg p-6 border border-purple-100 hover:shadow-xl transition-all">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-3 rounded-xl">
-                  <Send className="w-6 h-6 text-white" />
-                </div>
-              </div>
-              <p className="text-slate-600 text-sm font-medium mb-1">Total Enviados</p>
-              <p className="text-3xl font-bold text-slate-900">{overallStats.totalSent.toLocaleString()}</p>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow-lg p-6 border border-blue-100 hover:shadow-xl transition-all">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-3 rounded-xl">
-                  <Eye className="w-6 h-6 text-white" />
-                </div>
-              </div>
-              <p className="text-slate-600 text-sm font-medium mb-1">Tasa de Apertura</p>
-              <p className="text-3xl font-bold text-slate-900">{overallStats.openRate.toFixed(1)}%</p>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow-lg p-6 border border-emerald-100 hover:shadow-xl transition-all">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-3 rounded-xl">
-                  <MousePointerClick className="w-6 h-6 text-white" />
-                </div>
-              </div>
-              <p className="text-slate-600 text-sm font-medium mb-1">Tasa de Clicks</p>
-              <p className="text-3xl font-bold text-slate-900">{overallStats.clickRate.toFixed(1)}%</p>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow-lg p-6 border border-orange-100 hover:shadow-xl transition-all">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-3 rounded-xl">
-                  <Activity className="w-6 h-6 text-white" />
-                </div>
-              </div>
-              <p className="text-slate-600 text-sm font-medium mb-1">Campañas Activas</p>
-              <p className="text-3xl font-bold text-slate-900">{campaigns.filter(c => c.status === 'sending' || c.status === 'scheduled').length}</p>
-            </div>
+            <StatCard color="brand" icon={<Send />} label="Total Enviados" value={overallStats.totalSent.toLocaleString()} />
+            <StatCard color="info" icon={<Eye />} label="Tasa de Apertura" value={`${overallStats.openRate.toFixed(1)}%`} />
+            <StatCard color="success" icon={<MousePointerClick />} label="Tasa de Clicks" value={`${overallStats.clickRate.toFixed(1)}%`} />
+            <StatCard color="warning" icon={<Activity />} label="Campañas Activas" value={campaigns.filter(c => c.status === 'sending' || c.status === 'scheduled').length} />
           </div>
 
-          <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-slate-200">
+          <Card className="p-6 mb-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-slate-900">Navegación Rápida</h2>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Navegación Rápida</h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <button
                 onClick={() => setActiveTab('campaigns')}
-                className="flex items-center space-x-4 p-6 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl hover:from-purple-100 hover:to-purple-200 transition-all border border-purple-200"
+                className="flex items-center space-x-4 p-6 bg-gradient-to-br from-brand-50 to-brand-100 dark:from-brand-500/10 dark:to-brand-500/20 rounded-xl hover:from-brand-100 hover:to-brand-200 dark:hover:from-brand-500/20 dark:hover:to-brand-500/30 transition-all border border-brand-200 dark:border-brand-500/30"
               >
-                <div className="bg-purple-600 p-3 rounded-xl">
+                <div className="bg-brand-600 p-3 rounded-xl">
                   <Send className="w-6 h-6 text-white" />
                 </div>
                 <div className="text-left">
-                  <p className="font-bold text-slate-900">Campañas</p>
-                  <p className="text-sm text-slate-600">{campaigns.length} campañas</p>
+                  <p className="font-bold text-slate-900 dark:text-white">Campañas</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">{campaigns.length} campañas</p>
                 </div>
               </button>
 
               <button
                 onClick={() => setActiveTab('templates')}
-                className="flex items-center space-x-4 p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl hover:from-blue-100 hover:to-blue-200 transition-all border border-blue-200"
+                className="flex items-center space-x-4 p-6 bg-gradient-to-br from-sky-50 to-sky-100 dark:from-sky-500/10 dark:to-sky-500/20 rounded-xl hover:from-sky-100 hover:to-sky-200 dark:hover:from-sky-500/20 dark:hover:to-sky-500/30 transition-all border border-sky-200 dark:border-sky-500/30"
               >
-                <div className="bg-blue-600 p-3 rounded-xl">
+                <div className="bg-sky-600 p-3 rounded-xl">
                   <FileText className="w-6 h-6 text-white" />
                 </div>
                 <div className="text-left">
-                  <p className="font-bold text-slate-900">Plantillas</p>
-                  <p className="text-sm text-slate-600">{templates.length} plantillas</p>
+                  <p className="font-bold text-slate-900 dark:text-white">Plantillas</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">{templates.length} plantillas</p>
                 </div>
               </button>
 
               <button
                 onClick={() => setActiveTab('groups')}
-                className="flex items-center space-x-4 p-6 bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl hover:from-emerald-100 hover:to-emerald-200 transition-all border border-emerald-200"
+                className="flex items-center space-x-4 p-6 bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-500/10 dark:to-emerald-500/20 rounded-xl hover:from-emerald-100 hover:to-emerald-200 dark:hover:from-emerald-500/20 dark:hover:to-emerald-500/30 transition-all border border-emerald-200 dark:border-emerald-500/30"
               >
                 <div className="bg-emerald-600 p-3 rounded-xl">
                   <Users className="w-6 h-6 text-white" />
                 </div>
                 <div className="text-left">
-                  <p className="font-bold text-slate-900">Grupos</p>
-                  <p className="text-sm text-slate-600">{groups.length} grupos</p>
+                  <p className="font-bold text-slate-900 dark:text-white">Grupos</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">{groups.length} grupos</p>
                 </div>
               </button>
             </div>
-          </div>
+          </Card>
         </>
       )}
 
       {activeTab === 'campaigns' && (
         <>
-          <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-slate-200">
+          <Card className="p-6 mb-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-900">Mis Campañas</h2>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Mis Campañas</h2>
               <PermissionGate module="campanas" permission="create">
-                <button
-                  onClick={() => setShowCampaignModal(true)}
-                  className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl"
-                >
-                  <Plus className="w-5 h-5" />
-                  <span className="font-semibold">Nueva Campaña</span>
-                </button>
+                <Button onClick={() => setShowCampaignModal(true)} icon={<Plus className="w-5 h-5" />}>
+                  Nueva Campaña
+                </Button>
               </PermissionGate>
             </div>
-          </div>
+          </Card>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {campaigns.map((campaign) => (
-              <div key={campaign.id} className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden hover:shadow-xl transition-all">
-                <div className="h-2 bg-gradient-to-r from-purple-500 to-pink-500"></div>
+              <Card key={campaign.id} hover className="overflow-hidden">
+                <div className="h-2 bg-gradient-to-r from-brand-500 to-accent-500"></div>
                 <div className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <h3 className="font-bold text-lg text-slate-900 mb-2">{campaign.name}</h3>
+                      <h3 className="font-bold text-lg text-slate-900 dark:text-white mb-2">{campaign.name}</h3>
                       <div className="flex items-center space-x-2">
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold border flex items-center space-x-1 ${getStatusColor(campaign.status)}`}>
-                          {getStatusIcon(campaign.status)}
-                          <span className="ml-1">{campaign.status}</span>
-                        </span>
+                        <Badge variant={getStatusVariant(campaign.status)} icon={getStatusIcon(campaign.status)}>
+                          {getStatusLabel(campaign.status)}
+                        </Badge>
                       </div>
                     </div>
                   </div>
 
-                  <div className="space-y-2 mb-4 text-sm text-slate-600">
+                  <div className="space-y-2 mb-4 text-sm text-slate-600 dark:text-slate-300">
                     <div className="flex items-center">
-                      <FileText className="w-4 h-4 mr-2 text-blue-500" />
+                      <FileText className="w-4 h-4 mr-2 text-sky-500" />
                       <span>Plantilla: {campaign.email_templates?.name || 'N/A'}</span>
                     </div>
                     <div className="flex items-center">
@@ -577,18 +551,18 @@ export function CampaignsModule() {
                   </div>
 
                   {campaignStats[campaign.id] && (
-                    <div className="grid grid-cols-3 gap-3 p-4 bg-slate-50 rounded-xl mb-4">
+                    <div className="grid grid-cols-3 gap-3 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl mb-4">
                       <div className="text-center">
-                        <p className="text-xs text-slate-500 mb-1">Enviados</p>
-                        <p className="text-lg font-bold text-slate-900">{campaignStats[campaign.id].totalSent}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Enviados</p>
+                        <p className="text-lg font-bold text-slate-900 dark:text-white">{campaignStats[campaign.id].totalSent}</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-xs text-slate-500 mb-1">Aperturas</p>
-                        <p className="text-lg font-bold text-blue-600">{campaignStats[campaign.id].openRate.toFixed(1)}%</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Aperturas</p>
+                        <p className="text-lg font-bold text-sky-600 dark:text-sky-400">{campaignStats[campaign.id].openRate.toFixed(1)}%</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-xs text-slate-500 mb-1">Clicks</p>
-                        <p className="text-lg font-bold text-emerald-600">{campaignStats[campaign.id].clickRate.toFixed(1)}%</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Clicks</p>
+                        <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{campaignStats[campaign.id].clickRate.toFixed(1)}%</p>
                       </div>
                     </div>
                   )}
@@ -596,38 +570,38 @@ export function CampaignsModule() {
                   <div className="space-y-2">
                     {(campaign.status === 'draft' || campaign.status === 'scheduled') && (
                       <PermissionGate module="campanas" permission="update">
-                        <button
+                        <Button
                           onClick={() => handleSendCampaign(campaign.id)}
-                          className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-md hover:shadow-lg"
+                          className="w-full !bg-gradient-to-r !from-emerald-500 !to-emerald-600 hover:!from-emerald-600 hover:!to-emerald-700"
+                          icon={<Send className="w-5 h-5" />}
                         >
-                          <Send className="w-5 h-5" />
-                          <span className="font-semibold">Enviar Campaña</span>
-                        </button>
+                          Enviar Campaña
+                        </Button>
                       </PermissionGate>
                     )}
 
                     {(campaign.status === 'sending' || campaign.status === 'sent') && (
                       <>
-                        <button
+                        <Button
                           onClick={() => {
                             setMonitoringCampaign(campaign);
                             setShowMonitorModal(true);
                           }}
-                          className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all shadow-md hover:shadow-lg"
+                          className="w-full !bg-gradient-to-r !from-sky-500 !to-sky-600 hover:!from-sky-600 hover:!to-sky-700"
+                          icon={<List className="w-5 h-5" />}
                         >
-                          <List className="w-5 h-5" />
-                          <span className="font-semibold">Ver Logs de Envío</span>
-                        </button>
+                          Ver Logs de Envío
+                        </Button>
 
                         {campaign.failed_count > 0 && (
                           <PermissionGate module="campanas" permission="update">
-                            <button
+                            <Button
                               onClick={() => handleRetryFailedEmails(campaign.id)}
-                              className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all shadow-md hover:shadow-lg"
+                              className="w-full !bg-gradient-to-r !from-amber-500 !to-amber-600 hover:!from-amber-600 hover:!to-amber-700"
+                              icon={<Send className="w-5 h-5" />}
                             >
-                              <Send className="w-5 h-5" />
-                              <span className="font-semibold">Reintentar Fallidos ({campaign.failed_count})</span>
-                            </button>
+                              Reintentar Fallidos ({campaign.failed_count})
+                            </Button>
                           </PermissionGate>
                         )}
                       </>
@@ -635,27 +609,31 @@ export function CampaignsModule() {
 
                     <div className="flex space-x-2">
                       <PermissionGate module="campanas" permission="update">
-                        <button
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="flex-1 !bg-brand-50 !text-brand-700 !border-brand-200 hover:!bg-brand-100 dark:!bg-brand-500/10 dark:!text-brand-400 dark:!border-brand-500/30"
                           onClick={() => handleEditCampaign(campaign)}
-                          className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-purple-50 text-purple-700 rounded-xl hover:bg-purple-100 transition-colors border border-purple-200"
+                          icon={<Edit2 className="w-4 h-4" />}
                         >
-                          <Edit2 className="w-4 h-4" />
-                          <span className="text-sm font-medium">Editar</span>
-                        </button>
+                          Editar
+                        </Button>
                       </PermissionGate>
                       <PermissionGate module="campanas" permission="delete">
-                        <button
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="flex-1 !bg-rose-50 !text-rose-700 !border-rose-200 hover:!bg-rose-100 dark:!bg-rose-500/10 dark:!text-rose-400 dark:!border-rose-500/30"
                           onClick={() => handleDeleteCampaign(campaign.id)}
-                          className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-red-50 text-red-700 rounded-xl hover:bg-red-100 transition-colors border border-red-200"
+                          icon={<Trash2 className="w-4 h-4" />}
                         >
-                          <Trash2 className="w-4 h-4" />
-                          <span className="text-sm font-medium">Eliminar</span>
-                        </button>
+                          Eliminar
+                        </Button>
                       </PermissionGate>
                     </div>
                   </div>
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
         </>
@@ -663,64 +641,67 @@ export function CampaignsModule() {
 
       {activeTab === 'templates' && (
         <>
-          <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-slate-200">
+          <Card className="p-6 mb-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-900">Plantillas de Email</h2>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Plantillas de Email</h2>
               <PermissionGate module="campanas" permission="create">
-                <button
+                <Button
                   onClick={() => {
                     setEditingTemplate(null);
                     setShowHTMLEditor(true);
                   }}
-                  className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl"
+                  icon={<Plus className="w-5 h-5" />}
                 >
-                  <Plus className="w-5 h-5" />
-                  <span className="font-semibold">Nueva Plantilla</span>
-                </button>
+                  Nueva Plantilla
+                </Button>
               </PermissionGate>
             </div>
-          </div>
+          </Card>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {templates.map((template) => (
-              <div key={template.id} className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden hover:shadow-xl transition-all">
-                <div className="h-2 bg-gradient-to-r from-blue-500 to-indigo-500"></div>
+              <Card key={template.id} hover className="overflow-hidden">
+                <div className="h-2 bg-gradient-to-r from-sky-500 to-brand-500"></div>
                 <div className="p-6">
                   <div className="flex items-center space-x-3 mb-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                    <div className="w-12 h-12 bg-gradient-to-br from-sky-500 to-brand-600 rounded-xl flex items-center justify-center">
                       <FileText className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-lg text-slate-900">{template.name}</h3>
-                      <p className="text-sm text-slate-500">{template.subject}</p>
+                      <h3 className="font-bold text-lg text-slate-900 dark:text-white">{template.name}</h3>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">{template.subject}</p>
                     </div>
                   </div>
 
                   <div className="flex space-x-2">
                     <PermissionGate module="campanas" permission="update">
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="flex-1 !bg-sky-50 !text-sky-700 !border-sky-200 hover:!bg-sky-100 dark:!bg-sky-500/10 dark:!text-sky-400 dark:!border-sky-500/30"
                         onClick={() => {
                           setEditingTemplate(template);
                           setShowHTMLEditor(true);
                         }}
-                        className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-100 transition-colors border border-blue-200"
+                        icon={<Edit2 className="w-4 h-4" />}
                       >
-                        <Edit2 className="w-4 h-4" />
-                        <span className="text-sm font-medium">Editar</span>
-                      </button>
+                        Editar
+                      </Button>
                     </PermissionGate>
                     <PermissionGate module="campanas" permission="delete">
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="flex-1 !bg-rose-50 !text-rose-700 !border-rose-200 hover:!bg-rose-100 dark:!bg-rose-500/10 dark:!text-rose-400 dark:!border-rose-500/30"
                         onClick={() => handleDeleteTemplate(template.id)}
-                        className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-red-50 text-red-700 rounded-xl hover:bg-red-100 transition-colors border border-red-200"
+                        icon={<Trash2 className="w-4 h-4" />}
                       >
-                        <Trash2 className="w-4 h-4" />
-                        <span className="text-sm font-medium">Eliminar</span>
-                      </button>
+                        Eliminar
+                      </Button>
                     </PermissionGate>
                   </div>
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
         </>
@@ -728,24 +709,24 @@ export function CampaignsModule() {
 
       {activeTab === 'groups' && (
         <>
-          <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-slate-200">
+          <Card className="p-6 mb-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-900">Grupos de Contactos</h2>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Grupos de Contactos</h2>
               <PermissionGate module="campanas" permission="create">
-                <button
+                <Button
                   onClick={() => setShowGroupModal(true)}
-                  className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all shadow-lg hover:shadow-xl"
+                  className="!bg-gradient-to-r !from-emerald-600 !to-teal-600 hover:!from-emerald-700 hover:!to-teal-700"
+                  icon={<Plus className="w-5 h-5" />}
                 >
-                  <Plus className="w-5 h-5" />
-                  <span className="font-semibold">Nuevo Grupo</span>
-                </button>
+                  Nuevo Grupo
+                </Button>
               </PermissionGate>
             </div>
-          </div>
+          </Card>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {groups.map((group) => (
-              <div key={group.id} className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden hover:shadow-xl transition-all">
+              <Card key={group.id} hover className="overflow-hidden">
                 <div className="h-2 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
                 <div className="p-6">
                   <div className="flex items-center space-x-3 mb-4">
@@ -753,49 +734,53 @@ export function CampaignsModule() {
                       <Users className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-lg text-slate-900">{group.name}</h3>
-                      <p className="text-sm text-slate-500">{group.description || 'Sin descripción'}</p>
+                      <h3 className="font-bold text-lg text-slate-900 dark:text-white">{group.name}</h3>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">{group.description || 'Sin descripción'}</p>
                     </div>
                   </div>
 
                   <div className="flex space-x-2">
                     <PermissionGate module="campanas" permission="update">
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="flex-1 !bg-emerald-50 !text-emerald-700 !border-emerald-200 hover:!bg-emerald-100 dark:!bg-emerald-500/10 dark:!text-emerald-400 dark:!border-emerald-500/30"
                         onClick={() => {
                           setSelectedGroupId(group.id);
                           setShowContactsManager(true);
                         }}
-                        className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-emerald-50 text-emerald-700 rounded-xl hover:bg-emerald-100 transition-colors border border-emerald-200"
+                        icon={<UserPlus className="w-4 h-4" />}
                       >
-                        <UserPlus className="w-4 h-4" />
-                        <span className="text-sm font-medium">Contactos</span>
-                      </button>
+                        Contactos
+                      </Button>
                     </PermissionGate>
                     <PermissionGate module="campanas" permission="delete">
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="flex-1 !bg-rose-50 !text-rose-700 !border-rose-200 hover:!bg-rose-100 dark:!bg-rose-500/10 dark:!text-rose-400 dark:!border-rose-500/30"
                         onClick={() => handleDeleteGroup(group.id)}
-                        className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 bg-red-50 text-red-700 rounded-xl hover:bg-red-100 transition-colors border border-red-200"
+                        icon={<Trash2 className="w-4 h-4" />}
                       >
-                        <Trash2 className="w-4 h-4" />
-                        <span className="text-sm font-medium">Eliminar</span>
-                      </button>
+                        Eliminar
+                      </Button>
                     </PermissionGate>
                   </div>
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
         </>
       )}
 
       <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-40">
-        <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-2 flex space-x-2">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 p-2 flex space-x-2">
           <button
             onClick={() => setActiveTab('overview')}
             className={`px-6 py-3 rounded-xl font-medium transition-all ${
               activeTab === 'overview'
-                ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
-                : 'text-slate-600 hover:bg-slate-100'
+                ? 'bg-gradient-to-r from-brand-600 to-accent-600 text-white shadow-lg'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
             }`}
           >
             <BarChart3 className="w-5 h-5 inline mr-2" />
@@ -805,8 +790,8 @@ export function CampaignsModule() {
             onClick={() => setActiveTab('campaigns')}
             className={`px-6 py-3 rounded-xl font-medium transition-all ${
               activeTab === 'campaigns'
-                ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
-                : 'text-slate-600 hover:bg-slate-100'
+                ? 'bg-gradient-to-r from-brand-600 to-accent-600 text-white shadow-lg'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
             }`}
           >
             <Send className="w-5 h-5 inline mr-2" />
@@ -816,8 +801,8 @@ export function CampaignsModule() {
             onClick={() => setActiveTab('templates')}
             className={`px-6 py-3 rounded-xl font-medium transition-all ${
               activeTab === 'templates'
-                ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
-                : 'text-slate-600 hover:bg-slate-100'
+                ? 'bg-gradient-to-r from-brand-600 to-accent-600 text-white shadow-lg'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
             }`}
           >
             <FileText className="w-5 h-5 inline mr-2" />
@@ -827,8 +812,8 @@ export function CampaignsModule() {
             onClick={() => setActiveTab('groups')}
             className={`px-6 py-3 rounded-xl font-medium transition-all ${
               activeTab === 'groups'
-                ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
-                : 'text-slate-600 hover:bg-slate-100'
+                ? 'bg-gradient-to-r from-brand-600 to-accent-600 text-white shadow-lg'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
             }`}
           >
             <Users className="w-5 h-5 inline mr-2" />
@@ -839,14 +824,14 @@ export function CampaignsModule() {
 
       {showCampaignModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-pink-600 p-6 rounded-t-3xl">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-brand-600 to-accent-600 p-6 rounded-t-3xl">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-2xl font-bold text-white">
                     {editingCampaign ? 'Editar Campaña' : 'Nueva Campaña'}
                   </h2>
-                  <p className="text-purple-100 text-sm mt-1">
+                  <p className="text-brand-100 text-sm mt-1">
                     Configura tu campaña de email marketing
                   </p>
                 </div>
@@ -859,65 +844,65 @@ export function CampaignsModule() {
             <form onSubmit={handleCampaignSubmit} className="p-8">
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    <Target className="w-4 h-4 inline mr-2 text-purple-600" />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
+                    <Target className="w-4 h-4 inline mr-2 text-brand-600 dark:text-brand-400" />
                     Nombre de la Campaña *
                   </label>
                   <input
                     type="text"
                     value={campaignForm.name}
                     onChange={(e) => setCampaignForm({ ...campaignForm, name: e.target.value })}
-                    className={`w-full px-4 py-3 border ${errors.name ? 'border-red-300' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition`}
+                    className={`w-full px-4 py-3 border ${errors.name ? 'border-rose-300 dark:border-rose-500/50' : 'border-slate-300 dark:border-slate-600'} bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent transition`}
                     placeholder="Ej: Lanzamiento Primavera 2024"
                   />
-                  {errors.name && <p className="text-red-600 text-xs mt-1">{errors.name}</p>}
+                  {errors.name && <p className="text-rose-600 dark:text-rose-400 text-xs mt-1">{errors.name}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    <FileText className="w-4 h-4 inline mr-2 text-blue-600" />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
+                    <FileText className="w-4 h-4 inline mr-2 text-sky-600 dark:text-sky-400" />
                     Plantilla de Email *
                   </label>
                   <select
                     value={campaignForm.template_id}
                     onChange={(e) => setCampaignForm({ ...campaignForm, template_id: e.target.value })}
-                    className={`w-full px-4 py-3 border ${errors.template_id ? 'border-red-300' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition`}
+                    className={`w-full px-4 py-3 border ${errors.template_id ? 'border-rose-300 dark:border-rose-500/50' : 'border-slate-300 dark:border-slate-600'} bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent transition`}
                   >
                     <option value="">Selecciona una plantilla</option>
                     {templates.map(t => (
                       <option key={t.id} value={t.id}>{t.name}</option>
                     ))}
                   </select>
-                  {errors.template_id && <p className="text-red-600 text-xs mt-1">{errors.template_id}</p>}
+                  {errors.template_id && <p className="text-rose-600 dark:text-rose-400 text-xs mt-1">{errors.template_id}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    <Users className="w-4 h-4 inline mr-2 text-emerald-600" />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
+                    <Users className="w-4 h-4 inline mr-2 text-emerald-600 dark:text-emerald-400" />
                     Grupo de Contactos *
                   </label>
                   <select
                     value={campaignForm.group_id}
                     onChange={(e) => setCampaignForm({ ...campaignForm, group_id: e.target.value })}
-                    className={`w-full px-4 py-3 border ${errors.group_id ? 'border-red-300' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition`}
+                    className={`w-full px-4 py-3 border ${errors.group_id ? 'border-rose-300 dark:border-rose-500/50' : 'border-slate-300 dark:border-slate-600'} bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent transition`}
                   >
                     <option value="">Selecciona un grupo</option>
                     {groups.map(g => (
                       <option key={g.id} value={g.id}>{g.name}</option>
                     ))}
                   </select>
-                  {errors.group_id && <p className="text-red-600 text-xs mt-1">{errors.group_id}</p>}
+                  {errors.group_id && <p className="text-rose-600 dark:text-rose-400 text-xs mt-1">{errors.group_id}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    <Activity className="w-4 h-4 inline mr-2 text-orange-600" />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
+                    <Activity className="w-4 h-4 inline mr-2 text-amber-600 dark:text-amber-400" />
                     Estado
                   </label>
                   <select
                     value={campaignForm.status}
                     onChange={(e) => setCampaignForm({ ...campaignForm, status: e.target.value })}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
+                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
                   >
                     <option value="draft">Borrador</option>
                     <option value="scheduled">Programada</option>
@@ -929,38 +914,31 @@ export function CampaignsModule() {
 
                 {campaignForm.status === 'scheduled' && (
                   <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">
-                      <Calendar className="w-4 h-4 inline mr-2 text-purple-600" />
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
+                      <Calendar className="w-4 h-4 inline mr-2 text-brand-600 dark:text-brand-400" />
                       Fecha y Hora Programada
                     </label>
                     <input
                       type="datetime-local"
                       value={campaignForm.scheduled_at}
                       onChange={(e) => setCampaignForm({ ...campaignForm, scheduled_at: e.target.value })}
-                      className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
+                      className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
                     />
                   </div>
                 )}
               </div>
 
-              <div className="flex space-x-4 mt-8 pt-6 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={resetCampaignForm}
-                  className="flex-1 px-6 py-3 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors font-medium"
-                >
+              <div className="flex space-x-4 mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
+                <Button type="button" variant="secondary" className="flex-1" onClick={resetCampaignForm}>
                   Cancelar
-                </button>
+                </Button>
                 <PermissionGate
                   module="campanas"
                   permission={editingCampaign ? 'update' : 'create'}
                 >
-                  <button
-                    type="submit"
-                    className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl font-medium"
-                  >
+                  <Button type="submit" className="flex-1">
                     {editingCampaign ? 'Actualizar' : 'Crear Campaña'}
-                  </button>
+                  </Button>
                 </PermissionGate>
               </div>
             </form>
@@ -970,7 +948,7 @@ export function CampaignsModule() {
 
       {showGroupModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-2xl shadow-2xl">
             <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-6 rounded-t-3xl">
               <div className="flex items-center justify-between">
                 <div>
@@ -986,49 +964,45 @@ export function CampaignsModule() {
             <form onSubmit={handleGroupSubmit} className="p-8">
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    <Users className="w-4 h-4 inline mr-2 text-emerald-600" />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
+                    <Users className="w-4 h-4 inline mr-2 text-emerald-600 dark:text-emerald-400" />
                     Nombre del Grupo *
                   </label>
                   <input
                     type="text"
                     value={groupForm.name}
                     onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
+                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
                     placeholder="Ej: Clientes Premium"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    <FileText className="w-4 h-4 inline mr-2 text-blue-600" />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
+                    <FileText className="w-4 h-4 inline mr-2 text-sky-600 dark:text-sky-400" />
                     Descripción
                   </label>
                   <textarea
                     value={groupForm.description}
                     onChange={(e) => setGroupForm({ ...groupForm, description: e.target.value })}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
+                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
                     rows={3}
                     placeholder="Describe el propósito de este grupo..."
                   />
                 </div>
               </div>
 
-              <div className="flex space-x-4 mt-8 pt-6 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={resetGroupForm}
-                  className="flex-1 px-6 py-3 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors font-medium"
-                >
+              <div className="flex space-x-4 mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
+                <Button type="button" variant="secondary" className="flex-1" onClick={resetGroupForm}>
                   Cancelar
-                </button>
+                </Button>
                 <PermissionGate module="campanas" permission="create">
-                  <button
+                  <Button
                     type="submit"
-                    className="flex-1 px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all shadow-lg hover:shadow-xl font-medium"
+                    className="flex-1 !bg-gradient-to-r !from-emerald-600 !to-teal-600 hover:!from-emerald-700 hover:!to-teal-700"
                   >
                     Crear Grupo
-                  </button>
+                  </Button>
                 </PermissionGate>
               </div>
             </form>

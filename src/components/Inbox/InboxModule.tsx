@@ -11,6 +11,10 @@ import { useToast } from '../../contexts/ToastContext';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { externalAuth } from '../../lib/externalAuth';
 import { saveTicketCreateDraft } from '../../lib/ticketDraft';
+import { recordClientInteractionSafely } from '../../lib/clientInteractionLogger';
+import { Card } from '../ui/Card';
+import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
 
 interface InboxEmail {
   id: string;
@@ -38,6 +42,7 @@ interface InboxEmail {
 
 interface EmailDraft {
   id?: string;
+  client_id?: string | null;
   to_emails: string[];
   cc_emails: string[];
   bcc_emails: string[];
@@ -364,6 +369,7 @@ export function InboxModule() {
   const [draftsCount, setDraftsCount] = useState(0);
 
   const [composeData, setComposeData] = useState<EmailDraft>({
+    client_id: null,
     to_emails: [],
     cc_emails: [],
     bcc_emails: [],
@@ -463,6 +469,7 @@ export function InboxModule() {
     if (inboxRecipient) {
       setShowCompose(true);
       setComposeData({
+        client_id: inboxContext?.clientId || null,
         to_emails: [inboxRecipient],
         cc_emails: [],
         bcc_emails: [],
@@ -586,6 +593,7 @@ export function InboxModule() {
     forwardFromId?: string;
     webchatConversationId?: string;
     webchatSourceChannel?: string;
+    clientId?: string | null;
   }) => {
     if (!user?.id) return;
 
@@ -619,6 +627,24 @@ export function InboxModule() {
       if (!response.ok) {
         throw new Error(result.error || 'Error al enviar email');
       }
+
+      await recordClientInteractionSafely({
+        client_id: args.clientId || null,
+        type: 'email',
+        description: `Email enviado a ${args.toEmails.join(', ')}`,
+        metadata: {
+          subject: args.subject,
+          to_emails: args.toEmails,
+          cc_emails: args.ccEmails,
+          bcc_emails: args.bccEmails,
+          reply_to_id: args.replyToId || null,
+          forward_from_id: args.forwardFromId || null,
+          webchat_conversation_id: args.webchatConversationId || null,
+          webchat_source_channel: args.webchatSourceChannel || null,
+        },
+        created_by: user.id,
+        created_at: new Date().toISOString(),
+      });
 
       await refreshOutboxCount();
       if (activeFolder === 'outbox' || activeFolder === 'sent') {
@@ -980,6 +1006,7 @@ export function InboxModule() {
     const greetingName = email.from_name || email.from_email;
     setComposeMode('reply');
     setComposeData({
+      client_id: composeData.client_id || inboxContext?.clientId || null,
       to_emails: [email.from_email],
       cc_emails: [],
       bcc_emails: [],
@@ -996,6 +1023,7 @@ export function InboxModule() {
     const toList = email.to_emails.map((recipient) => recipient.email).join(', ');
     setComposeMode('forward');
     setComposeData({
+      client_id: composeData.client_id || inboxContext?.clientId || null,
       to_emails: [],
       cc_emails: [],
       bcc_emails: [],
@@ -1099,6 +1127,7 @@ export function InboxModule() {
         forwardFromId: composeData.forward_from_id,
         webchatConversationId: composeData.webchat_conversation_id,
         webchatSourceChannel: composeData.webchat_source_channel,
+        clientId: composeData.client_id || null,
       };
 
       if (composeData.id) {
@@ -1182,6 +1211,7 @@ export function InboxModule() {
 
   const resetCompose = () => {
     setComposeData({
+      client_id: null,
       to_emails: [],
       cc_emails: [],
       bcc_emails: [],
@@ -1213,6 +1243,7 @@ export function InboxModule() {
       description_html: richDescription,
       priority: 'medium',
       status: 'open',
+      client_id: composeData.client_id || undefined,
       source_module: 'email',
       source_name: selectedEmail.from_name || undefined,
       source_email: senderEmail || undefined,
@@ -1283,14 +1314,14 @@ export function InboxModule() {
 
   if (checkingEmailAccount) {
     return (
-      <div className="flex h-screen bg-slate-50">
-        <div className="w-64 bg-white border-r border-slate-200" />
+      <div className="flex h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700" />
         <div className="flex-1 p-8">
-          <div className="bg-white border border-slate-200 rounded-xl p-8 max-w-3xl mx-auto text-center">
-            <RefreshCw className="w-8 h-8 mx-auto mb-3 animate-spin text-blue-600" />
-            <p className="text-slate-900 font-medium">Cargando buzón...</p>
-            <p className="text-sm text-slate-500 mt-1">Validando configuración de correo</p>
-          </div>
+          <Card className="p-8 max-w-3xl mx-auto text-center">
+            <RefreshCw className="w-8 h-8 mx-auto mb-3 animate-spin text-brand-600 dark:text-brand-400" />
+            <p className="text-slate-900 dark:text-white font-medium">Cargando buzón...</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Validando configuración de correo</p>
+          </Card>
         </div>
       </div>
     );
@@ -1298,22 +1329,22 @@ export function InboxModule() {
 
   if (!hasEmailAccount) {
     return (
-      <div className="p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
+      <div className="p-8 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 min-h-screen">
         <div className="max-w-2xl mx-auto">
-          <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8 text-center">
-            <div className="bg-orange-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Settings className="w-10 h-10 text-orange-600" />
+          <Card className="p-8 text-center">
+            <div className="bg-amber-100 dark:bg-amber-500/10 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Settings className="w-10 h-10 text-amber-600 dark:text-amber-400" />
             </div>
-            <h2 className="text-2xl font-bold text-slate-900 mb-4">Configura tu Buzón de Correo</h2>
-            <p className="text-slate-600 mb-6">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">Configura tu Buzón de Correo</h2>
+            <p className="text-slate-600 dark:text-slate-300 mb-6">
               Para usar el buzón de correos, primero debes configurar tu cuenta de email en la sección de Configuración.
             </p>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="bg-sky-50 dark:bg-sky-500/10 border border-sky-200 dark:border-sky-500/30 rounded-lg p-4 mb-6">
               <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-blue-800 text-left">
+                <AlertCircle className="w-5 h-5 text-sky-600 dark:text-sky-400 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-sky-800 dark:text-sky-300 text-left">
                   <p className="font-semibold mb-1">Pasos para configurar:</p>
-                  <ol className="list-decimal list-inside space-y-1 text-blue-700">
+                  <ol className="list-decimal list-inside space-y-1 text-sky-700 dark:text-sky-300">
                     <li>Ve a la sección "Configuración"</li>
                     <li>Selecciona la pestaña "Buzón Personal"</li>
                     <li>Ingresa los datos de tu cuenta de correo (IMAP/SMTP)</li>
@@ -1323,33 +1354,30 @@ export function InboxModule() {
                 </div>
               </div>
             </div>
-            <button
-              onClick={() => window.location.hash = '#settings'}
-              className="bg-gradient-to-r from-orange-600 to-orange-500 text-white px-6 py-3 rounded-lg hover:from-orange-700 hover:to-orange-600 transition shadow-lg"
-            >
+            <Button onClick={() => window.location.hash = '#settings'}>
               Ir a Configuración
-            </button>
-          </div>
+            </Button>
+          </Card>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen bg-slate-50">
-      <div className="w-64 bg-white border-r border-slate-200 flex flex-col">
-        <div className="p-4 border-b border-slate-200">
-          <button
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-950">
+      <div className="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 flex flex-col">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-700">
+          <Button
+            className="w-full"
+            icon={<Plus className="w-5 h-5" />}
             onClick={() => {
               setShowCompose(true);
               setComposeMode('new');
               resetCompose();
             }}
-            className="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white px-4 py-3 rounded-lg hover:from-blue-700 hover:to-blue-600 transition shadow-lg"
           >
-            <Plus className="w-5 h-5" />
-            <span className="font-medium">Nuevo Email</span>
-          </button>
+            Nuevo Email
+          </Button>
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
@@ -1357,8 +1385,8 @@ export function InboxModule() {
             onClick={() => handleFolderChange('inbox')}
             className={`w-full flex items-center justify-between space-x-3 px-4 py-3 rounded-lg transition ${
               activeFolder === 'inbox'
-                ? 'bg-blue-50 text-blue-700 font-medium'
-                : 'text-slate-700 hover:bg-slate-50'
+                ? 'bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-400 font-medium'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
             <div className="flex items-center space-x-3">
@@ -1366,9 +1394,7 @@ export function InboxModule() {
               <span className="whitespace-nowrap">Bandeja de entrada</span>
             </div>
             {unreadInboxCount > 0 && (
-              <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded-full">
-                {unreadInboxCount}
-              </span>
+              <Badge variant="brand">{unreadInboxCount}</Badge>
             )}
           </button>
 
@@ -1376,8 +1402,8 @@ export function InboxModule() {
             onClick={() => handleFolderChange('starred')}
             className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
               activeFolder === 'starred'
-                ? 'bg-blue-50 text-blue-700 font-medium'
-                : 'text-slate-700 hover:bg-slate-50'
+                ? 'bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-400 font-medium'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
             <Star className="w-5 h-5" />
@@ -1388,8 +1414,8 @@ export function InboxModule() {
             onClick={() => handleFolderChange('outbox')}
             className={`w-full flex items-center justify-between space-x-3 px-4 py-3 rounded-lg transition ${
               activeFolder === 'outbox'
-                ? 'bg-blue-50 text-blue-700 font-medium'
-                : 'text-slate-700 hover:bg-slate-50'
+                ? 'bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-400 font-medium'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
             <div className="flex items-center space-x-3">
@@ -1397,9 +1423,7 @@ export function InboxModule() {
               <span>Bandeja de salida</span>
             </div>
             {outboxCount > 0 && (
-              <span className="bg-amber-600 text-white text-xs px-2 py-1 rounded-full">
-                {outboxCount}
-              </span>
+              <Badge variant="warning">{outboxCount}</Badge>
             )}
           </button>
 
@@ -1407,8 +1431,8 @@ export function InboxModule() {
             onClick={() => handleFolderChange('sent')}
             className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
               activeFolder === 'sent'
-                ? 'bg-blue-50 text-blue-700 font-medium'
-                : 'text-slate-700 hover:bg-slate-50'
+                ? 'bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-400 font-medium'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
             <Send className="w-5 h-5" />
@@ -1419,8 +1443,8 @@ export function InboxModule() {
             onClick={() => handleFolderChange('drafts')}
             className={`w-full flex items-center justify-between space-x-3 px-4 py-3 rounded-lg transition ${
               activeFolder === 'drafts'
-                ? 'bg-blue-50 text-blue-700 font-medium'
-                : 'text-slate-700 hover:bg-slate-50'
+                ? 'bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-400 font-medium'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
             <div className="flex items-center space-x-3">
@@ -1428,9 +1452,7 @@ export function InboxModule() {
               <span>Borradores</span>
             </div>
             {draftsCount > 0 && (
-              <span className="bg-slate-600 text-white text-xs px-2 py-1 rounded-full">
-                {draftsCount}
-              </span>
+              <Badge variant="neutral">{draftsCount}</Badge>
             )}
           </button>
 
@@ -1438,8 +1460,8 @@ export function InboxModule() {
             onClick={() => handleFolderChange('archived')}
             className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
               activeFolder === 'archived'
-                ? 'bg-blue-50 text-blue-700 font-medium'
-                : 'text-slate-700 hover:bg-slate-50'
+                ? 'bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-400 font-medium'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
             <Archive className="w-5 h-5" />
@@ -1450,8 +1472,8 @@ export function InboxModule() {
             onClick={() => handleFolderChange('trash')}
             className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
               activeFolder === 'trash'
-                ? 'bg-blue-50 text-blue-700 font-medium'
-                : 'text-slate-700 hover:bg-slate-50'
+                ? 'bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-400 font-medium'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
             <Trash2 className="w-5 h-5" />
@@ -1461,48 +1483,48 @@ export function InboxModule() {
       </div>
 
       <div className="flex-1 flex flex-col">
-        <div className="bg-white border-b border-slate-200 px-6 py-4">
+        <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-6 py-4">
           <div className="flex items-center space-x-4">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-slate-500" />
               <input
                 type="text"
                 placeholder="Buscar en el buzón..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
               />
             </div>
-            <button
+            <Button
+              variant="ghost"
               onClick={handleSyncEmails}
               disabled={loading}
-              className="flex items-center space-x-2 px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition disabled:opacity-50"
+              icon={<RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />}
             >
-              <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-              <span>Sincronizar</span>
-            </button>
+              Sincronizar
+            </Button>
           </div>
         </div>
 
         <div className="flex-1 flex overflow-hidden">
-          <div className="w-[30rem] bg-white border-r border-slate-200 overflow-y-auto">
+          <div className="w-[30rem] bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 overflow-y-auto">
             {loading && emails.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-slate-500">
+              <div className="flex items-center justify-center h-full text-slate-500 dark:text-slate-400">
                 <div className="text-center">
-                  <RefreshCw className="w-8 h-8 mx-auto mb-2 animate-spin text-blue-600" />
+                  <RefreshCw className="w-8 h-8 mx-auto mb-2 animate-spin text-brand-600 dark:text-brand-400" />
                   <p>Cargando emails...</p>
                 </div>
               </div>
             ) : filteredEmails.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-slate-500">
+              <div className="flex items-center justify-center h-full text-slate-500 dark:text-slate-400">
                 <div className="text-center p-8">
-                  <InboxIcon className="w-16 h-16 mx-auto mb-4 text-slate-300" />
+                  <InboxIcon className="w-16 h-16 mx-auto mb-4 text-slate-300 dark:text-slate-600" />
                   <p className="text-lg font-medium mb-2">No hay emails</p>
                   <p className="text-sm">Esta carpeta está vacía</p>
                 </div>
               </div>
             ) : (
-              <div className="divide-y divide-slate-200">
+              <div className="divide-y divide-slate-200 dark:divide-slate-700">
                 {filteredEmails.map((email) => (
                   <div
                     key={email.id}
@@ -1510,9 +1532,9 @@ export function InboxModule() {
                     onDoubleClick={() => handleOpenEmailViewerFromList(email)}
                     className={`p-4 cursor-pointer transition ${
                       selectedEmail?.id === email.id
-                        ? 'bg-blue-50 border-l-4 border-blue-600'
-                        : 'hover:bg-slate-50 border-l-4 border-transparent'
-                    } ${!email.is_read ? 'bg-blue-50/30' : ''}`}
+                        ? 'bg-brand-50 dark:bg-brand-500/10 border-l-4 border-brand-600 dark:border-brand-400'
+                        : 'hover:bg-slate-50 dark:hover:bg-slate-800 border-l-4 border-transparent'
+                    } ${!email.is_read ? 'bg-brand-50/30 dark:bg-brand-500/5' : ''}`}
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center space-x-2 flex-1 min-w-0">
@@ -1526,35 +1548,35 @@ export function InboxModule() {
                           <Star
                             className={`w-4 h-4 ${
                               email.is_starred
-                                ? 'fill-yellow-400 text-yellow-400'
-                                : 'text-slate-300 hover:text-yellow-400'
+                                ? 'fill-amber-400 text-amber-400'
+                                : 'text-slate-300 dark:text-slate-600 hover:text-amber-400'
                             }`}
                           />
                         </button>
                         <p
                           className={`text-sm truncate ${
-                            !email.is_read ? 'font-bold text-slate-900' : 'font-medium text-slate-700'
+                            !email.is_read ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-700 dark:text-slate-300'
                           }`}
                         >
                           {email.from_name || email.from_email}
                         </p>
                       </div>
-                      <span className="text-xs text-slate-500 ml-2 flex-shrink-0">
+                      <span className="text-xs text-slate-500 dark:text-slate-400 ml-2 flex-shrink-0">
                         {new Date(email.email_date).toLocaleDateString()}
                       </span>
                     </div>
                     <p
                       className={`text-sm mb-1 truncate ${
-                        !email.is_read ? 'font-semibold text-slate-900' : 'text-slate-700'
+                        !email.is_read ? 'font-semibold text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-300'
                       }`}
                     >
                       {email.subject || '(Sin asunto)'}
                     </p>
-                    <p className="text-xs text-slate-500 line-clamp-2">{getEmailPreview(email)}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">{getEmailPreview(email)}</p>
                     {email.attachments && email.attachments.length > 0 && (
                       <div className="flex items-center space-x-1 mt-2">
-                        <Paperclip className="w-3 h-3 text-slate-400" />
-                        <span className="text-xs text-slate-500">
+                        <Paperclip className="w-3 h-3 text-slate-400 dark:text-slate-500" />
+                        <span className="text-xs text-slate-500 dark:text-slate-400">
                           {email.attachments.length} adjunto(s)
                         </span>
                       </div>
@@ -1565,81 +1587,85 @@ export function InboxModule() {
             )}
           </div>
 
-          <div className="flex-1 bg-slate-50 overflow-y-auto min-w-0">
+          <div className="flex-1 bg-slate-50 dark:bg-slate-950 overflow-y-auto min-w-0">
             {selectedEmail ? (
               <div className="h-full p-6 overflow-y-auto">
                 {(() => {
                   const readableBody = getReadableEmailBody(selectedEmail);
                   return (
-                <div className="max-w-6xl mx-auto bg-white border border-slate-200 rounded-xl shadow-sm min-h-full flex flex-col">
-                  <div className="border-b border-slate-200 p-6">
+                <Card className="max-w-6xl mx-auto min-h-full flex flex-col">
+                  <div className="border-b border-slate-200 dark:border-slate-700 p-6">
                     <div className="flex items-start justify-between mb-4">
-                      <h2 className="text-2xl font-bold text-slate-900 flex-1 break-words pr-4">
+                      <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex-1 break-words pr-4">
                         {selectedEmail.subject || '(Sin asunto)'}
                       </h2>
                       <div className="flex items-center space-x-2 ml-4 flex-shrink-0">
-                        <button
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           onClick={() => handleReply(selectedEmail)}
-                          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition"
+                          icon={<Reply className="w-4 h-4" />}
                           title="Responder"
                         >
-                          <Reply className="w-4 h-4" />
-                          <span>Responder</span>
-                        </button>
-                        <button
+                          Responder
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           onClick={() => handleForward(selectedEmail)}
-                          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition"
+                          icon={<Forward className="w-4 h-4" />}
                           title="Reenviar"
                         >
-                          <Forward className="w-4 h-4" />
-                          <span>Reenviar</span>
-                        </button>
+                          Reenviar
+                        </Button>
                         <button
                           onClick={() => handleArchive(selectedEmail.id)}
-                          className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition"
+                          className="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
                           title="Archivar"
                         >
                           <Archive className="w-5 h-5" />
                         </button>
                         <button
                           onClick={() => handleDelete(selectedEmail.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                          className="p-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition"
                           title={activeFolder === 'drafts' ? 'Eliminar borrador' : 'Eliminar'}
                         >
                           <Trash2 className="w-5 h-5" />
                         </button>
-                        <button
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="!bg-emerald-50 !text-emerald-700 !border-emerald-200 hover:!bg-emerald-100 dark:!bg-emerald-500/10 dark:!text-emerald-400 dark:!border-emerald-500/30"
                           onClick={handleOpenCreateTicketModal}
-                          className="flex items-center space-x-1 px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition"
+                          icon={<Ticket className="w-4 h-4" />}
                         >
-                          <Ticket className="w-4 h-4" />
-                          <span className="text-sm font-medium">Crear Ticket</span>
-                        </button>
+                          Crear Ticket
+                        </Button>
                       </div>
                     </div>
 
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center space-x-2 min-w-0">
-                        <span className="font-medium text-slate-700">De:</span>
-                        <span className="text-slate-900 break-all">
+                        <span className="font-medium text-slate-700 dark:text-slate-300">De:</span>
+                        <span className="text-slate-900 dark:text-white break-all">
                           {selectedEmail.from_name ? `${selectedEmail.from_name} <${selectedEmail.from_email}>` : selectedEmail.from_email}
                         </span>
                       </div>
                       <div className="flex items-center space-x-2 min-w-0">
-                        <span className="font-medium text-slate-700">Para:</span>
-                        <span className="text-slate-900 break-all">
+                        <span className="font-medium text-slate-700 dark:text-slate-300">Para:</span>
+                        <span className="text-slate-900 dark:text-white break-all">
                           {selectedEmail.to_emails.map((t: { email?: string } | string) => (typeof t === 'string' ? t : t.email || '')).join(', ')}
                         </span>
                       </div>
                       {selectedEmail.cc_emails && selectedEmail.cc_emails.length > 0 && (
                         <div className="flex items-center space-x-2 min-w-0">
-                          <span className="font-medium text-slate-700">CC:</span>
-                          <span className="text-slate-900 break-all">
+                          <span className="font-medium text-slate-700 dark:text-slate-300">CC:</span>
+                          <span className="text-slate-900 dark:text-white break-all">
                             {selectedEmail.cc_emails.map((t: { email?: string } | string) => (typeof t === 'string' ? t : t.email || '')).join(', ')}
                           </span>
                         </div>
                       )}
-                      <div className="flex items-center space-x-2 text-slate-600">
+                      <div className="flex items-center space-x-2 text-slate-600 dark:text-slate-400">
                         <Clock className="w-4 h-4" />
                         <span>{new Date(selectedEmail.email_date).toLocaleString()}</span>
                       </div>
@@ -1649,16 +1675,16 @@ export function InboxModule() {
                   <div className="flex-1 p-6 overflow-y-auto">
                     {readableBody.html ? (
                       <div
-                        className="prose max-w-none break-words"
+                        className="prose dark:prose-invert max-w-none break-words"
                         dangerouslySetInnerHTML={{ __html: readableBody.html }}
                       />
                     ) : (
-                      <p className="text-slate-700 whitespace-pre-wrap break-words">{readableBody.text}</p>
+                      <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">{readableBody.text}</p>
                     )}
 
                     {selectedEmail.attachments && selectedEmail.attachments.length > 0 && (
-                      <div className="mt-6 pt-6 border-t border-slate-200">
-                        <h3 className="text-sm font-semibold text-slate-900 mb-3 flex items-center space-x-2">
+                      <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+                        <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3 flex items-center space-x-2">
                           <Paperclip className="w-4 h-4" />
                           <span>Adjuntos ({selectedEmail.attachments.length})</span>
                         </h3>
@@ -1666,18 +1692,18 @@ export function InboxModule() {
                           {selectedEmail.attachments.map((attachment: any, index: number) => (
                             <div
                               key={index}
-                              className="flex items-center space-x-3 p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition"
+                              className="flex items-center space-x-3 p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                             >
-                              <Paperclip className="w-5 h-5 text-slate-400" />
+                              <Paperclip className="w-5 h-5 text-slate-400 dark:text-slate-500" />
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-slate-900 truncate">
+                                <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
                                   {attachment.filename}
                                 </p>
-                                <p className="text-xs text-slate-500">
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
                                   {(attachment.size / 1024).toFixed(1)} KB
                                 </p>
                               </div>
-                              <button className="p-1 text-blue-600 hover:text-blue-700">
+                              <button className="p-1 text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300">
                                 <Download className="w-4 h-4" />
                               </button>
                             </div>
@@ -1686,17 +1712,17 @@ export function InboxModule() {
                       </div>
                     )}
                   </div>
-                </div>
+                </Card>
                   );
                 })()}
               </div>
             ) : (
-              <div className="h-full flex items-center justify-center text-slate-500">
-                <div className="text-center bg-white border border-slate-200 rounded-xl px-10 py-12 shadow-sm">
-                  <Mail className="w-20 h-20 mx-auto mb-4 text-slate-300" />
-                  <p className="text-lg font-medium mb-2">Selecciona un email</p>
+              <div className="h-full flex items-center justify-center text-slate-500 dark:text-slate-400">
+                <Card className="text-center px-10 py-12">
+                  <Mail className="w-20 h-20 mx-auto mb-4 text-slate-300 dark:text-slate-600" />
+                  <p className="text-lg font-medium mb-2 text-slate-700 dark:text-slate-200">Selecciona un email</p>
                   <p className="text-sm">Elige un mensaje para ver su contenido</p>
-                </div>
+                </Card>
               </div>
             )}
           </div>
@@ -1705,9 +1731,9 @@ export function InboxModule() {
 
       {showCompose && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between p-6 border-b border-slate-200">
-              <h2 className="text-xl font-bold text-slate-900">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">
                 {composeMode === 'reply' ? 'Responder' : composeMode === 'forward' ? 'Reenviar' : 'Nuevo Mensaje'}
               </h2>
               <button
@@ -1715,7 +1741,7 @@ export function InboxModule() {
                   setShowCompose(false);
                   resetCompose();
                 }}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition"
+                className="p-2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1725,92 +1751,92 @@ export function InboxModule() {
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
                 <div>
                   <div className="flex items-center space-x-2 mb-2">
-                    <label className="text-sm font-medium text-slate-700 w-16">Para:</label>
+                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300 w-16">Para:</label>
                     <input
                       type="text"
                       value={toInput}
                       onChange={(e) => setToInput(e.target.value)}
                       placeholder="destinatario@ejemplo.com"
-                      className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                       required
                     />
                     <button
                       type="button"
                       onClick={() => setShowCc(!showCc)}
-                      className="text-sm text-blue-600 hover:text-blue-700 px-2"
+                      className="text-sm text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 px-2"
                     >
                       Cc
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowBcc(!showBcc)}
-                      className="text-sm text-blue-600 hover:text-blue-700 px-2"
+                      className="text-sm text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 px-2"
                     >
                       Bcc
                     </button>
                   </div>
                   {invalidToRecipients.length > 0 && (
-                    <p className="text-xs text-red-600 ml-[4.5rem] mb-2 break-words">
+                    <p className="text-xs text-rose-600 dark:text-rose-400 ml-[4.5rem] mb-2 break-words">
                       Correos inválidos en Para: {invalidToRecipients.join(', ')}
                     </p>
                   )}
                   {showCc && (
                     <div className="flex items-center space-x-2 mb-2">
-                      <label className="text-sm font-medium text-slate-700 w-16">Cc:</label>
+                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300 w-16">Cc:</label>
                       <input
                         type="text"
                         value={ccInput}
                         onChange={(e) => setCcInput(e.target.value)}
                         placeholder="copia@ejemplo.com"
-                        className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                       />
                     </div>
                   )}
                   {showCc && invalidCcRecipients.length > 0 && (
-                    <p className="text-xs text-red-600 ml-[4.5rem] mb-2 break-words">
+                    <p className="text-xs text-rose-600 dark:text-rose-400 ml-[4.5rem] mb-2 break-words">
                       Correos inválidos en Cc: {invalidCcRecipients.join(', ')}
                     </p>
                   )}
                   {showBcc && (
                     <div className="flex items-center space-x-2 mb-2">
-                      <label className="text-sm font-medium text-slate-700 w-16">Bcc:</label>
+                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300 w-16">Bcc:</label>
                       <input
                         type="text"
                         value={bccInput}
                         onChange={(e) => setBccInput(e.target.value)}
                         placeholder="copia-oculta@ejemplo.com"
-                        className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                       />
                     </div>
                   )}
                   {showBcc && invalidBccRecipients.length > 0 && (
-                    <p className="text-xs text-red-600 ml-[4.5rem] mb-2 break-words">
+                    <p className="text-xs text-rose-600 dark:text-rose-400 ml-[4.5rem] mb-2 break-words">
                       Correos inválidos en Bcc: {invalidBccRecipients.join(', ')}
                     </p>
                   )}
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <label className="text-sm font-medium text-slate-700 w-16">Asunto:</label>
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300 w-16">Asunto:</label>
                   <input
                     type="text"
                     value={composeData.subject}
                     onChange={(e) => setComposeData({ ...composeData, subject: e.target.value })}
                     placeholder="Asunto del mensaje"
-                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                     required
                   />
                 </div>
 
                 <div>
-                  <div className="border border-slate-200 rounded-lg bg-slate-50 p-3 mb-3">
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3 mb-3">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                       <div>
-                        <label className="block text-xs font-medium text-slate-600 mb-1">Fuente</label>
+                        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Fuente</label>
                         <select
                           value={composeFontFamily}
                           onChange={(e) => setComposeFontFamily(e.target.value)}
-                          className="w-full px-2 py-2 border border-slate-300 rounded-lg bg-white text-sm"
+                          className="w-full px-2 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
                         >
                           {composeFontFamilyOptions.map((option) => (
                             <option key={option.label} value={option.value}>{option.label}</option>
@@ -1819,11 +1845,11 @@ export function InboxModule() {
                       </div>
 
                       <div>
-                        <label className="block text-xs font-medium text-slate-600 mb-1">Tamaño</label>
+                        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Tamaño</label>
                         <select
                           value={composeFontSize}
                           onChange={(e) => setComposeFontSize(Number(e.target.value))}
-                          className="w-full px-2 py-2 border border-slate-300 rounded-lg bg-white text-sm"
+                          className="w-full px-2 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
                         >
                           {composeFontSizeOptions.map((size) => (
                             <option key={size} value={size}>{size}px</option>
@@ -1832,12 +1858,12 @@ export function InboxModule() {
                       </div>
 
                       <div>
-                        <label className="block text-xs font-medium text-slate-600 mb-1">Color</label>
+                        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Color</label>
                         <input
                           type="color"
                           value={composeTextColor}
                           onChange={(e) => setComposeTextColor(e.target.value)}
-                          className="w-full h-10 px-1 py-1 border border-slate-300 rounded-lg bg-white"
+                          className="w-full h-10 px-1 py-1 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
                         />
                       </div>
                     </div>
@@ -1848,19 +1874,19 @@ export function InboxModule() {
                     onChange={(e) => setComposeData({ ...composeData, body_html: e.target.value })}
                     rows={10}
                     placeholder="Escribe tu mensaje aquí..."
-                    className="w-full min-h-[220px] max-h-[320px] px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
+                    className="w-full min-h-[220px] max-h-[320px] px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent resize-y"
                     required
                   />
                 </div>
 
                 {composeMode !== 'new' && composeData.original_quoted_html && (
-                  <div className="border border-slate-200 rounded-lg bg-slate-50">
-                    <div className="px-4 py-2 border-b border-slate-200 text-sm font-medium text-slate-700">
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                    <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300">
                       Mensaje recibido
                     </div>
                     <div className="p-4 max-h-72 overflow-y-auto">
                       <div
-                        className="prose max-w-none break-words"
+                        className="prose dark:prose-invert max-w-none break-words"
                         dangerouslySetInnerHTML={{ __html: composeData.original_quoted_html }}
                       />
                     </div>
@@ -1868,33 +1894,29 @@ export function InboxModule() {
                 )}
               </div>
 
-              <div className="flex items-center justify-between p-6 border-t border-slate-200 bg-slate-50">
-                <button
+              <div className="flex items-center justify-between p-6 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={handleSaveDraft}
-                  className="flex items-center space-x-2 px-4 py-2 text-slate-700 hover:bg-slate-200 rounded-lg transition"
+                  icon={<Save className="w-4 h-4" />}
                 >
-                  <Save className="w-4 h-4" />
-                  <span>Guardar Borrador</span>
-                </button>
+                  Guardar Borrador
+                </Button>
                 <div className="flex items-center space-x-3">
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
                     onClick={() => {
                       setShowCompose(false);
                       resetCompose();
                     }}
-                    className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition"
                   >
                     Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white px-6 py-2 rounded-lg hover:from-blue-700 hover:to-blue-600 transition shadow-lg"
-                  >
-                    <Send className="w-4 h-4" />
-                    <span>Enviar</span>
-                  </button>
+                  </Button>
+                  <Button type="submit" icon={<Send className="w-4 h-4" />}>
+                    Enviar
+                  </Button>
                 </div>
               </div>
             </form>
@@ -1904,24 +1926,24 @@ export function InboxModule() {
 
       {showEmailViewer && selectedEmail && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden">
-            <div className="border-b border-slate-200 px-6 py-4 flex items-start justify-between gap-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden">
+            <div className="border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h2 className="text-xl font-bold text-slate-900 break-words">{selectedEmail.subject || '(Sin asunto)'}</h2>
-                <p className="text-sm text-slate-600 mt-1 break-all">
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white break-words">{selectedEmail.subject || '(Sin asunto)'}</h2>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 break-all">
                   {selectedEmail.from_name ? `${selectedEmail.from_name} <${selectedEmail.from_email}>` : selectedEmail.from_email}
                 </p>
               </div>
               <button
                 onClick={() => setShowEmailViewer(false)}
-                className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition"
+                className="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
                 title="Cerrar visor"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="px-6 py-3 border-b border-slate-100 text-sm text-slate-700 space-y-1">
+            <div className="px-6 py-3 border-b border-slate-100 dark:border-slate-800 text-sm text-slate-700 dark:text-slate-300 space-y-1">
               <p className="break-all"><strong>Para:</strong> {selectedEmail.to_emails.map((t: { email?: string } | string) => (typeof t === 'string' ? t : t.email || '')).join(', ')}</p>
               {selectedEmail.cc_emails && selectedEmail.cc_emails.length > 0 && (
                 <p className="break-all"><strong>CC:</strong> {selectedEmail.cc_emails.map((t: { email?: string } | string) => (typeof t === 'string' ? t : t.email || '')).join(', ')}</p>
@@ -1929,21 +1951,21 @@ export function InboxModule() {
               <p><strong>Fecha:</strong> {new Date(selectedEmail.email_date).toLocaleString()}</p>
             </div>
 
-            <div className="flex-1 overflow-auto p-6 bg-slate-50">
-              <div className="bg-white border border-slate-200 rounded-lg p-4 min-h-full">
+            <div className="flex-1 overflow-auto p-6 bg-slate-50 dark:bg-slate-950">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 min-h-full">
                 {(() => {
                   const readableBody = getReadableEmailBody(selectedEmail);
                   if ((readableBody.html || '').trim()) {
                     return (
                       <div
-                        className="prose max-w-none break-words"
+                        className="prose dark:prose-invert max-w-none break-words"
                         dangerouslySetInnerHTML={{ __html: readableBody.html }}
                       />
                     );
                   }
 
                   return (
-                    <p className="text-sm text-slate-700 whitespace-pre-wrap break-words">
+                    <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">
                       {readableBody.text || '(Sin contenido)'}
                     </p>
                   );
@@ -1951,20 +1973,17 @@ export function InboxModule() {
               </div>
             </div>
 
-            <div className="border-t border-slate-200 px-6 py-4 flex justify-end gap-3 bg-white">
-              <button
-                onClick={() => setShowEmailViewer(false)}
-                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition"
-              >
+            <div className="border-t border-slate-200 dark:border-slate-700 px-6 py-4 flex justify-end gap-3 bg-white dark:bg-slate-900">
+              <Button variant="secondary" onClick={() => setShowEmailViewer(false)}>
                 Cerrar
-              </button>
-              <button
+              </Button>
+              <Button
+                className="!bg-gradient-to-r !from-emerald-600 !to-emerald-500 hover:!from-emerald-700 hover:!to-emerald-600"
                 onClick={handleOpenCreateTicketModal}
-                className="flex items-center space-x-2 bg-gradient-to-r from-green-600 to-green-500 text-white px-6 py-2 rounded-lg hover:from-green-700 hover:to-green-600 transition shadow-lg"
+                icon={<Ticket className="w-5 h-5" />}
               >
-                <Ticket className="w-5 h-5" />
-                <span>Crear Ticket</span>
-              </button>
+                Crear Ticket
+              </Button>
             </div>
           </div>
         </div>

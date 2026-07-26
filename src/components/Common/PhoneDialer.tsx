@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Phone, X, Search, User, Delete, PhoneCall, Clock, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { twilioService } from '../../lib/twilioService';
 import { CallModal } from './CallModal';
 import { useDialer } from '../../contexts/DialerContext';
 import type { Call } from '@twilio/voice-sdk';
@@ -32,9 +31,10 @@ interface PhoneDialerProps {
   makeCall: (phoneNumber: string) => Promise<Call | null>;
   isDeviceReady: boolean;
   activeCall: Call | null;
+  providerLabel?: string;
 }
 
-export function PhoneDialer({ makeCall, isDeviceReady, activeCall }: PhoneDialerProps) {
+export function PhoneDialer({ makeCall, isDeviceReady, activeCall, providerLabel = 'Twilio' }: PhoneDialerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,7 +44,6 @@ export function PhoneDialer({ makeCall, isDeviceReady, activeCall }: PhoneDialer
   const [activeTab, setActiveTab] = useState<'dial' | 'contacts' | 'recent'>('dial');
   const [isCalling, setIsCalling] = useState(false);
   const [callError, setCallError] = useState<string | null>(null);
-  const [twilioConfigured, setTwilioConfigured] = useState(false);
   const [showCallModal, setShowCallModal] = useState(false);
   const [activeCallSid, setActiveCallSid] = useState<string | undefined>();
   const [activeCallNumber, setActiveCallNumber] = useState('');
@@ -53,21 +52,25 @@ export function PhoneDialer({ makeCall, isDeviceReady, activeCall }: PhoneDialer
   const { registerDialer } = useDialer();
 
   useEffect(() => {
-    registerDialer((number: string) => {
+    registerDialer((number: string, contact?: Contact | null) => {
+      const resolvedContact =
+        contact ||
+        contacts.find((item) => normalizePhoneNumber(item.phone || '') === normalizePhoneNumber(number)) ||
+        null;
+
       setPhoneNumber(number);
       setIsOpen(true);
       setActiveTab('dial');
       setTimeout(() => {
-        handleCall(number);
+        handleCall(number, resolvedContact);
       }, 100);
     });
-  }, [makeCall, isDeviceReady]);
+  }, [contacts, makeCall, isDeviceReady]);
 
   useEffect(() => {
     if (isOpen) {
       loadContacts();
       loadRecentCalls();
-      checkTwilioConfig();
     }
   }, [isOpen]);
 
@@ -147,6 +150,8 @@ export function PhoneDialer({ makeCall, isDeviceReady, activeCall }: PhoneDialer
     };
   }, [isOpen, activeTab, phoneNumber]);
 
+  const normalizePhoneNumber = (value: string) => value.replace(/[^\d+]/g, '');
+
   const loadContacts = async () => {
     const { data } = await supabase
       .from('clients')
@@ -189,11 +194,6 @@ export function PhoneDialer({ makeCall, isDeviceReady, activeCall }: PhoneDialer
       );
       setRecentCalls(enrichedCalls);
     }
-  };
-
-  const checkTwilioConfig = async () => {
-    const configured = await twilioService.loadConfig();
-    setTwilioConfigured(configured);
   };
 
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -254,7 +254,12 @@ export function PhoneDialer({ makeCall, isDeviceReady, activeCall }: PhoneDialer
   };
 
   const handleCall = async (number: string, contact?: Contact) => {
-    if (!twilioConfigured || !isDeviceReady) {
+    const resolvedContact =
+      contact ||
+      contacts.find((item) => normalizePhoneNumber(item.phone || '') === normalizePhoneNumber(number)) ||
+      null;
+
+    if (!isDeviceReady) {
       window.open(`tel:${number}`, '_self');
       return;
     }
@@ -270,7 +275,7 @@ export function PhoneDialer({ makeCall, isDeviceReady, activeCall }: PhoneDialer
 
         setActiveCallSid(call.parameters.CallSid);
         setActiveCallNumber(number);
-        setActiveCallContact(contact || null);
+        setActiveCallContact(resolvedContact);
 
         setPhoneNumber('');
         setCallError(null);
@@ -345,10 +350,10 @@ export function PhoneDialer({ makeCall, isDeviceReady, activeCall }: PhoneDialer
                 <h3 className="text-lg font-bold text-white">Marcador</h3>
               </div>
               <div className="flex items-center gap-1">
-                {twilioConfigured ? (
+                {isDeviceReady ? (
                   <>
                     <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
-                    <span className="text-xs text-green-100 font-medium">Twilio Activo</span>
+                    <span className="text-xs text-green-100 font-medium">{providerLabel} Activo</span>
                   </>
                 ) : (
                   <>
@@ -402,6 +407,14 @@ export function PhoneDialer({ makeCall, isDeviceReady, activeCall }: PhoneDialer
                       type="tel"
                       value={phoneNumber}
                       onChange={(e) => setPhoneNumber(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (dtmfFrequencies[e.key]) {
+                          playDTMFTone(e.key);
+                        } else if (e.key === 'Enter' && phoneNumber) {
+                          e.preventDefault();
+                          handleCall(phoneNumber);
+                        }
+                      }}
                       placeholder="Ingresa número"
                       className={`w-full px-4 py-4 text-center text-2xl font-bold border-2 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all ${
                         phoneNumber
@@ -514,7 +527,7 @@ export function PhoneDialer({ makeCall, isDeviceReady, activeCall }: PhoneDialer
                   ) : (
                     <>
                       <PhoneCall className="w-6 h-6 animate-pulse" />
-                      {twilioConfigured ? 'Llamar con Twilio' : 'Llamar'}
+                      {isDeviceReady ? `Llamar con ${providerLabel}` : 'Llamar'}
                     </>
                   )}
                 </button>

@@ -27,10 +27,10 @@ export function Toast({ message, type, onClose, duration = 4000 }: ToastProps) {
   };
 
   const colors = {
-    success: 'bg-gradient-to-r from-green-500 to-emerald-500 text-white',
-    error: 'bg-gradient-to-r from-red-500 to-rose-500 text-white',
-    warning: 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white',
-    info: 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white'
+    success: 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white',
+    error: 'bg-gradient-to-r from-rose-500 to-rose-600 text-white',
+    warning: 'bg-gradient-to-r from-amber-500 to-amber-600 text-white',
+    info: 'bg-gradient-to-r from-brand-500 to-accent-500 text-white'
   };
 
   return (

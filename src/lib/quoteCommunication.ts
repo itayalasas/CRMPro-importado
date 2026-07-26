@@ -56,6 +56,7 @@ export interface QuoteCommunicationQuote {
   notes: string | null;
   terms: string | null;
   order_id?: string | null;
+  order?: { order_number?: string | null } | null;
   metadata?: Record<string, unknown> | null;
   client?: QuoteCommunicationClient | null;
   items?: QuoteCommunicationItem[] | null;
@@ -286,7 +287,7 @@ export const buildQuoteCommunicationRequest = (
   const taxAmount = toNumber(quote.tax_amount);
   const taxRate = toNumber(quote.tax_rate);
   const hasDiscount = discountAmount > 0;
-  const orderId = quote.order_id || quote.quote_number;
+  const orderId = quote.quote_number;
 
   return {
     recipient_email: clientEmail,
@@ -423,6 +424,173 @@ export const buildQuoteCommunicationRequest = (
           channel: getStringValue(quote.metadata?.channel) || 'manual',
           reference_type: 'quote',
           reference_id: quote.id,
+        },
+      },
+    },
+    wait_for_invoice: false,
+  };
+};
+
+export interface QuoteCommunicationOrderInfo {
+  order_number: string;
+  order_date?: string | null;
+}
+
+export const buildOrderCommunicationRequest = (
+  quote: QuoteCommunicationQuote,
+  order: QuoteCommunicationOrderInfo,
+  client: QuoteCommunicationClient | null,
+  company: QuoteCommunicationCompanySettings,
+  appUrl: string,
+  publicToken: string,
+  generatedAt: string,
+  acceptedAt: string | null
+): QuoteCommunicationRequest => {
+  const quoteItems = getQuoteItems(quote);
+  const normalizedAppUrl = normalizeBaseUrl(appUrl);
+  const orderId = order.order_number;
+  const orderPath = `${normalizedAppUrl}/ordenes/${encodeURIComponent(orderId)}`;
+  const publicUrl = `${orderPath}?t=${encodeURIComponent(publicToken)}`;
+  const downloadUrl = `${orderPath}/descargar?t=${encodeURIComponent(publicToken)}`;
+  const companyName = getStringValue(company.company_name) || 'Mi Empresa';
+  const companyLegalName = getStringValue(company.company_legal_name) || companyName;
+  const companyTaxId = getStringValue(company.company_rut) || getStringValue(company.company_tax_id);
+  const companyEmail = getStringValue(company.company_email);
+  const companyPhone = getStringValue(company.company_phone);
+  const companyWebsite = getStringValue(company.company_website) || normalizedAppUrl;
+  const companyLogoUrl = getStringValue(company.company_logo_url);
+  const companyAddress = getCompanyAddress(company);
+  const clientName = getStringValue(client?.company_name) || getStringValue(client?.contact_name) || 'Cliente';
+  const clientContactName = getStringValue(client?.contact_name) || clientName;
+  const clientEmail = getStringValue(client?.email);
+  const clientPhone = getStringValue(client?.phone);
+  const clientAddress = getClientAddress(client);
+  const totalAmount = toNumber(quote.total_amount);
+  const subtotalAmount = toNumber(quote.subtotal);
+  const discountAmount = toNumber(quote.discount_amount);
+  const taxAmount = toNumber(quote.tax_amount);
+  const taxRate = toNumber(quote.tax_rate);
+  const hasDiscount = discountAmount > 0;
+  const orderDateLabel = formatDate(order.order_date || generatedAt);
+  const acceptedAtLabel = formatDateTime(acceptedAt || generatedAt);
+  const emailSubject = `Tu orden ${orderId} fue generada`;
+
+  return {
+    recipient_email: clientEmail,
+    order_id: orderId,
+    email: {
+      template_name: 'quote_accepted_order_email_v2',
+      subject: emailSubject,
+      data: {
+        order_id: orderId,
+        order_number: orderId,
+        order_date: orderDateLabel,
+        quote_id: quote.id,
+        quote_number: quote.quote_number,
+        email_subject: emailSubject,
+        preheader: 'Tu cotización fue aceptada y la orden ya está disponible.',
+        client_name: clientName,
+        client_email: clientEmail,
+        quote_date: formatDate(quote.quote_date),
+        accepted_at: acceptedAtLabel,
+        status: 'accepted',
+        status_label: 'Aceptada',
+        currency: quote.currency,
+        order_total: totalAmount,
+        formatted_total: formatAmount(totalAmount),
+        terms: quote.terms || '',
+        notes: quote.notes || '',
+        company_name: companyName,
+        company_legal_name: companyLegalName,
+        company_tax_id: companyTaxId,
+        company_email: companyEmail,
+        company_phone: companyPhone,
+        company_website: companyWebsite,
+        company_logo_url: companyLogoUrl,
+        company_address: companyAddress,
+        primary_color: getStringValue(company.primary_color) || DEFAULT_PRIMARY_COLOR,
+        accent_color: getStringValue(company.accent_color) || DEFAULT_ACCENT_COLOR,
+        public_url: publicUrl,
+        download_url: downloadUrl,
+        reference_type: 'order',
+        reference_id: orderId,
+      },
+    },
+    attachment: {
+      pdf_template_name: 'order_document_pdf_v2',
+      filename: `orden-${orderId}.pdf`,
+      data: {
+        order_id: orderId,
+        order_number: orderId,
+        order_date: orderDateLabel,
+        quote_id: quote.id,
+        quote_number: quote.quote_number,
+        quote_date: formatDate(quote.quote_date),
+        accepted_at: acceptedAtLabel,
+        generated_at: formatDateTime(generatedAt),
+        status: 'accepted',
+        status_label: 'Aceptada',
+        currency: quote.currency,
+        subtotal: subtotalAmount,
+        discount_amount: discountAmount,
+        has_discount: hasDiscount,
+        tax_rate: taxRate,
+        tax_amount: taxAmount,
+        total_amount: totalAmount,
+        formatted_subtotal: formatAmount(subtotalAmount),
+        formatted_discount_amount: formatAmount(discountAmount),
+        formatted_tax_amount: formatAmount(taxAmount),
+        formatted_total_amount: formatAmount(totalAmount),
+        notes: quote.notes || '',
+        terms: quote.terms || '',
+        company_name: companyName,
+        company_legal_name: companyLegalName,
+        company_tax_id: companyTaxId,
+        company_email: companyEmail,
+        company_phone: companyPhone,
+        company_website: companyWebsite,
+        company_logo_url: companyLogoUrl,
+        company_address: companyAddress,
+        primary_color: getStringValue(company.primary_color) || DEFAULT_PRIMARY_COLOR,
+        accent_color: getStringValue(company.accent_color) || DEFAULT_ACCENT_COLOR,
+        client_id: client?.id || '',
+        client_company_name: clientName,
+        client_contact_name: clientContactName,
+        client_tax_id: '',
+        client_email: clientEmail,
+        client_phone: clientPhone,
+        client_address: clientAddress,
+        items: quoteItems.map((item, index) => {
+          const quantity = toNumber(item.quantity);
+          const unitPrice = toNumber(item.unit_price);
+          const discountPercent = toNumber(item.discount_percent);
+          const discountValue = toNumber(item.discount_amount);
+          const lineTotal = toNumber(item.line_total);
+
+          return {
+            numero: index + 1,
+            id: item.id,
+            product_id: item.product_id || '',
+            product_name: item.product_name || item.description || '',
+            description: item.description || item.product_name || '',
+            item_type: item.item_type,
+            quantity,
+            unit_price: unitPrice,
+            formatted_unit_price: formatAmount(unitPrice),
+            discount_percent: discountPercent,
+            discount_amount: discountValue,
+            line_total: lineTotal,
+            formatted_line_total: formatAmount(lineTotal),
+            currency: item.currency || quote.currency,
+          };
+        }),
+        metadata: {
+          source: getStringValue(quote.metadata?.source) || 'sales_module',
+          channel: 'quote_acceptance',
+          reference_type: 'order',
+          reference_id: orderId,
+          source_quote_id: quote.id,
+          source_quote_number: quote.quote_number,
         },
       },
     },

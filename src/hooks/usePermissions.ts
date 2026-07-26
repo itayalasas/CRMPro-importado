@@ -14,6 +14,7 @@ export type ModuleKey =
   | 'tickets'
   | 'buzon'
   | 'chat_web'
+  | 'agenda'
   | 'validacion_ext'
   | 'parametros'
   | 'configuracion';
@@ -28,6 +29,10 @@ export function usePermissions() {
   const getAliasModules = (module: ModuleKey): ModuleKey[] => {
     if (module === 'ventas') {
       return ['ventas', 'ordenes', 'clientes'];
+    }
+
+    if (module === 'agenda') {
+      return ['agenda', 'clientes', 'ventas', 'tickets'];
     }
 
     return [module];

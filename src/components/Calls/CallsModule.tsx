@@ -11,6 +11,12 @@ import { useToast } from '../../contexts/ToastContext';
 import { useDialer } from '../../contexts/DialerContext';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { saveTicketCreateDraft } from '../../lib/ticketDraft';
+import { recordClientInteractionSafely } from '../../lib/clientInteractionLogger';
+import { PageHeader } from '../ui/PageHeader';
+import { StatCard } from '../ui/StatCard';
+import { Card } from '../ui/Card';
+import { Badge, BadgeVariant } from '../ui/Badge';
+import { Button } from '../ui/Button';
 
 interface Call {
   id: string;
@@ -214,8 +220,27 @@ export function CallsModule() {
         if (error) throw error;
         toast.success('Llamada actualizada correctamente');
       } else {
-        const { error } = await supabase.from('calls').insert(callData);
+        const { data: createdCall, error } = await supabase
+          .from('calls')
+          .insert(callData)
+          .select('id')
+          .single();
         if (error) throw error;
+
+        void recordClientInteractionSafely({
+          client_id: callData.client_id || null,
+          type: 'call',
+          description: `Llamada registrada a ${callData.phone_number}`,
+          metadata: {
+            call_id: createdCall?.id || null,
+            phone_number: callData.phone_number,
+            direction: callData.direction,
+            status: callData.status,
+            duration: callData.duration,
+          },
+          created_by: user?.id || null,
+          created_at: new Date().toISOString(),
+        });
         toast.success('Llamada registrada correctamente');
       }
 
@@ -328,6 +353,22 @@ export function CallsModule() {
 
       if (error) throw error;
 
+      void recordClientInteractionSafely({
+        client_id: selectedCall.client_id || null,
+        type: 'ticket_created',
+        description: `Ticket ${ticketNumber} creado desde una llamada`,
+        metadata: {
+          ticket_number: ticketNumber,
+          source_module: 'llamadas',
+          source_name: selectedCall.clients?.contact_name || selectedCall.clients?.company_name || null,
+          source_email: selectedCall.clients?.email || null,
+          source_phone: selectedCall.clients?.phone || selectedCall.phone_number || null,
+          call_id: selectedCall.id,
+        },
+        created_by: user?.id || null,
+        created_at: new Date().toISOString(),
+      });
+
       toast.success('Ticket creado exitosamente desde la llamada');
       setShowTicketModal(false);
       setSelectedCall(null);
@@ -371,25 +412,21 @@ export function CallsModule() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const getStatusBadge = (status: string) => {
-    const badges: Record<string, { color: string; label: string }> = {
-      completed: { color: 'bg-green-100 text-green-800 border-green-200', label: 'Completada' },
-      in_progress: { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'En Progreso' },
-      missed: { color: 'bg-red-100 text-red-800 border-red-200', label: 'Perdida' },
-      cancelled: { color: 'bg-orange-100 text-orange-800 border-orange-200', label: 'Cancelada' },
-      failed: { color: 'bg-red-100 text-red-800 border-red-200', label: 'Fallida' },
-      busy: { color: 'bg-yellow-100 text-yellow-800 border-yellow-200', label: 'Ocupado' },
-      no_answer: { color: 'bg-slate-100 text-slate-800 border-slate-200', label: 'Sin Respuesta' },
-      ringing: { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'Timbrando' },
-      answered: { color: 'bg-green-100 text-green-800 border-green-200', label: 'Contestada' }
-    };
+  const statusBadgeMeta: Record<string, { variant: BadgeVariant; label: string }> = {
+    completed: { variant: 'success', label: 'Completada' },
+    in_progress: { variant: 'info', label: 'En Progreso' },
+    missed: { variant: 'danger', label: 'Perdida' },
+    cancelled: { variant: 'warning', label: 'Cancelada' },
+    failed: { variant: 'danger', label: 'Fallida' },
+    busy: { variant: 'warning', label: 'Ocupado' },
+    no_answer: { variant: 'neutral', label: 'Sin Respuesta' },
+    ringing: { variant: 'info', label: 'Timbrando' },
+    answered: { variant: 'success', label: 'Contestada' }
+  };
 
-    const badge = badges[status] || { color: 'bg-slate-100 text-slate-800 border-slate-200', label: status };
-    return (
-      <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${badge.color}`}>
-        {badge.label}
-      </span>
-    );
+  const getStatusBadge = (status: string) => {
+    const meta = statusBadgeMeta[status] || { variant: 'neutral' as BadgeVariant, label: status };
+    return <Badge variant={meta.variant}>{meta.label}</Badge>;
   };
 
   const totalCalls = calls.length;
@@ -408,103 +445,70 @@ export function CallsModule() {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 sm:mb-8 gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
-            Llamadas
-          </h1>
-          <p className="text-slate-600 mt-2 text-sm sm:text-base lg:text-lg">Registra y gestiona tus llamadas</p>
-        </div>
-        <div className="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto">
-          <button
-            onClick={() => setShowRetryListModal(true)}
-            className={`flex items-center space-x-2 px-6 py-3 rounded-lg transition shadow-lg ${
-              failedCalls.length > 0
-                ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white hover:from-orange-700 hover:to-orange-600'
-                : 'bg-gradient-to-r from-slate-300 to-slate-400 text-slate-600 cursor-default'
-            }`}
-            disabled={failedCalls.length === 0}
-          >
-            <RefreshCw className="w-5 h-5" />
-            <span>Reintentos ({failedCalls.length})</span>
-          </button>
-          <button
-            onClick={() => openModal('create')}
-            className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-blue-600 transition shadow-lg"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Registrar Llamada</span>
-          </button>
-        </div>
-      </div>
+    <div className="p-4 sm:p-6 lg:p-8 min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+      <PageHeader
+        title="Llamadas"
+        subtitle="Registra y gestiona tus llamadas"
+        action={
+          <div className="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto">
+            <Button
+              variant="secondary"
+              onClick={() => setShowRetryListModal(true)}
+              disabled={failedCalls.length === 0}
+              icon={<RefreshCw className="w-5 h-5" />}
+              className={failedCalls.length > 0
+                ? '!bg-amber-50 !text-amber-700 !border-amber-200 hover:!bg-amber-100 dark:!bg-amber-500/10 dark:!text-amber-400 dark:!border-amber-500/30'
+                : ''}
+            >
+              Reintentos ({failedCalls.length})
+            </Button>
+            <Button onClick={() => openModal('create')} icon={<Plus className="w-5 h-5" />}>
+              Registrar Llamada
+            </Button>
+          </div>
+        }
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-xl shadow-md border border-slate-200 p-6 hover:shadow-lg transition">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium text-slate-600">Total Llamadas</span>
-            <div className="p-3 bg-blue-50 rounded-lg">
-              <Phone className="w-6 h-6 text-blue-600" />
-            </div>
-          </div>
-          <p className="text-4xl font-bold text-slate-900">{totalCalls}</p>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-md border border-slate-200 p-6 hover:shadow-lg transition">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium text-slate-600">Tiempo Total</span>
-            <div className="p-3 bg-green-50 rounded-lg">
-              <PhoneCall className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-          <p className="text-4xl font-bold text-slate-900">{formatDuration(totalDuration)}</p>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-md border border-slate-200 p-6 hover:shadow-lg transition">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium text-slate-600">Duración Promedio</span>
-            <div className="p-3 bg-orange-50 rounded-lg">
-              <Clock className="w-6 h-6 text-orange-600" />
-            </div>
-          </div>
-          <p className="text-4xl font-bold text-slate-900">{formatDuration(avgDuration)}</p>
-        </div>
+        <StatCard color="brand" icon={<Phone />} label="Total Llamadas" value={totalCalls} />
+        <StatCard color="success" icon={<PhoneCall />} label="Tiempo Total" value={formatDuration(totalDuration)} />
+        <StatCard color="warning" icon={<Clock />} label="Duración Promedio" value={formatDuration(avgDuration)} />
       </div>
 
-      <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+      <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+            <thead className="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 border-b border-slate-200 dark:border-slate-700">
               <tr>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Cliente</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Dirección</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Duración</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Estado</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Notas</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Fecha</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700">Acciones</th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Cliente</th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Dirección</th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Duración</th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Estado</th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Notas</th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Fecha</th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
               {calls.map((call) => (
-                <tr key={call.id} className="hover:bg-slate-50 transition">
+                <tr key={call.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
                   <td className="px-6 py-4">
                     {call.clients ? (
                       <div>
-                        <p className="text-sm font-medium text-slate-900">
+                        <p className="text-sm font-medium text-slate-900 dark:text-white">
                           {call.clients.company_name || call.clients.contact_name}
                         </p>
                         {call.clients.company_name && call.clients.contact_name && (
-                          <p className="text-xs text-slate-500">{call.clients.contact_name}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">{call.clients.contact_name}</p>
                         )}
                         {call.phone_number && (
-                          <p className="text-xs text-slate-400 font-mono">{call.phone_number}</p>
+                          <p className="text-xs text-slate-400 dark:text-slate-500 font-mono">{call.phone_number}</p>
                         )}
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <Phone className="w-4 h-4 text-slate-400" />
-                        <span className="text-sm text-slate-600 font-mono">{call.phone_number || 'Saliente'}</span>
+                        <Phone className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                        <span className="text-sm text-slate-600 dark:text-slate-300 font-mono">{call.phone_number || 'Saliente'}</span>
                       </div>
                     )}
                   </td>
@@ -512,41 +516,41 @@ export function CallsModule() {
                     <div className="flex items-center space-x-2">
                       {call.direction === 'inbound' ? (
                         <>
-                          <PhoneIncoming className="w-4 h-4 text-green-600" />
-                          <span className="text-sm text-green-600 font-medium">Entrante</span>
+                          <PhoneIncoming className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                          <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">Entrante</span>
                         </>
                       ) : (
                         <>
-                          <PhoneOutgoing className="w-4 h-4 text-blue-600" />
-                          <span className="text-sm text-blue-600 font-medium">Saliente</span>
+                          <PhoneOutgoing className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                          <span className="text-sm text-sky-600 dark:text-sky-400 font-medium">Saliente</span>
                         </>
                       )}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-sm text-slate-600 font-mono">
+                  <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300 font-mono">
                     {formatDuration(call.duration)}
                   </td>
                   <td className="px-6 py-4">
                     {getStatusBadge(call.status)}
                   </td>
-                  <td className="px-6 py-4 text-sm text-slate-600 max-w-xs truncate">
+                  <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300 max-w-xs truncate">
                     {call.notes || '-'}
                   </td>
-                  <td className="px-6 py-4 text-sm text-slate-600">
+                  <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
                     {new Date(call.created_at).toLocaleString()}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => openModal('view', call)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                        className="p-2 text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded-lg transition"
                         title="Ver detalles"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => openModal('edit', call)}
-                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition"
+                        className="p-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 rounded-lg transition"
                         title="Editar"
                       >
                         <Edit2 className="w-4 h-4" />
@@ -556,14 +560,14 @@ export function CallsModule() {
                           setCallToDelete(call);
                           setShowDeleteConfirm(true);
                         }}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                        className="p-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition"
                         title="Eliminar"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => openCreateTicketModal(call)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition text-xs font-medium"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-400 rounded-lg hover:bg-brand-100 dark:hover:bg-brand-500/20 transition text-xs font-medium"
                         title="Crear ticket"
                       >
                         <Ticket className="w-3 h-3" />
@@ -575,7 +579,7 @@ export function CallsModule() {
                             setSelectedCall(call);
                             setShowTransferModal(true);
                           }}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-orange-50 text-orange-700 rounded-lg hover:bg-orange-100 transition text-xs font-medium"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-500/20 transition text-xs font-medium"
                           title="Transferir"
                         >
                           <Send className="w-3 h-3" />
@@ -591,15 +595,15 @@ export function CallsModule() {
         </div>
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-t border-slate-200">
-            <div className="text-sm text-slate-600">
+          <div className="flex items-center justify-between px-6 py-4 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-700">
+            <div className="text-sm text-slate-600 dark:text-slate-400">
               Página {currentPage} de {totalPages}
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
-                className="px-4 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
               >
                 <ChevronLeft className="w-4 h-4" />
                 Anterior
@@ -607,7 +611,7 @@ export function CallsModule() {
               <button
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                 disabled={currentPage === totalPages}
-                className="px-4 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
               >
                 Siguiente
                 <ChevronRight className="w-4 h-4" />
@@ -615,12 +619,12 @@ export function CallsModule() {
             </div>
           </div>
         )}
-      </div>
+      </Card>
 
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-8 py-6 rounded-t-2xl">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-brand-600 to-accent-600 text-white px-8 py-6 rounded-t-2xl">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-white bg-opacity-20 rounded-lg">
@@ -631,7 +635,7 @@ export function CallsModule() {
                       {modalMode === 'view' ? 'Detalles de Llamada' :
                        modalMode === 'edit' ? 'Editar Llamada' : 'Registrar Llamada'}
                     </h2>
-                    <p className="text-blue-100 text-sm mt-0.5">
+                    <p className="text-white/80 text-sm mt-0.5">
                       {modalMode === 'view' ? 'Información completa de la llamada' : 'Complete los detalles de la llamada'}
                     </p>
                   </div>
@@ -648,8 +652,8 @@ export function CallsModule() {
             {modalMode === 'view' && selectedCall ? (
               <div className="p-8 space-y-6">
                 {selectedCall.recording_url && (
-                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-200">
-                    <h3 className="text-lg font-semibold text-purple-900 mb-4 flex items-center gap-2">
+                  <div className="bg-gradient-to-br from-brand-50 to-accent-50 dark:from-brand-500/10 dark:to-accent-500/10 rounded-xl p-6 border border-brand-200 dark:border-brand-500/30">
+                    <h3 className="text-lg font-semibold text-brand-900 dark:text-brand-300 mb-4 flex items-center gap-2">
                       <Volume2 className="w-5 h-5" />
                       Grabación de la Llamada
                     </h3>
@@ -660,7 +664,7 @@ export function CallsModule() {
                     <a
                       href={selectedCall.recording_url}
                       download
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition text-sm font-medium"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition text-sm font-medium"
                     >
                       <Download className="w-4 h-4" />
                       Descargar Grabación
@@ -668,74 +672,74 @@ export function CallsModule() {
                   </div>
                 )}
 
-                <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-                  <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                    <User className="w-5 h-5 text-blue-600" />
+                <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+                  <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+                    <User className="w-5 h-5 text-brand-600 dark:text-brand-400" />
                     Información del Cliente
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <p className="text-xs font-medium text-slate-500 mb-1">{selectedCall.clients?.company_name ? 'Empresa' : 'Nombre'}</p>
-                      <p className="text-sm text-slate-900 font-medium">
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{selectedCall.clients?.company_name ? 'Empresa' : 'Nombre'}</p>
+                      <p className="text-sm text-slate-900 dark:text-white font-medium">
                         {selectedCall.clients?.company_name || selectedCall.clients?.contact_name || 'Sin asignar'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs font-medium text-slate-500 mb-1">Contacto</p>
-                      <p className="text-sm text-slate-900 font-medium">
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Contacto</p>
+                      <p className="text-sm text-slate-900 dark:text-white font-medium">
                         {selectedCall.clients?.contact_name || '-'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs font-medium text-slate-500 mb-1">Teléfono</p>
-                      <p className="text-sm text-slate-900 font-mono">
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Teléfono</p>
+                      <p className="text-sm text-slate-900 dark:text-white font-mono">
                         {selectedCall.phone_number || selectedCall.clients?.phone || '-'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs font-medium text-slate-500 mb-1">Email</p>
-                      <p className="text-sm text-slate-900">
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Email</p>
+                      <p className="text-sm text-slate-900 dark:text-white">
                         {selectedCall.clients?.email || '-'}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-                  <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                    <PhoneCall className="w-5 h-5 text-blue-600" />
+                <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+                  <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+                    <PhoneCall className="w-5 h-5 text-brand-600 dark:text-brand-400" />
                     Detalles de la Llamada
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                      <p className="text-xs font-medium text-slate-500 mb-1">Dirección</p>
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Dirección</p>
                       <div className="flex items-center gap-2">
                         {selectedCall.direction === 'inbound' ? (
                           <>
-                            <PhoneIncoming className="w-4 h-4 text-green-600" />
-                            <span className="text-sm text-green-600 font-medium">Entrante</span>
+                            <PhoneIncoming className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                            <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">Entrante</span>
                           </>
                         ) : (
                           <>
-                            <PhoneOutgoing className="w-4 h-4 text-blue-600" />
-                            <span className="text-sm text-blue-600 font-medium">Saliente</span>
+                            <PhoneOutgoing className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                            <span className="text-sm text-sky-600 dark:text-sky-400 font-medium">Saliente</span>
                           </>
                         )}
                       </div>
                     </div>
                     <div>
-                      <p className="text-xs font-medium text-slate-500 mb-1">Duración</p>
-                      <p className="text-sm text-slate-900 font-mono font-medium">
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Duración</p>
+                      <p className="text-sm text-slate-900 dark:text-white font-mono font-medium">
                         {formatDuration(selectedCall.duration)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs font-medium text-slate-500 mb-1">Estado</p>
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Estado</p>
                       {getStatusBadge(selectedCall.status)}
                     </div>
                     <div className="md:col-span-3">
-                      <p className="text-xs font-medium text-slate-500 mb-1">Fecha y Hora</p>
-                      <p className="text-sm text-slate-900">
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Fecha y Hora</p>
+                      <p className="text-sm text-slate-900 dark:text-white">
                         {new Date(selectedCall.created_at).toLocaleString('es-ES', {
                           dateStyle: 'full',
                           timeStyle: 'long'
@@ -744,51 +748,44 @@ export function CallsModule() {
                     </div>
                     {selectedCall.twilio_call_sid && (
                       <div className="md:col-span-3">
-                        <p className="text-xs font-medium text-slate-500 mb-1">Twilio Call SID</p>
-                        <p className="text-sm text-slate-600 font-mono">{selectedCall.twilio_call_sid}</p>
+                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Twilio Call SID</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-300 font-mono">{selectedCall.twilio_call_sid}</p>
                       </div>
                     )}
                   </div>
                 </div>
 
                 {selectedCall.notes && (
-                  <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-                    <h3 className="text-lg font-semibold text-slate-800 mb-3 flex items-center gap-2">
-                      <MessageSquare className="w-5 h-5 text-blue-600" />
+                  <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+                    <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-3 flex items-center gap-2">
+                      <MessageSquare className="w-5 h-5 text-brand-600 dark:text-brand-400" />
                       Notas
                     </h3>
-                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{selectedCall.notes}</p>
+                    <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{selectedCall.notes}</p>
                   </div>
                 )}
 
-                <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200">
-                  <button
-                    onClick={() => openModal('edit', selectedCall)}
-                    className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 transition font-medium shadow-lg"
-                  >
-                    <Edit2 className="w-4 h-4 inline mr-2" />
+                <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <Button variant="primary" onClick={() => openModal('edit', selectedCall)} icon={<Edit2 className="w-4 h-4" />}>
                     Editar Llamada
-                  </button>
-                  <button
-                    onClick={resetForm}
-                    className="px-6 py-3 border-2 border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition font-medium"
-                  >
+                  </Button>
+                  <Button variant="secondary" onClick={resetForm}>
                     Cerrar
-                  </button>
+                  </Button>
                 </div>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="p-8 space-y-6">
-                <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
+                <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                      <User className="w-5 h-5 text-blue-600" />
+                    <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                      <User className="w-5 h-5 text-brand-600 dark:text-brand-400" />
                       Información del Cliente
                     </h3>
                     <button
                       type="button"
                       onClick={() => setShowClientModal(true)}
-                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition text-sm font-medium"
+                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition text-sm font-medium"
                     >
                       <UserPlus className="w-4 h-4" />
                       Crear Cliente
@@ -796,7 +793,7 @@ export function CallsModule() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">Cliente</label>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Cliente</label>
                       <select
                         value={formData.client_id}
                         onChange={(e) => {
@@ -807,7 +804,7 @@ export function CallsModule() {
                             phone_number: selectedClient?.phone || formData.phone_number
                           });
                         }}
-                        className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                        className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
                         disabled={modalMode === 'view'}
                       >
                         <option value="">Sin cliente asignado</option>
@@ -817,37 +814,37 @@ export function CallsModule() {
                           </option>
                         ))}
                       </select>
-                      <p className="text-xs text-slate-500 mt-1">Opcional: Asocia la llamada a un cliente existente</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Opcional: Asocia la llamada a un cliente existente</p>
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">Número de Teléfono *</label>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Número de Teléfono *</label>
                       <input
                         type="tel"
                         value={formData.phone_number}
                         onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
-                        className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition font-mono"
+                        className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition font-mono"
                         placeholder="+59895148335"
                         required
                         disabled={modalMode === 'view'}
                       />
-                      <p className="text-xs text-slate-500 mt-1">Formato E.164 recomendado (incluye +)</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Formato E.164 recomendado (incluye +)</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-                  <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                    <Phone className="w-5 h-5 text-blue-600" />
+                <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+                  <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+                    <Phone className="w-5 h-5 text-brand-600 dark:text-brand-400" />
                     Detalles de la Llamada
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-3">Dirección *</label>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">Dirección *</label>
                       <div className="grid grid-cols-2 gap-3">
                         <label className={`flex flex-col items-center justify-center p-4 border-2 rounded-xl cursor-pointer transition ${
                           formData.direction === 'outbound'
-                            ? 'border-blue-500 bg-blue-50 text-blue-700'
-                            : 'border-slate-300 bg-white text-slate-600 hover:border-blue-300'
+                            ? 'border-sky-500 bg-sky-50 dark:bg-sky-500/10 text-sky-700 dark:text-sky-400'
+                            : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-sky-300'
                         }`}>
                           <input
                             type="radio"
@@ -862,8 +859,8 @@ export function CallsModule() {
                         </label>
                         <label className={`flex flex-col items-center justify-center p-4 border-2 rounded-xl cursor-pointer transition ${
                           formData.direction === 'inbound'
-                            ? 'border-green-500 bg-green-50 text-green-700'
-                            : 'border-slate-300 bg-white text-slate-600 hover:border-green-300'
+                            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                            : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-emerald-300'
                         }`}>
                           <input
                             type="radio"
@@ -880,7 +877,7 @@ export function CallsModule() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2 flex items-center gap-1">
                         <Clock className="w-4 h-4" />
                         Duración (segundos) *
                       </label>
@@ -888,14 +885,14 @@ export function CallsModule() {
                         type="number"
                         value={formData.duration}
                         onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
-                        className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                        className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
                         placeholder="Ej: 120"
                         min="0"
                         required
                         disabled={modalMode === 'view'}
                       />
                       {formData.duration && (
-                        <p className="text-xs text-slate-500 mt-1.5">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
                           Equivale a: {formatDuration(parseInt(formData.duration))}
                         </p>
                       )}
@@ -903,13 +900,13 @@ export function CallsModule() {
                   </div>
                 </div>
 
-                <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-                  <h3 className="text-lg font-semibold text-slate-800 mb-4">Estado de la Llamada</h3>
-                  <label className="block text-sm font-semibold text-slate-700 mb-3">Estado *</label>
+                <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+                  <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Estado de la Llamada</h3>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">Estado *</label>
                   <select
                     value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
                     required
                     disabled={modalMode === 'view'}
                   >
@@ -925,35 +922,28 @@ export function CallsModule() {
                   </select>
                 </div>
 
-                <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-                  <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5 text-blue-600" />
+                <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+                  <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-brand-600 dark:text-brand-400" />
                     Notas y Observaciones
                   </h3>
                   <textarea
                     value={formData.notes}
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                     rows={5}
-                    className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition resize-none"
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition resize-none"
                     placeholder="Resumen de la conversación, temas tratados, acuerdos alcanzados, próximos pasos..."
                     disabled={modalMode === 'view'}
                   />
                 </div>
 
-                <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200">
-                  <button
-                    type="button"
-                    onClick={resetForm}
-                    className="px-6 py-3 border-2 border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition font-medium"
-                  >
+                <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <Button type="button" variant="secondary" onClick={resetForm}>
                     Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition font-medium shadow-lg shadow-blue-500/30"
-                  >
+                  </Button>
+                  <Button type="submit">
                     {modalMode === 'edit' ? 'Actualizar Llamada' : 'Registrar Llamada'}
-                  </button>
+                  </Button>
                 </div>
               </form>
             )}
@@ -963,8 +953,8 @@ export function CallsModule() {
 
       {showClientModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-green-600 to-green-700 text-white px-8 py-6 rounded-t-2xl">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-8 py-6 rounded-t-2xl">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-white bg-opacity-20 rounded-lg">
@@ -972,7 +962,7 @@ export function CallsModule() {
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold">Crear Nuevo Cliente</h2>
-                    <p className="text-green-100 text-sm mt-0.5">Se asociará automáticamente a la llamada</p>
+                    <p className="text-white/80 text-sm mt-0.5">Se asociará automáticamente a la llamada</p>
                   </div>
                 </div>
                 <button
@@ -987,7 +977,7 @@ export function CallsModule() {
             <form onSubmit={handleCreateClient} className="p-8 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2 flex items-center gap-1">
                     <Building2 className="w-4 h-4" />
                     Nombre de Empresa
                   </label>
@@ -995,14 +985,14 @@ export function CallsModule() {
                     type="text"
                     value={newClientData.company_name}
                     onChange={(e) => setNewClientData({ ...newClientData, company_name: e.target.value })}
-                    className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
                     placeholder="Ej: Ayala IT (opcional para personas físicas)"
                   />
-                  <p className="text-xs text-slate-500 mt-1">Opcional si es persona física</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Opcional si es persona física</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2 flex items-center gap-1">
                     <User className="w-4 h-4" />
                     Nombre de Contacto *
                   </label>
@@ -1010,14 +1000,14 @@ export function CallsModule() {
                     type="text"
                     value={newClientData.contact_name}
                     onChange={(e) => setNewClientData({ ...newClientData, contact_name: e.target.value })}
-                    className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
                     placeholder="Ej: Juan Pérez"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2 flex items-center gap-1">
                     <Phone className="w-4 h-4" />
                     Teléfono *
                   </label>
@@ -1025,14 +1015,14 @@ export function CallsModule() {
                     type="tel"
                     value={newClientData.phone}
                     onChange={(e) => setNewClientData({ ...newClientData, phone: e.target.value })}
-                    className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition font-mono"
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition font-mono"
                     placeholder="+59895148335"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2 flex items-center gap-1">
                     <Mail className="w-4 h-4" />
                     Email *
                   </label>
@@ -1040,14 +1030,14 @@ export function CallsModule() {
                     type="email"
                     value={newClientData.email}
                     onChange={(e) => setNewClientData({ ...newClientData, email: e.target.value })}
-                    className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
                     placeholder="contacto@empresa.com"
                     required
                   />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2 flex items-center gap-1">
                     <MapPin className="w-4 h-4" />
                     Dirección
                   </label>
@@ -1055,26 +1045,19 @@ export function CallsModule() {
                     type="text"
                     value={newClientData.address}
                     onChange={(e) => setNewClientData({ ...newClientData, address: e.target.value })}
-                    className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
                     placeholder="Calle, Ciudad, País"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setShowClientModal(false)}
-                  className="px-6 py-3 border-2 border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition font-medium"
-                >
+              <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <Button type="button" variant="secondary" onClick={() => setShowClientModal(false)}>
                   Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 transition font-medium shadow-lg shadow-green-500/30"
-                >
+                </Button>
+                <Button type="submit">
                   Crear y Asociar Cliente
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -1083,19 +1066,19 @@ export function CallsModule() {
 
       {showDeleteConfirm && callToDelete && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-8">
             <div className="flex items-center gap-4 mb-6">
-              <div className="p-3 bg-red-100 rounded-full">
-                <Trash2 className="w-6 h-6 text-red-600" />
+              <div className="p-3 bg-rose-100 dark:bg-rose-500/10 rounded-full">
+                <Trash2 className="w-6 h-6 text-rose-600 dark:text-rose-400" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-slate-900">Eliminar Llamada</h3>
-                <p className="text-sm text-slate-600 mt-1">Esta acción no se puede deshacer</p>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Eliminar Llamada</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">Esta acción no se puede deshacer</p>
               </div>
             </div>
 
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-              <p className="text-sm text-red-900">
+            <div className="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 rounded-lg p-4 mb-6">
+              <p className="text-sm text-rose-900 dark:text-rose-300">
                 ¿Estás seguro de que deseas eliminar esta llamada con{' '}
                 <span className="font-semibold">
                   {callToDelete.clients?.company_name || callToDelete.clients?.contact_name || callToDelete.phone_number}
@@ -1104,21 +1087,18 @@ export function CallsModule() {
             </div>
 
             <div className="flex justify-end space-x-3">
-              <button
+              <Button
+                variant="secondary"
                 onClick={() => {
                   setShowDeleteConfirm(false);
                   setCallToDelete(null);
                 }}
-                className="px-6 py-3 border-2 border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition font-medium"
               >
                 Cancelar
-              </button>
-              <button
-                onClick={handleDelete}
-                className="px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl hover:from-red-700 hover:to-red-800 transition font-medium shadow-lg shadow-red-500/30"
-              >
+              </Button>
+              <Button variant="danger" onClick={handleDelete}>
                 Eliminar Definitivamente
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1126,8 +1106,8 @@ export function CallsModule() {
 
       {showTicketModal && selectedCall && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-purple-700 text-white px-8 py-6 rounded-t-2xl">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-brand-600 to-brand-700 text-white px-8 py-6 rounded-t-2xl">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-white bg-opacity-20 rounded-lg">
@@ -1135,7 +1115,7 @@ export function CallsModule() {
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold">Crear Ticket desde Llamada</h2>
-                    <p className="text-purple-100 text-sm mt-0.5">
+                    <p className="text-white/80 text-sm mt-0.5">
                       {selectedCall.clients?.company_name || selectedCall.clients?.contact_name || selectedCall.phone_number}
                     </p>
                   </div>
@@ -1153,12 +1133,12 @@ export function CallsModule() {
             </div>
 
             <form onSubmit={handleCreateTicket} className="p-8 space-y-6">
-              <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+              <div className="bg-sky-50 dark:bg-sky-500/10 rounded-xl p-4 border border-sky-200 dark:border-sky-500/30">
                 <div className="flex items-start gap-3">
-                  <PhoneCall className="w-5 h-5 text-blue-600 mt-0.5" />
+                  <PhoneCall className="w-5 h-5 text-sky-600 dark:text-sky-400 mt-0.5" />
                   <div className="flex-1">
-                    <h4 className="font-semibold text-blue-900 mb-1">Información de la Llamada</h4>
-                    <div className="text-sm text-blue-700 space-y-1">
+                    <h4 className="font-semibold text-sky-900 dark:text-sky-300 mb-1">Información de la Llamada</h4>
+                    <div className="text-sm text-sky-700 dark:text-sky-400 space-y-1">
                       <p>• Dirección: <span className="font-medium">{selectedCall.direction === 'inbound' ? 'Entrante' : 'Saliente'}</span></p>
                       <p>• Duración: <span className="font-medium">{formatDuration(selectedCall.duration)}</span></p>
                       <p>• Estado: <span className="font-medium capitalize">{selectedCall.status}</span></p>
@@ -1169,24 +1149,24 @@ export function CallsModule() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Asunto del Ticket *</label>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Asunto del Ticket *</label>
                 <input
                   type="text"
                   value={ticketFormData.subject}
                   onChange={(e) => setTicketFormData({ ...ticketFormData, subject: e.target.value })}
-                  className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition"
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
                   placeholder="Ej: Problema con el producto X"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Descripción *</label>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Descripción *</label>
                 <textarea
                   value={ticketFormData.description}
                   onChange={(e) => setTicketFormData({ ...ticketFormData, description: e.target.value })}
                   rows={6}
-                  className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition resize-none"
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition resize-none"
                   placeholder="Describe el problema o requerimiento..."
                   required
                 />
@@ -1194,11 +1174,11 @@ export function CallsModule() {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Prioridad *</label>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Prioridad *</label>
                   <select
                     value={ticketFormData.priority}
                     onChange={(e) => setTicketFormData({ ...ticketFormData, priority: e.target.value as any })}
-                    className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition"
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
                   >
                     <option value="low">Baja</option>
                     <option value="medium">Media</option>
@@ -1208,11 +1188,11 @@ export function CallsModule() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Categoría</label>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Categoría</label>
                   <select
                     value={ticketFormData.category_id}
                     onChange={(e) => setTicketFormData({ ...ticketFormData, category_id: e.target.value })}
-                    className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition"
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
                   >
                     <option value="">Sin categoría</option>
                     {categories.map((cat) => (
@@ -1222,42 +1202,42 @@ export function CallsModule() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Asignar a</label>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Asignar a</label>
                   <input
                     type="text"
                     value={userSearchTerm}
                     onChange={(e) => setUserSearchTerm(e.target.value)}
                     placeholder="Buscar usuario por nombre..."
-                    className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition mb-3"
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition mb-3"
                   />
-                  <div className="max-h-64 overflow-y-auto space-y-2 border-2 border-slate-200 rounded-xl p-3 bg-slate-50">
+                  <div className="max-h-64 overflow-y-auto space-y-2 border-2 border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-slate-50 dark:bg-slate-900/50">
                     <div
                       onClick={() => setTicketFormData({ ...ticketFormData, assigned_to: '' })}
                       className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
                         ticketFormData.assigned_to === ''
-                          ? 'bg-purple-100 border-purple-500 shadow-md'
-                          : 'bg-white border-slate-200 hover:border-purple-300 hover:bg-purple-50'
+                          ? 'bg-brand-100 dark:bg-brand-500/20 border-brand-500 shadow-md'
+                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 hover:border-brand-300 hover:bg-brand-50 dark:hover:bg-brand-500/10'
                       }`}
                     >
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                           ticketFormData.assigned_to === ''
-                            ? 'bg-purple-500'
-                            : 'bg-slate-300'
+                            ? 'bg-brand-500'
+                            : 'bg-slate-300 dark:bg-slate-600'
                         }`}>
                           <User className="w-5 h-5 text-white" />
                         </div>
                         <div className="flex-1">
                           <p className={`font-semibold ${
                             ticketFormData.assigned_to === ''
-                              ? 'text-purple-900'
-                              : 'text-slate-800'
+                              ? 'text-brand-900 dark:text-brand-300'
+                              : 'text-slate-800 dark:text-slate-200'
                           }`}>
                             A mí mismo
                           </p>
                         </div>
                         {ticketFormData.assigned_to === '' && (
-                          <div className="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center">
+                          <div className="w-6 h-6 bg-brand-500 rounded-full flex items-center justify-center">
                             <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
@@ -1267,8 +1247,8 @@ export function CallsModule() {
                     </div>
                     {users.length === 0 ? (
                       <div className="text-center py-8">
-                        <User className="w-12 h-12 text-slate-300 mx-auto mb-2" />
-                        <p className="text-slate-500 text-sm">No se encontraron usuarios</p>
+                        <User className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
+                        <p className="text-slate-500 dark:text-slate-400 text-sm">No se encontraron usuarios</p>
                       </div>
                     ) : (
                       users.map((u) => (
@@ -1277,36 +1257,36 @@ export function CallsModule() {
                           onClick={() => setTicketFormData({ ...ticketFormData, assigned_to: u.id })}
                           className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
                             ticketFormData.assigned_to === u.id
-                              ? 'bg-purple-100 border-purple-500 shadow-md'
-                              : 'bg-white border-slate-200 hover:border-purple-300 hover:bg-purple-50'
+                              ? 'bg-brand-100 dark:bg-brand-500/20 border-brand-500 shadow-md'
+                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 hover:border-brand-300 hover:bg-brand-50 dark:hover:bg-brand-500/10'
                           }`}
                         >
                           <div className="flex items-center gap-3">
                             <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                               ticketFormData.assigned_to === u.id
-                                ? 'bg-purple-500'
-                                : 'bg-slate-300'
+                                ? 'bg-brand-500'
+                                : 'bg-slate-300 dark:bg-slate-600'
                             }`}>
                               <User className="w-5 h-5 text-white" />
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className={`font-semibold truncate ${
                                 ticketFormData.assigned_to === u.id
-                                  ? 'text-purple-900'
-                                  : 'text-slate-800'
+                                  ? 'text-brand-900 dark:text-brand-300'
+                                  : 'text-slate-800 dark:text-slate-200'
                               }`}>
                                 {u.name}
                               </p>
                               <p className={`text-sm truncate ${
                                 ticketFormData.assigned_to === u.id
-                                  ? 'text-purple-700'
-                                  : 'text-slate-500'
+                                  ? 'text-brand-700 dark:text-brand-400'
+                                  : 'text-slate-500 dark:text-slate-400'
                               }`}>
                                 {u.email}
                               </p>
                             </div>
                             {ticketFormData.assigned_to === u.id && (
-                              <div className="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center">
+                              <div className="w-6 h-6 bg-brand-500 rounded-full flex items-center justify-center">
                                 <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                 </svg>
@@ -1320,23 +1300,20 @@ export function CallsModule() {
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200">
-                <button
+              <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <Button
                   type="button"
+                  variant="secondary"
                   onClick={() => {
                     setShowTicketModal(false);
                     setSelectedCall(null);
                   }}
-                  className="px-6 py-3 border-2 border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition font-medium"
                 >
                   Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition font-medium shadow-lg shadow-purple-500/30"
-                >
+                </Button>
+                <Button type="submit">
                   Crear Ticket
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -1345,8 +1322,8 @@ export function CallsModule() {
 
       {showRetryListModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-orange-600 to-orange-700 text-white px-8 py-6 rounded-t-2xl">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-amber-600 to-amber-700 text-white px-8 py-6 rounded-t-2xl">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-white bg-opacity-20 rounded-lg">
@@ -1354,7 +1331,7 @@ export function CallsModule() {
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold">Lista de Reintentos</h2>
-                    <p className="text-orange-100 text-sm mt-0.5">
+                    <p className="text-white/80 text-sm mt-0.5">
                       Llamadas fallidas, ocupadas o sin respuesta ({failedCalls.length})
                     </p>
                   </div>
@@ -1371,68 +1348,74 @@ export function CallsModule() {
             <div className="p-8">
               {failedCalls.length === 0 ? (
                 <div className="text-center py-12">
-                  <RefreshCw className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                  <p className="text-slate-600 text-lg">No hay llamadas para reintentar</p>
+                  <RefreshCw className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+                  <p className="text-slate-600 dark:text-slate-400 text-lg">No hay llamadas para reintentar</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {failedCalls.map((call) => (
                     <div
                       key={call.id}
-                      className="bg-slate-50 rounded-xl p-4 border-2 border-slate-200 hover:border-orange-300 hover:bg-orange-50 transition"
+                      className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border-2 border-slate-200 dark:border-slate-700 hover:border-amber-300 dark:hover:border-amber-500/50 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition"
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
-                            <div className="p-2 bg-orange-100 rounded-lg">
-                              <Phone className="w-5 h-5 text-orange-600" />
+                            <div className="p-2 bg-amber-100 dark:bg-amber-500/20 rounded-lg">
+                              <Phone className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                             </div>
                             <div>
-                              <h3 className="font-semibold text-slate-900">
+                              <h3 className="font-semibold text-slate-900 dark:text-white">
                                 {call.clients?.company_name || call.clients?.contact_name || 'Sin cliente'}
                               </h3>
-                              <p className="text-sm text-slate-600 font-mono">{call.phone_number}</p>
+                              <p className="text-sm text-slate-600 dark:text-slate-300 font-mono">{call.phone_number}</p>
                             </div>
                           </div>
                           <div className="grid grid-cols-3 gap-3 mt-3">
                             <div>
-                              <p className="text-xs text-slate-500">Estado</p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">Estado</p>
                               {getStatusBadge(call.status)}
                             </div>
                             <div>
-                              <p className="text-xs text-slate-500">Fecha</p>
-                              <p className="text-sm text-slate-700">
+                              <p className="text-xs text-slate-500 dark:text-slate-400">Fecha</p>
+                              <p className="text-sm text-slate-700 dark:text-slate-300">
                                 {new Date(call.created_at).toLocaleDateString('es-ES')}
                               </p>
                             </div>
                             <div>
-                              <p className="text-xs text-slate-500">Duración</p>
-                              <p className="text-sm text-slate-700 font-mono">
+                              <p className="text-xs text-slate-500 dark:text-slate-400">Duración</p>
+                              <p className="text-sm text-slate-700 dark:text-slate-300 font-mono">
                                 {formatDuration(call.duration)}
                               </p>
                             </div>
                           </div>
                           {call.notes && (
-                            <div className="mt-3 p-3 bg-white rounded-lg border border-slate-200">
-                              <p className="text-xs text-slate-500 mb-1">Notas</p>
-                              <p className="text-sm text-slate-700">{call.notes}</p>
+                            <div className="mt-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Notas</p>
+                              <p className="text-sm text-slate-700 dark:text-slate-300">{call.notes}</p>
                             </div>
                           )}
                         </div>
                         <div className="flex flex-col gap-2">
                           <button
                             onClick={() => {
-                              openDialerWithNumber(call.phone_number);
+                              openDialerWithNumber(call.phone_number, call.clients ? {
+                                id: call.client_id || undefined,
+                                company_name: call.clients.company_name,
+                                contact_name: call.clients.contact_name,
+                                email: call.clients.email,
+                                phone: call.clients.phone,
+                              } : null);
                               setShowRetryListModal(false);
                             }}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-medium whitespace-nowrap"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition text-sm font-medium whitespace-nowrap"
                           >
                             <PhoneCall className="w-4 h-4" />
                             Llamar
                           </button>
                           <button
                             onClick={() => openCreateTicketModal(call)}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition text-sm font-medium whitespace-nowrap"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition text-sm font-medium whitespace-nowrap"
                           >
                             <Ticket className="w-4 h-4" />
                             Crear Ticket
@@ -1443,7 +1426,7 @@ export function CallsModule() {
                               setShowRetryListModal(false);
                               setShowTransferModal(true);
                             }}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium whitespace-nowrap"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition text-sm font-medium whitespace-nowrap"
                           >
                             <Send className="w-4 h-4" />
                             Transferir
@@ -1461,8 +1444,8 @@ export function CallsModule() {
 
       {showTransferModal && selectedCall && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-8 py-6 rounded-t-2xl">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-sky-600 to-sky-700 text-white px-8 py-6 rounded-t-2xl">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-white bg-opacity-20 rounded-lg">
@@ -1470,7 +1453,7 @@ export function CallsModule() {
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold">Transferir Llamada</h2>
-                    <p className="text-blue-100 text-sm mt-0.5">
+                    <p className="text-white/80 text-sm mt-0.5">
                       {selectedCall.clients?.company_name || selectedCall.clients?.contact_name || selectedCall.phone_number}
                     </p>
                   </div>
@@ -1490,12 +1473,12 @@ export function CallsModule() {
             </div>
 
             <form onSubmit={handleTransferCall} className="p-8 space-y-6">
-              <div className="bg-orange-50 rounded-xl p-4 border border-orange-200">
+              <div className="bg-amber-50 dark:bg-amber-500/10 rounded-xl p-4 border border-amber-200 dark:border-amber-500/30">
                 <div className="flex items-start gap-3">
-                  <PhoneCall className="w-5 h-5 text-orange-600 mt-0.5" />
+                  <PhoneCall className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5" />
                   <div className="flex-1">
-                    <h4 className="font-semibold text-orange-900 mb-1">Información de la Llamada</h4>
-                    <div className="text-sm text-orange-700 space-y-1">
+                    <h4 className="font-semibold text-amber-900 dark:text-amber-300 mb-1">Información de la Llamada</h4>
+                    <div className="text-sm text-amber-700 dark:text-amber-400 space-y-1">
                       <p>• Estado: <span className="font-medium capitalize">{selectedCall.status}</span></p>
                       <p>• Teléfono: <span className="font-medium font-mono">{selectedCall.phone_number}</span></p>
                       <p>• Fecha: <span className="font-medium">{new Date(selectedCall.created_at).toLocaleString()}</span></p>
@@ -1505,7 +1488,7 @@ export function CallsModule() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2 flex items-center gap-2">
                   <UserCheck className="w-4 h-4" />
                   Transferir a *
                 </label>
@@ -1514,13 +1497,13 @@ export function CallsModule() {
                   value={userSearchTerm}
                   onChange={(e) => setUserSearchTerm(e.target.value)}
                   placeholder="Buscar usuario por nombre..."
-                  className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition mb-3"
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition mb-3"
                 />
-                <div className="max-h-64 overflow-y-auto space-y-2 border-2 border-slate-200 rounded-xl p-3 bg-slate-50">
+                <div className="max-h-64 overflow-y-auto space-y-2 border-2 border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-slate-50 dark:bg-slate-900/50">
                   {users.filter(u => u.id !== user?.id).length === 0 ? (
                     <div className="text-center py-8">
-                      <User className="w-12 h-12 text-slate-300 mx-auto mb-2" />
-                      <p className="text-slate-500 text-sm">No se encontraron usuarios</p>
+                      <User className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
+                      <p className="text-slate-500 dark:text-slate-400 text-sm">No se encontraron usuarios</p>
                     </div>
                   ) : (
                     users
@@ -1531,36 +1514,36 @@ export function CallsModule() {
                           onClick={() => setTransferFormData({ ...transferFormData, assigned_to: u.id })}
                           className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
                             transferFormData.assigned_to === u.id
-                              ? 'bg-blue-100 border-blue-500 shadow-md'
-                              : 'bg-white border-slate-200 hover:border-blue-300 hover:bg-blue-50'
+                              ? 'bg-sky-100 dark:bg-sky-500/20 border-sky-500 shadow-md'
+                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 hover:border-sky-300 hover:bg-sky-50 dark:hover:bg-sky-500/10'
                           }`}
                         >
                           <div className="flex items-center gap-3">
                             <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                               transferFormData.assigned_to === u.id
-                                ? 'bg-blue-500'
-                                : 'bg-slate-300'
+                                ? 'bg-sky-500'
+                                : 'bg-slate-300 dark:bg-slate-600'
                             }`}>
                               <User className="w-5 h-5 text-white" />
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className={`font-semibold truncate ${
                                 transferFormData.assigned_to === u.id
-                                  ? 'text-blue-900'
-                                  : 'text-slate-800'
+                                  ? 'text-sky-900 dark:text-sky-300'
+                                  : 'text-slate-800 dark:text-slate-200'
                               }`}>
                                 {u.name}
                               </p>
                               <p className={`text-sm truncate ${
                                 transferFormData.assigned_to === u.id
-                                  ? 'text-blue-700'
-                                  : 'text-slate-500'
+                                  ? 'text-sky-700 dark:text-sky-400'
+                                  : 'text-slate-500 dark:text-slate-400'
                               }`}>
                                 {u.email}
                               </p>
                             </div>
                             {transferFormData.assigned_to === u.id && (
-                              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                              <div className="w-6 h-6 bg-sky-500 rounded-full flex items-center justify-center">
                                 <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                 </svg>
@@ -1574,36 +1557,33 @@ export function CallsModule() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Notas de Transferencia *</label>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Notas de Transferencia *</label>
                 <textarea
                   value={transferFormData.notes}
                   onChange={(e) => setTransferFormData({ ...transferFormData, notes: e.target.value })}
                   rows={4}
-                  className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition resize-none"
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition resize-none"
                   placeholder="Motivo de la transferencia, contexto adicional..."
                   required
                 />
               </div>
 
-              <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200">
-                <button
+              <div className="flex justify-end space-x-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <Button
                   type="button"
+                  variant="secondary"
                   onClick={() => {
                     setShowTransferModal(false);
                     setSelectedCall(null);
                     setTransferFormData({ assigned_to: '', notes: '' });
                     setUserSearchTerm('');
                   }}
-                  className="px-6 py-3 border-2 border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition font-medium"
                 >
                   Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition font-medium shadow-lg shadow-blue-500/30"
-                >
+                </Button>
+                <Button type="submit">
                   Transferir Llamada
-                </button>
+                </Button>
               </div>
             </form>
           </div>

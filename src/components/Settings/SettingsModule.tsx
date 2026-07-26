@@ -2,17 +2,22 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { getEnvVar } from '../../lib/envLoader';
 import {
-  Settings, Mail, Server, Globe, Shield, Save, CheckCircle, AlertCircle, Phone, TestTube, Inbox, Eye, EyeOff, Building2, MessageCircle
+  Settings, Mail, Server, Globe, Shield, Save, CheckCircle, AlertCircle, Phone, TestTube, Inbox, Eye, EyeOff, Building2, MessageCircle, Radio, Users, Trash2, Plus
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { twilioService } from '../../lib/twilioService';
+import { freepbxService } from '../../lib/freepbxService';
 import { BranchesModule } from './BranchesModule';
+import { PageHeader } from '../ui/PageHeader';
+import { Card } from '../ui/Card';
+import { Button } from '../ui/Button';
 
 export function SettingsModule() {
   const toast = useToast();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'smtp' | 'email' | 'general' | 'twilio' | 'inbox' | 'branches' | 'webchat'>('smtp');
+  const [activeTab, setActiveTab] = useState<'smtp' | 'email' | 'general' | 'twilio' | 'inbox' | 'branches' | 'webchat' | 'freepbx' | 'extensions'>('smtp');
+  const isAdmin = user?.role === 'admin';
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
 
   const [smtpConfig, setSmtpConfig] = useState({
@@ -73,6 +78,42 @@ export function SettingsModule() {
     is_test_mode: false
   });
 
+  const [freepbxConfig, setFreepbxConfig] = useState({
+    id: '',
+    sip_domain: '',
+    websocket_url: '',
+    default_country_code: '',
+    outbound_caller_id: '',
+    stun_server: '',
+    is_default_provider: false,
+  });
+
+  interface SystemUserOption {
+    id: string;
+    full_name: string;
+    email: string;
+  }
+
+  interface SipExtensionRow {
+    id: string;
+    user_id: string;
+    sip_extension: string;
+    sip_auth_user: string;
+    sip_password: string;
+    display_name: string | null;
+  }
+
+  const [systemUsersList, setSystemUsersList] = useState<SystemUserOption[]>([]);
+  const [sipExtensions, setSipExtensions] = useState<SipExtensionRow[]>([]);
+  const [extensionForm, setExtensionForm] = useState({
+    user_id: '',
+    sip_extension: '',
+    sip_auth_user: '',
+    sip_password: '',
+    display_name: '',
+  });
+  const [editingExtensionId, setEditingExtensionId] = useState<string | null>(null);
+
   const [inboxConfig, setInboxConfig] = useState({
     id: '',
     email_address: '',
@@ -131,7 +172,12 @@ export function SettingsModule() {
     loadSettings();
     loadTwilioConfig();
     loadCurrencies();
-  }, []);
+    if (isAdmin) {
+      loadFreepbxConfig();
+      loadSystemUsersList();
+      loadSipExtensions();
+    }
+  }, [isAdmin]);
 
   useEffect(() => {
     if (user?.id) {
@@ -215,6 +261,44 @@ export function SettingsModule() {
 
     if (data) {
       setTwilioConfig(data);
+    }
+  };
+
+  const loadFreepbxConfig = async () => {
+    const config = await freepbxService.loadConfig(true);
+    if (config) {
+      setFreepbxConfig({
+        id: config.id,
+        sip_domain: config.sip_domain || '',
+        websocket_url: config.websocket_url || '',
+        default_country_code: config.default_country_code || '',
+        outbound_caller_id: config.outbound_caller_id || '',
+        stun_server: config.stun_server || '',
+        is_default_provider: config.is_default_provider,
+      });
+    }
+  };
+
+  const loadSystemUsersList = async () => {
+    const { data } = await supabase
+      .from('system_users')
+      .select('id, full_name, email')
+      .eq('is_active', true)
+      .order('full_name', { ascending: true });
+
+    if (data) {
+      setSystemUsersList(data);
+    }
+  };
+
+  const loadSipExtensions = async () => {
+    const { data } = await supabase
+      .from('user_sip_extensions')
+      .select('id, user_id, sip_extension, sip_auth_user, sip_password, display_name')
+      .order('sip_extension', { ascending: true });
+
+    if (data) {
+      setSipExtensions(data);
     }
   };
 
@@ -427,6 +511,145 @@ export function SettingsModule() {
     }
   };
 
+  const handleSaveFreepbx = async () => {
+    if (!isAdmin) {
+      toast.error('Solo un administrador puede configurar FreePBX');
+      return;
+    }
+
+    if (!freepbxConfig.sip_domain || !freepbxConfig.websocket_url) {
+      toast.error('Dominio SIP y Servidor WebSocket son obligatorios');
+      return;
+    }
+
+    setSaveStatus('saving');
+
+    try {
+      const freepbxData = {
+        provider: 'freepbx',
+        sip_domain: freepbxConfig.sip_domain,
+        websocket_url: freepbxConfig.websocket_url,
+        default_country_code: freepbxConfig.default_country_code || '',
+        outbound_caller_id: freepbxConfig.outbound_caller_id || null,
+        stun_server: freepbxConfig.stun_server || null,
+        is_active: true,
+        is_default_provider: freepbxConfig.is_default_provider,
+        updated_by: user?.id,
+      };
+
+      let error;
+
+      if (freepbxConfig.id) {
+        ({ error } = await supabase
+          .from('freepbx_config')
+          .update(freepbxData)
+          .eq('id', freepbxConfig.id));
+      } else {
+        ({ error } = await supabase
+          .from('freepbx_config')
+          .insert({ ...freepbxData, created_by: user?.id }));
+      }
+
+      if (error) {
+        setSaveStatus('error');
+        toast.error(`Error al guardar: ${error.message}`);
+      } else {
+        freepbxService.clearConfig();
+        setSaveStatus('success');
+        toast.success('Configuración de FreePBX guardada correctamente');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+        await loadFreepbxConfig();
+      }
+    } catch (err) {
+      setSaveStatus('error');
+      toast.error('Error inesperado al guardar');
+    }
+  };
+
+  const resetExtensionForm = () => {
+    setExtensionForm({ user_id: '', sip_extension: '', sip_auth_user: '', sip_password: '', display_name: '' });
+    setEditingExtensionId(null);
+  };
+
+  const handleEditExtension = (extension: SipExtensionRow) => {
+    setExtensionForm({
+      user_id: extension.user_id,
+      sip_extension: extension.sip_extension,
+      sip_auth_user: extension.sip_auth_user,
+      sip_password: extension.sip_password,
+      display_name: extension.display_name || '',
+    });
+    setEditingExtensionId(extension.id);
+  };
+
+  const handleSaveExtension = async () => {
+    if (!isAdmin) {
+      toast.error('Solo un administrador puede asignar extensiones');
+      return;
+    }
+
+    if (!extensionForm.user_id || !extensionForm.sip_extension || !extensionForm.sip_password) {
+      toast.error('Usuario, extensión y contraseña SIP son obligatorios');
+      return;
+    }
+
+    setSaveStatus('saving');
+
+    try {
+      const extensionData = {
+        user_id: extensionForm.user_id,
+        sip_extension: extensionForm.sip_extension,
+        sip_auth_user: extensionForm.sip_auth_user || extensionForm.sip_extension,
+        sip_password: extensionForm.sip_password,
+        display_name: extensionForm.display_name || null,
+        is_active: true,
+      };
+
+      let error;
+
+      if (editingExtensionId) {
+        ({ error } = await supabase
+          .from('user_sip_extensions')
+          .update(extensionData)
+          .eq('id', editingExtensionId));
+      } else {
+        ({ error } = await supabase
+          .from('user_sip_extensions')
+          .insert({ ...extensionData, created_by: user?.id }));
+      }
+
+      if (error) {
+        setSaveStatus('error');
+        toast.error(`Error al guardar la extensión: ${error.message}`);
+      } else {
+        setSaveStatus('success');
+        toast.success('Extensión guardada correctamente');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+        resetExtensionForm();
+        await loadSipExtensions();
+      }
+    } catch (err) {
+      setSaveStatus('error');
+      toast.error('Error inesperado al guardar la extensión');
+    }
+  };
+
+  const handleDeleteExtension = async (id: string) => {
+    if (!isAdmin) {
+      toast.error('Solo un administrador puede eliminar extensiones');
+      return;
+    }
+
+    const { error } = await supabase.from('user_sip_extensions').delete().eq('id', id);
+    if (error) {
+      toast.error(`Error al eliminar: ${error.message}`);
+    } else {
+      toast.success('Extensión eliminada');
+      if (editingExtensionId === id) resetExtensionForm();
+      await loadSipExtensions();
+    }
+  };
+
   const handleSaveInbox = async () => {
     setSaveStatus('saving');
 
@@ -498,191 +721,139 @@ export function SettingsModule() {
   };
 
   return (
-    <div className="p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
-          Configuración del Sistema
-        </h1>
-        <p className="text-slate-600 mt-2 text-lg">Administra la configuración general del CRM</p>
-      </div>
+    <div className="p-4 sm:p-6 lg:p-8 min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+      <PageHeader
+        title="Configuración del Sistema"
+        subtitle="Administra la configuración general del CRM"
+      />
 
       {saveStatus !== 'idle' && (
-        <div className={`mb-6 p-4 rounded-lg flex items-center space-x-3 ${
-          saveStatus === 'success' ? 'bg-green-50 border border-green-200' :
-          saveStatus === 'error' ? 'bg-red-50 border border-red-200' :
-          'bg-blue-50 border border-blue-200'
+        <div className={`mb-6 p-4 rounded-lg flex items-center space-x-3 border ${
+          saveStatus === 'success' ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/30' :
+          saveStatus === 'error' ? 'bg-rose-50 border-rose-200 dark:bg-rose-500/10 dark:border-rose-500/30' :
+          'bg-sky-50 border-sky-200 dark:bg-sky-500/10 dark:border-sky-500/30'
         }`}>
           {saveStatus === 'success' ? (
             <>
-              <CheckCircle className="w-5 h-5 text-green-600" />
-              <span className="text-green-700 font-medium">Configuración guardada exitosamente</span>
+              <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+              <span className="text-emerald-700 dark:text-emerald-400 font-medium">Configuración guardada exitosamente</span>
             </>
           ) : saveStatus === 'error' ? (
             <>
-              <AlertCircle className="w-5 h-5 text-red-600" />
-              <span className="text-red-700 font-medium">Error al guardar la configuración</span>
+              <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400" />
+              <span className="text-rose-700 dark:text-rose-400 font-medium">Error al guardar la configuración</span>
             </>
           ) : (
-            <span className="text-blue-700 font-medium">Guardando...</span>
+            <span className="text-sky-700 dark:text-sky-400 font-medium">Guardando...</span>
           )}
         </div>
       )}
 
-      <div className="flex space-x-2 mb-6 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('smtp')}
-          className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition ${
-            activeTab === 'smtp'
-              ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg'
-              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-          }`}
-        >
-          <Server className="w-5 h-5" />
-          <span>Servidor SMTP</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('email')}
-          className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition ${
-            activeTab === 'email'
-              ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg'
-              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-          }`}
-        >
-          <Mail className="w-5 h-5" />
-          <span>Email</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('inbox')}
-          className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition ${
-            activeTab === 'inbox'
-              ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-lg'
-              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-          }`}
-        >
-          <Inbox className="w-5 h-5" />
-          <span>Buzón Personal</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('webchat')}
-          className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition ${
-            activeTab === 'webchat'
-              ? 'bg-gradient-to-r from-teal-600 to-teal-500 text-white shadow-lg'
-              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-          }`}
-        >
-          <MessageCircle className="w-5 h-5" />
-          <span>Chat Web</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('twilio')}
-          className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition ${
-            activeTab === 'twilio'
-              ? 'bg-gradient-to-r from-green-600 to-green-500 text-white shadow-lg'
-              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-          }`}
-        >
-          <Phone className="w-5 h-5" />
-          <span>Twilio</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('general')}
-          className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition ${
-            activeTab === 'general'
-              ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg'
-              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-          }`}
-        >
-          <Settings className="w-5 h-5" />
-          <span>General</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('branches')}
-          className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition ${
-            activeTab === 'branches'
-              ? 'bg-gradient-to-r from-cyan-600 to-cyan-500 text-white shadow-lg'
-              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-          }`}
-        >
-          <Building2 className="w-5 h-5" />
-          <span>Sucursales</span>
-        </button>
+      <div className="flex flex-wrap gap-2 mb-6 overflow-x-auto">
+        {([
+          { key: 'smtp', label: 'Servidor SMTP', icon: Server },
+          { key: 'email', label: 'Email', icon: Mail },
+          { key: 'inbox', label: 'Buzón Personal', icon: Inbox },
+          { key: 'webchat', label: 'Chat Web', icon: MessageCircle },
+          { key: 'twilio', label: 'Twilio', icon: Phone },
+          ...(isAdmin ? [{ key: 'freepbx' as const, label: 'FreePBX', icon: Radio }] : []),
+          ...(isAdmin ? [{ key: 'extensions' as const, label: 'Extensiones', icon: Users }] : []),
+          { key: 'general', label: 'General', icon: Settings },
+          { key: 'branches', label: 'Sucursales', icon: Building2 },
+        ] as const).map((tab) => {
+          const TabIcon = tab.icon;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition ${
+                activeTab === tab.key
+                  ? 'bg-gradient-to-r from-brand-600 to-accent-600 text-white shadow-lg'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600'
+              }`}
+            >
+              <TabIcon className="w-5 h-5" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {activeTab === 'smtp' && (
-        <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8">
+        <Card className="p-8">
           <div className="flex items-center space-x-3 mb-6">
-            <div className="bg-blue-100 p-3 rounded-lg">
-              <Server className="w-6 h-6 text-blue-600" />
+            <div className="bg-gradient-to-br from-brand-500 to-accent-500 p-3 rounded-xl">
+              <Server className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-slate-900">Configuración SMTP</h2>
-              <p className="text-slate-600">Configura el servidor para envío de emails</p>
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Configuración SMTP</h2>
+              <p className="text-slate-600 dark:text-slate-400">Configura el servidor para envío de emails</p>
             </div>
           </div>
 
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Host SMTP</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Host SMTP</label>
                 <input
                   type="text"
                   value={smtpConfig.host}
                   onChange={(e) => setSmtpConfig({ ...smtpConfig, host: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   placeholder="smtp.gmail.com"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Puerto</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Puerto</label>
                 <input
                   type="number"
                   value={smtpConfig.port}
                   onChange={(e) => setSmtpConfig({ ...smtpConfig, port: parseInt(e.target.value) })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Usuario</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Usuario</label>
                 <input
                   type="text"
                   value={smtpConfig.username}
                   onChange={(e) => setSmtpConfig({ ...smtpConfig, username: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   placeholder="tu-email@gmail.com"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Contraseña</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Contraseña</label>
                 <input
                   type="password"
                   value={smtpConfig.password}
                   onChange={(e) => setSmtpConfig({ ...smtpConfig, password: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   placeholder="••••••••"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Email de Origen</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Email de Origen</label>
                 <input
                   type="email"
                   value={smtpConfig.from_email}
                   onChange={(e) => setSmtpConfig({ ...smtpConfig, from_email: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   placeholder="noreply@tuempresa.com"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Nombre de Origen</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Nombre de Origen</label>
                 <input
                   type="text"
                   value={smtpConfig.from_name}
                   onChange={(e) => setSmtpConfig({ ...smtpConfig, from_name: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   placeholder="Mi Empresa CRM"
                 />
               </div>
@@ -694,69 +865,65 @@ export function SettingsModule() {
                 id="secure"
                 checked={smtpConfig.secure}
                 onChange={(e) => setSmtpConfig({ ...smtpConfig, secure: e.target.checked })}
-                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                className="rounded border-slate-300 dark:border-slate-600 text-brand-600 focus:ring-brand-500"
               />
-              <label htmlFor="secure" className="text-sm text-slate-700">Usar conexión segura (SSL/TLS)</label>
+              <label htmlFor="secure" className="text-sm text-slate-700 dark:text-slate-300">Usar conexión segura (SSL/TLS)</label>
             </div>
 
             <div className="pt-4 flex justify-end">
-              <button
-                onClick={handleSaveSMTP}
-                className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-blue-600 transition shadow-lg"
-              >
-                <Save className="w-5 h-5" />
-                <span>Guardar Configuración SMTP</span>
-              </button>
+              <Button onClick={handleSaveSMTP} icon={<Save className="w-5 h-5" />}>
+                Guardar Configuración SMTP
+              </Button>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {activeTab === 'email' && (
-        <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8">
+        <Card className="p-8">
           <div className="flex items-center space-x-3 mb-6">
-            <div className="bg-purple-100 p-3 rounded-lg">
-              <Mail className="w-6 h-6 text-purple-600" />
+            <div className="bg-gradient-to-br from-brand-500 to-accent-500 p-3 rounded-xl">
+              <Mail className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-slate-900">Configuración de Email</h2>
-              <p className="text-slate-600">Límites y políticas de envío</p>
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Configuración de Email</h2>
+              <p className="text-slate-600 dark:text-slate-400">Límites y políticas de envío</p>
             </div>
           </div>
 
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Límite Diario</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Límite Diario</label>
                 <input
                   type="number"
                   value={emailSettings.daily_limit}
                   onChange={(e) => setEmailSettings({ ...emailSettings, daily_limit: parseInt(e.target.value) })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                 />
-                <p className="text-xs text-slate-500 mt-1">Número máximo de emails por día</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Número máximo de emails por día</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Límite por Hora</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Límite por Hora</label>
                 <input
                   type="number"
                   value={emailSettings.rate_limit}
                   onChange={(e) => setEmailSettings({ ...emailSettings, rate_limit: parseInt(e.target.value) })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                 />
-                <p className="text-xs text-slate-500 mt-1">Emails por hora</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Emails por hora</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Intentos de Reenvío</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Intentos de Reenvío</label>
                 <input
                   type="number"
                   value={emailSettings.retry_attempts}
                   onChange={(e) => setEmailSettings({ ...emailSettings, retry_attempts: parseInt(e.target.value) })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                 />
-                <p className="text-xs text-slate-500 mt-1">Número de reintentos si falla</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Número de reintentos si falla</p>
               </div>
             </div>
 
@@ -766,144 +933,140 @@ export function SettingsModule() {
                 id="bounce"
                 checked={emailSettings.bounce_handling}
                 onChange={(e) => setEmailSettings({ ...emailSettings, bounce_handling: e.target.checked })}
-                className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                className="rounded border-slate-300 dark:border-slate-600 text-brand-600 focus:ring-brand-500"
               />
-              <label htmlFor="bounce" className="text-sm text-slate-700">Activar manejo de rebotes automático</label>
+              <label htmlFor="bounce" className="text-sm text-slate-700 dark:text-slate-300">Activar manejo de rebotes automático</label>
             </div>
 
             <div className="pt-4 flex justify-end">
-              <button
-                onClick={handleSaveEmail}
-                className="flex items-center space-x-2 bg-gradient-to-r from-purple-600 to-purple-500 text-white px-6 py-3 rounded-lg hover:from-purple-700 hover:to-purple-600 transition shadow-lg"
-              >
-                <Save className="w-5 h-5" />
-                <span>Guardar Configuración de Email</span>
-              </button>
+              <Button onClick={handleSaveEmail} icon={<Save className="w-5 h-5" />}>
+                Guardar Configuración de Email
+              </Button>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {activeTab === 'general' && (
-        <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8">
+        <Card className="p-8">
           <div className="flex items-center space-x-3 mb-6">
-            <div className="bg-green-100 p-3 rounded-lg">
-              <Globe className="w-6 h-6 text-green-600" />
+            <div className="bg-gradient-to-br from-brand-500 to-accent-500 p-3 rounded-xl">
+              <Globe className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-slate-900">Configuración General</h2>
-              <p className="text-slate-600">Configuración de la empresa y sistema</p>
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Configuración General</h2>
+              <p className="text-slate-600 dark:text-slate-400">Configuración de la empresa y sistema</p>
             </div>
           </div>
 
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Nombre de la Empresa</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Nombre de la Empresa</label>
                 <input
                   type="text"
                   value={generalSettings.company_name}
                   onChange={(e) => setGeneralSettings({ ...generalSettings, company_name: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   placeholder="Mi Empresa"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">RUT / NIT / RFC</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">RUT / NIT / RFC</label>
                 <input
                   type="text"
                   value={generalSettings.company_rut}
                   onChange={(e) => setGeneralSettings({ ...generalSettings, company_rut: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   placeholder="000000000"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Dirección</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Dirección</label>
                 <input
                   type="text"
                   value={generalSettings.company_address}
                   onChange={(e) => setGeneralSettings({ ...generalSettings, company_address: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   placeholder="Calle Principal 123"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Ciudad</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Ciudad</label>
                 <input
                   type="text"
                   value={generalSettings.company_city}
                   onChange={(e) => setGeneralSettings({ ...generalSettings, company_city: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   placeholder="Montevideo"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">País</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">País</label>
                 <input
                   type="text"
                   value={generalSettings.company_country}
                   onChange={(e) => setGeneralSettings({ ...generalSettings, company_country: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   placeholder="Uruguay"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Teléfono</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Teléfono</label>
                 <input
                   type="tel"
                   value={generalSettings.company_phone}
                   onChange={(e) => setGeneralSettings({ ...generalSettings, company_phone: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   placeholder="+598 00 000 000"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Email</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Email</label>
                 <input
                   type="email"
                   value={generalSettings.company_email}
                   onChange={(e) => setGeneralSettings({ ...generalSettings, company_email: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   placeholder="contacto@miempresa.com"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Sitio Web</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Sitio Web</label>
                 <input
                   type="url"
                   value={generalSettings.company_website}
                   onChange={(e) => setGeneralSettings({ ...generalSettings, company_website: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   placeholder="https://ejemplo.com"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Logo URL</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Logo URL</label>
                 <input
                   type="url"
                   value={generalSettings.company_logo_url}
                   onChange={(e) => setGeneralSettings({ ...generalSettings, company_logo_url: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   placeholder="https://ejemplo.com/logo.png"
                 />
-                <p className="mt-1 text-sm text-slate-500">URL pública del logo de tu empresa (PNG, JPG, SVG)</p>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">URL pública del logo de tu empresa (PNG, JPG, SVG)</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Zona Horaria</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Zona Horaria</label>
                 <select
                   value={generalSettings.timezone}
                   onChange={(e) => setGeneralSettings({ ...generalSettings, timezone: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                 >
                   <option value="America/Mexico_City">Ciudad de México (GMT-6)</option>
                   <option value="America/Bogota">Bogotá (GMT-5)</option>
@@ -915,11 +1078,11 @@ export function SettingsModule() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Moneda</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Moneda</label>
                 <select
                   value={generalSettings.currency}
                   onChange={(e) => setGeneralSettings({ ...generalSettings, currency: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                 >
                   {currencies.length === 0 ? (
                     <option value="">Cargando monedas...</option>
@@ -934,11 +1097,11 @@ export function SettingsModule() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Formato de Fecha</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Formato de Fecha</label>
                 <select
                   value={generalSettings.date_format}
                   onChange={(e) => setGeneralSettings({ ...generalSettings, date_format: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                 >
                   <option value="DD/MM/YYYY">DD/MM/YYYY</option>
                   <option value="MM/DD/YYYY">MM/DD/YYYY</option>
@@ -947,146 +1110,138 @@ export function SettingsModule() {
               </div>
             </div>
 
-            <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
-              <h3 className="text-base font-semibold text-slate-800 mb-1">SLA de Tickets por Prioridad</h3>
-              <p className="text-sm text-slate-600 mb-4">Define por prioridad el vencimiento (SLA) y las horas hombre para cálculo automático.</p>
+            <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-slate-50 dark:bg-slate-900/50">
+              <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200 mb-1">SLA de Tickets por Prioridad</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Define por prioridad el vencimiento (SLA) y las horas hombre para cálculo automático.</p>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Baja (horas)</label>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Baja (horas)</label>
                   <input
                     type="number"
                     min={1}
                     value={ticketSlaSettings.low_hours}
                     onChange={(e) => setTicketSlaSettings({ ...ticketSlaSettings, low_hours: Math.max(1, Number(e.target.value) || 1) })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Media (horas)</label>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Media (horas)</label>
                   <input
                     type="number"
                     min={1}
                     value={ticketSlaSettings.medium_hours}
                     onChange={(e) => setTicketSlaSettings({ ...ticketSlaSettings, medium_hours: Math.max(1, Number(e.target.value) || 1) })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Alta (horas)</label>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Alta (horas)</label>
                   <input
                     type="number"
                     min={1}
                     value={ticketSlaSettings.high_hours}
                     onChange={(e) => setTicketSlaSettings({ ...ticketSlaSettings, high_hours: Math.max(1, Number(e.target.value) || 1) })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Urgente (horas)</label>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Urgente (horas)</label>
                   <input
                     type="number"
                     min={1}
                     value={ticketSlaSettings.urgent_hours}
                     onChange={(e) => setTicketSlaSettings({ ...ticketSlaSettings, urgent_hours: Math.max(1, Number(e.target.value) || 1) })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   />
                 </div>
               </div>
 
-              <div className="mt-4 pt-4 border-t border-slate-200">
-                <h4 className="text-sm font-semibold text-slate-800 mb-1">Horas hombre estimadas por prioridad</h4>
-                <p className="text-xs text-slate-600 mb-3">Se usan para completar automáticamente "Horas estimadas" al crear tickets.</p>
+              <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1">Horas hombre estimadas por prioridad</h4>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">Se usan para completar automáticamente "Horas estimadas" al crear tickets.</p>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">Baja (hh)</label>
+                    <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Baja (hh)</label>
                     <input
                       type="number"
                       min={0.5}
                       step={0.5}
                       value={ticketSlaSettings.low_estimated_hours}
                       onChange={(e) => setTicketSlaSettings({ ...ticketSlaSettings, low_estimated_hours: Math.max(0.5, Number(e.target.value) || 0.5) })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">Media (hh)</label>
+                    <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Media (hh)</label>
                     <input
                       type="number"
                       min={0.5}
                       step={0.5}
                       value={ticketSlaSettings.medium_estimated_hours}
                       onChange={(e) => setTicketSlaSettings({ ...ticketSlaSettings, medium_estimated_hours: Math.max(0.5, Number(e.target.value) || 0.5) })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">Alta (hh)</label>
+                    <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Alta (hh)</label>
                     <input
                       type="number"
                       min={0.5}
                       step={0.5}
                       value={ticketSlaSettings.high_estimated_hours}
                       onChange={(e) => setTicketSlaSettings({ ...ticketSlaSettings, high_estimated_hours: Math.max(0.5, Number(e.target.value) || 0.5) })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">Urgente (hh)</label>
+                    <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Urgente (hh)</label>
                     <input
                       type="number"
                       min={0.5}
                       step={0.5}
                       value={ticketSlaSettings.urgent_estimated_hours}
                       onChange={(e) => setTicketSlaSettings({ ...ticketSlaSettings, urgent_estimated_hours: Math.max(0.5, Number(e.target.value) || 0.5) })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                     />
                   </div>
                 </div>
               </div>
 
               <div className="pt-4 flex justify-end">
-                <button
-                  onClick={handleSaveTicketSla}
-                  className="flex items-center space-x-2 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-5 py-2.5 rounded-lg hover:from-emerald-700 hover:to-emerald-600 transition shadow"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>Guardar SLA de Tickets</span>
-                </button>
+                <Button size="sm" onClick={handleSaveTicketSla} icon={<Save className="w-4 h-4" />}>
+                  Guardar SLA de Tickets
+                </Button>
               </div>
             </div>
 
             <div className="pt-4 flex justify-end">
-              <button
-                onClick={handleSaveGeneral}
-                className="flex items-center space-x-2 bg-gradient-to-r from-green-600 to-green-500 text-white px-6 py-3 rounded-lg hover:from-green-700 hover:to-green-600 transition shadow-lg"
-              >
-                <Save className="w-5 h-5" />
-                <span>Guardar Configuración General</span>
-              </button>
+              <Button onClick={handleSaveGeneral} icon={<Save className="w-5 h-5" />}>
+                Guardar Configuración General
+              </Button>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {activeTab === 'inbox' && (
-        <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8">
+        <Card className="p-8">
           <div className="flex items-center space-x-3 mb-6">
-            <div className="bg-orange-100 p-3 rounded-lg">
-              <Inbox className="w-6 h-6 text-orange-600" />
+            <div className="bg-gradient-to-br from-brand-500 to-accent-500 p-3 rounded-xl">
+              <Inbox className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-slate-900">Configuración del Buzón Personal</h2>
-              <p className="text-slate-600">Conecta tu cuenta de correo para recibir y enviar emails</p>
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Configuración del Buzón Personal</h2>
+              <p className="text-slate-600 dark:text-slate-400">Conecta tu cuenta de correo para recibir y enviar emails</p>
             </div>
           </div>
 
           <div className="space-y-6 mb-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="bg-sky-50 dark:bg-sky-500/10 border border-sky-200 dark:border-sky-500/30 rounded-lg p-4">
               <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-blue-800">
+                <AlertCircle className="w-5 h-5 text-sky-600 dark:text-sky-400 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-sky-800 dark:text-sky-300">
                   <p className="font-semibold mb-1">Información importante:</p>
-                  <ul className="list-disc list-inside space-y-1 text-blue-700">
+                  <ul className="list-disc list-inside space-y-1 text-sky-700 dark:text-sky-400">
                     <li>Esta configuración es independiente del SMTP de campañas</li>
                     <li>Permite gestionar tu buzón personal dentro del CRM</li>
                     <li>Soporta protocolos IMAP y SMTP estándar</li>
@@ -1096,12 +1251,12 @@ export function SettingsModule() {
               </div>
             </div>
 
-            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+            <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-lg p-4">
               <div className="flex items-start gap-3">
-                <Mail className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-orange-800">
+                <Mail className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-amber-800 dark:text-amber-300">
                   <p className="font-semibold mb-1">Proveedores populares:</p>
-                  <div className="grid grid-cols-2 gap-2 mt-2 text-orange-700">
+                  <div className="grid grid-cols-2 gap-2 mt-2 text-amber-700 dark:text-amber-400">
                     <div>
                       <p className="font-medium">Gmail:</p>
                       <p className="text-xs">IMAP: imap.gmail.com:993</p>
@@ -1124,11 +1279,11 @@ export function SettingsModule() {
           </div>
 
           <div className="space-y-6">
-            <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-800 mb-4">Información de la Cuenta</h3>
+            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4">Información de la Cuenta</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Dirección de Email *
                   </label>
                   <input
@@ -1136,12 +1291,12 @@ export function SettingsModule() {
                     value={inboxConfig.email_address}
                     onChange={(e) => setInboxConfig({ ...inboxConfig, email_address: e.target.value })}
                     placeholder="tu-email@ejemplo.com"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Nombre para Mostrar
                   </label>
                   <input
@@ -1149,17 +1304,17 @@ export function SettingsModule() {
                     value={inboxConfig.display_name}
                     onChange={(e) => setInboxConfig({ ...inboxConfig, display_name: e.target.value })}
                     placeholder="Tu Nombre"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-800 mb-4">Configuración IMAP (Recepción)</h3>
+            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4">Configuración IMAP (Recepción)</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Servidor IMAP *
                   </label>
                   <input
@@ -1167,12 +1322,12 @@ export function SettingsModule() {
                     value={inboxConfig.imap_host}
                     onChange={(e) => setInboxConfig({ ...inboxConfig, imap_host: e.target.value })}
                     placeholder="imap.gmail.com"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Puerto IMAP *
                   </label>
                   <input
@@ -1180,12 +1335,12 @@ export function SettingsModule() {
                     value={inboxConfig.imap_port}
                     onChange={(e) => setInboxConfig({ ...inboxConfig, imap_port: parseInt(e.target.value) })}
                     placeholder="993"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Usuario IMAP *
                   </label>
                   <input
@@ -1193,12 +1348,12 @@ export function SettingsModule() {
                     value={inboxConfig.imap_username}
                     onChange={(e) => setInboxConfig({ ...inboxConfig, imap_username: e.target.value })}
                     placeholder="tu-email@ejemplo.com"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Contraseña IMAP *
                   </label>
                   <div className="relative">
@@ -1207,12 +1362,12 @@ export function SettingsModule() {
                       value={inboxConfig.imap_password}
                       onChange={(e) => setInboxConfig({ ...inboxConfig, imap_password: e.target.value })}
                       placeholder="••••••••"
-                      className="w-full px-4 py-2 pr-12 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      className="w-full px-4 py-2 pr-12 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPasswords({ ...showPasswords, imap: !showPasswords.imap })}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
                     >
                       {showPasswords.imap ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                     </button>
@@ -1221,11 +1376,11 @@ export function SettingsModule() {
               </div>
             </div>
 
-            <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-800 mb-4">Configuración SMTP (Envío)</h3>
+            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4">Configuración SMTP (Envío)</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Servidor SMTP *
                   </label>
                   <input
@@ -1233,12 +1388,12 @@ export function SettingsModule() {
                     value={inboxConfig.smtp_host}
                     onChange={(e) => setInboxConfig({ ...inboxConfig, smtp_host: e.target.value })}
                     placeholder="smtp.gmail.com"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Puerto SMTP *
                   </label>
                   <input
@@ -1246,12 +1401,12 @@ export function SettingsModule() {
                     value={inboxConfig.smtp_port}
                     onChange={(e) => setInboxConfig({ ...inboxConfig, smtp_port: parseInt(e.target.value) })}
                     placeholder="465"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Usuario SMTP *
                   </label>
                   <input
@@ -1259,12 +1414,12 @@ export function SettingsModule() {
                     value={inboxConfig.smtp_username}
                     onChange={(e) => setInboxConfig({ ...inboxConfig, smtp_username: e.target.value })}
                     placeholder="tu-email@ejemplo.com"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Contraseña SMTP *
                   </label>
                   <div className="relative">
@@ -1273,12 +1428,12 @@ export function SettingsModule() {
                       value={inboxConfig.smtp_password}
                       onChange={(e) => setInboxConfig({ ...inboxConfig, smtp_password: e.target.value })}
                       placeholder="••••••••"
-                      className="w-full px-4 py-2 pr-12 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      className="w-full px-4 py-2 pr-12 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPasswords({ ...showPasswords, smtp: !showPasswords.smtp })}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
                     >
                       {showPasswords.smtp ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                     </button>
@@ -1287,19 +1442,19 @@ export function SettingsModule() {
               </div>
             </div>
 
-            <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-800 mb-4">Opciones</h3>
+            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4">Opciones</h3>
               <div className="space-y-3">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={inboxConfig.use_ssl}
                     onChange={(e) => setInboxConfig({ ...inboxConfig, use_ssl: e.target.checked })}
-                    className="w-5 h-5 text-orange-600 border-slate-300 rounded focus:ring-2 focus:ring-orange-500"
+                    className="w-5 h-5 text-brand-600 border-slate-300 dark:border-slate-600 rounded focus:ring-2 focus:ring-brand-500"
                   />
                   <div>
-                    <span className="text-sm font-medium text-slate-700">Usar SSL/TLS</span>
-                    <p className="text-xs text-slate-500">Conexión segura cifrada (recomendado)</p>
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Usar SSL/TLS</span>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Conexión segura cifrada (recomendado)</p>
                   </div>
                 </label>
 
@@ -1308,171 +1463,166 @@ export function SettingsModule() {
                     type="checkbox"
                     checked={inboxConfig.is_active}
                     onChange={(e) => setInboxConfig({ ...inboxConfig, is_active: e.target.checked })}
-                    className="w-5 h-5 text-orange-600 border-slate-300 rounded focus:ring-2 focus:ring-orange-500"
+                    className="w-5 h-5 text-brand-600 border-slate-300 dark:border-slate-600 rounded focus:ring-2 focus:ring-brand-500"
                   />
                   <div>
-                    <span className="text-sm font-medium text-slate-700">Cuenta Activa</span>
-                    <p className="text-xs text-slate-500">Habilita esta cuenta para usar en el buzón</p>
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Cuenta Activa</span>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Habilita esta cuenta para usar en el buzón</p>
                   </div>
                 </label>
               </div>
             </div>
 
             <div className="pt-4 flex justify-end">
-              <button
-                onClick={handleSaveInbox}
-                disabled={saveStatus === 'saving'}
-                className="flex items-center space-x-2 bg-gradient-to-r from-orange-600 to-orange-500 text-white px-6 py-3 rounded-lg hover:from-orange-700 hover:to-orange-600 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Save className="w-5 h-5" />
-                <span>Guardar Configuración</span>
-              </button>
+              <Button onClick={handleSaveInbox} disabled={saveStatus === 'saving'} icon={<Save className="w-5 h-5" />}>
+                Guardar Configuración
+              </Button>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {activeTab === 'webchat' && (
-        <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8">
+        <Card className="p-8">
           <div className="flex items-center space-x-3 mb-6">
-            <div className="bg-teal-100 p-3 rounded-lg">
-              <MessageCircle className="w-6 h-6 text-teal-600" />
+            <div className="bg-gradient-to-br from-brand-500 to-accent-500 p-3 rounded-xl">
+              <MessageCircle className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-slate-900">Configuración de Chat Web</h2>
-              <p className="text-slate-600">Comparte el widget o consume la API desde dogcatify.com</p>
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Configuración de Chat Web</h2>
+              <p className="text-slate-600 dark:text-slate-400">Comparte el widget o consume la API desde dogcatify.com</p>
             </div>
           </div>
 
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Dominio permitido</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Dominio permitido</label>
                 <input
                   type="text"
                   value={webchatSettings.domain}
                   onChange={(e) => setWebchatSettings({ ...webchatSettings, domain: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   placeholder="dogcatify.com"
                 />
-                <p className="text-xs text-slate-500 mt-1">Debe coincidir con el dominio enviado en `source_domain`.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Debe coincidir con el dominio enviado en `source_domain`.</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Título del widget</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Título del widget</label>
                 <input
                   type="text"
                   value={webchatSettings.title}
                   onChange={(e) => setWebchatSettings({ ...webchatSettings, title: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Color del widget</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Color del widget</label>
                 <div className="flex items-center gap-3">
                   <input
                     type="color"
                     value={webchatSettings.theme}
                     onChange={(e) => setWebchatSettings({ ...webchatSettings, theme: e.target.value })}
-                    className="h-10 w-14 border border-slate-300 rounded-lg"
+                    className="h-10 w-14 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900"
                   />
                   <input
                     type="text"
                     value={webchatSettings.theme}
                     onChange={(e) => setWebchatSettings({ ...webchatSettings, theme: e.target.value })}
-                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg"
+                    className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Endpoint API (POST)</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Endpoint API (POST)</label>
                 <input
                   type="text"
                   value={webchatSettings.endpoint}
                   onChange={(e) => setWebchatSettings({ ...webchatSettings, endpoint: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Endpoint API (GET)</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Endpoint API (GET)</label>
                 <input
                   type="text"
                   value={webchatSettings.get_endpoint}
                   onChange={(e) => setWebchatSettings({ ...webchatSettings, get_endpoint: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                 />
-                <p className="text-xs text-slate-500 mt-1">Se usa para obtener mensajes con el param `session_id`.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Se usa para obtener mensajes con el param `session_id`.</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Header de integración</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Header de integración</label>
                 <input
                   type="text"
                   value={webchatSettings.integration_header}
                   onChange={(e) => setWebchatSettings({ ...webchatSettings, integration_header: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   placeholder="X-Integration-Key"
                 />
-                <p className="text-xs text-slate-500 mt-1">Header que exige el API Gateway.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Header que exige el API Gateway.</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Integration Key (Gateway)</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Integration Key (Gateway)</label>
                 <input
                   type="text"
                   value={webchatSettings.integration_key}
                   onChange={(e) => setWebchatSettings({ ...webchatSettings, integration_key: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   placeholder="pub_..."
                 />
-                <p className="text-xs text-slate-500 mt-1">Se envía en el header configurado arriba.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Se envía en el header configurado arriba.</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Header de integración (GET)</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Header de integración (GET)</label>
                 <input
                   type="text"
                   value={webchatSettings.get_integration_header}
                   onChange={(e) => setWebchatSettings({ ...webchatSettings, get_integration_header: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   placeholder="X-Integration-Key"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Integration Key (GET)</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Integration Key (GET)</label>
                 <input
                   type="text"
                   value={webchatSettings.get_integration_key}
                   onChange={(e) => setWebchatSettings({ ...webchatSettings, get_integration_key: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   placeholder="pub_..."
                 />
-                <p className="text-xs text-slate-500 mt-1">Se envía en el header del endpoint GET.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Se envía en el header del endpoint GET.</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Script del widget</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Script del widget</label>
                 <input
                   type="text"
                   value={webchatSettings.widget_script_url}
                   readOnly
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-slate-100"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-100 dark:bg-slate-900/50 text-slate-700 dark:text-slate-300"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">API Key (Supabase directo)</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">API Key (Supabase directo)</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
                     value={webchatSettings.api_key}
                     onChange={(e) => setWebchatSettings({ ...webchatSettings, api_key: e.target.value })}
                     placeholder="Genera una API Key"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   />
                   <button
                     type="button"
@@ -1480,93 +1630,88 @@ export function SettingsModule() {
                       const key = `wc_${crypto.randomUUID()}`;
                       setWebchatSettings({ ...webchatSettings, api_key: key });
                     }}
-                    className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg hover:bg-slate-200 transition text-sm"
+                    className="px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition text-sm"
                   >
                     Generar
                   </button>
                 </div>
-                <p className="text-xs text-slate-500 mt-1">Úsala solo si consumes el endpoint directo de Supabase.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Úsala solo si consumes el endpoint directo de Supabase.</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Límites activos</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Límites activos</label>
                 <div className="grid grid-cols-3 gap-2">
                   <input
                     type="number"
                     value={webchatSettings.max_message_length}
                     readOnly
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-100"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-100 dark:bg-slate-900/50 text-slate-700 dark:text-slate-300"
                   />
                   <input
                     type="number"
                     value={webchatSettings.max_attachments}
                     readOnly
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-100"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-100 dark:bg-slate-900/50 text-slate-700 dark:text-slate-300"
                   />
                   <input
                     type="number"
                     value={webchatSettings.max_attachment_mb}
                     readOnly
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-100"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-100 dark:bg-slate-900/50 text-slate-700 dark:text-slate-300"
                   />
                 </div>
-                <p className="text-xs text-slate-500 mt-1">Estos límites se aplican en el endpoint y el widget.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Estos límites se aplican en el endpoint y el widget.</p>
               </div>
             </div>
 
             <div>
-              <p className="text-sm font-medium text-slate-700 mb-2">Snippet del Widget</p>
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Snippet del Widget</p>
               <pre className="bg-slate-900 text-slate-100 rounded-xl p-4 text-xs overflow-auto">
                 {webchatSnippet}
               </pre>
-              <p className="text-xs text-slate-500 mt-2">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
                 Copia este código en dogcatify.com para habilitar el chat flotante.
               </p>
             </div>
 
             <div>
-              <p className="text-sm font-medium text-slate-700 mb-2">Cómo consumir la API</p>
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Cómo consumir la API</p>
               <pre className="bg-slate-900 text-slate-100 rounded-xl p-4 text-xs overflow-auto">
                 {webchatApiExample}
               </pre>
-              <p className="text-xs text-slate-500 mt-2">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
                 Para consultar una conversación: GET {webchatSettings.endpoint}?session_id=&lt;id&gt; (con header `x-api-key`). El campo `content` debe ser base64 válido (con o sin prefijo data:).
               </p>
             </div>
 
             <div className="pt-4 flex justify-end">
-              <button
-                onClick={handleSaveWebchat}
-                disabled={saveStatus === 'saving'}
-                className="flex items-center space-x-2 bg-gradient-to-r from-teal-600 to-teal-500 text-white px-6 py-3 rounded-lg hover:from-teal-700 hover:to-teal-600 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Save className="w-5 h-5" />
-                <span>Guardar Configuración</span>
-              </button>
+              <Button onClick={handleSaveWebchat} disabled={saveStatus === 'saving'} icon={<Save className="w-5 h-5" />}>
+                Guardar Configuración
+              </Button>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {activeTab === 'twilio' && (
-        <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8">
+        <Card className="p-8">
           <div className="flex items-center space-x-3 mb-6">
-            <div className="bg-gradient-to-br from-green-500 to-green-600 p-3 rounded-lg">
+            <div className="bg-gradient-to-br from-brand-500 to-accent-500 p-3 rounded-xl">
               <Phone className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-slate-900">Configuración de Twilio</h2>
-              <p className="text-slate-600">Configura la integración con Twilio para realizar y recibir llamadas</p>
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Configuración de Twilio</h2>
+              <p className="text-slate-600 dark:text-slate-400">Configura la integración con Twilio para realizar y recibir llamadas</p>
             </div>
           </div>
 
           <div className="space-y-4 mb-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="bg-sky-50 dark:bg-sky-500/10 border border-sky-200 dark:border-sky-500/30 rounded-lg p-4">
               <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-blue-800">
+                <AlertCircle className="w-5 h-5 text-sky-600 dark:text-sky-400 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-sky-800 dark:text-sky-300">
                   <p className="font-semibold mb-1">Información importante:</p>
-                  <ul className="list-disc list-inside space-y-1 text-blue-700">
+                  <ul className="list-disc list-inside space-y-1 text-sky-700 dark:text-sky-400">
                     <li>Obtén tus credenciales en <a href="https://console.twilio.com" target="_blank" rel="noopener noreferrer" className="underline font-medium">console.twilio.com</a></li>
                     <li>El Account SID comienza con "AC" seguido de 32 caracteres</li>
                     <li>El número de teléfono debe estar en formato E.164 (ej: +15551234567)</li>
@@ -1576,23 +1721,23 @@ export function SettingsModule() {
               </div>
             </div>
 
-            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+            <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-lg p-4">
               <div className="flex items-start gap-3">
-                <Globe className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-orange-800">
+                <Globe className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-amber-800 dark:text-amber-300">
                   <p className="font-semibold mb-1">Permisos Internacionales:</p>
-                  <p className="text-orange-700 mb-2">
+                  <p className="text-amber-700 dark:text-amber-400 mb-2">
                     Para realizar llamadas internacionales, debes habilitar los permisos geográficos en tu cuenta de Twilio.
                   </p>
                   <a
                     href="https://www.twilio.com/console/voice/calls/geo-permissions"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-orange-800 font-medium underline hover:text-orange-900"
+                    className="inline-flex items-center gap-1 text-amber-800 dark:text-amber-300 font-medium underline hover:text-amber-900 dark:hover:text-amber-200"
                   >
                     Configurar permisos geográficos →
                   </a>
-                  <p className="text-xs text-orange-600 mt-2">
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
                     Necesitarás habilitar los países a los que deseas llamar (ej: Uruguay, México, Argentina)
                   </p>
                 </div>
@@ -1601,11 +1746,11 @@ export function SettingsModule() {
           </div>
 
           <div className="space-y-6">
-            <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-800 mb-4">Credenciales Principales</h3>
+            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4">Credenciales Principales</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Account SID *
                   </label>
                   <input
@@ -1613,13 +1758,13 @@ export function SettingsModule() {
                     value={twilioConfig.account_sid}
                     onChange={(e) => setTwilioConfig({ ...twilioConfig, account_sid: e.target.value })}
                     placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent font-mono text-sm"
+                    className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent font-mono text-sm"
                   />
-                  <p className="text-xs text-slate-500 mt-1">Identificador único de tu cuenta Twilio</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Identificador único de tu cuenta Twilio</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Auth Token *
                   </label>
                   <input
@@ -1627,13 +1772,13 @@ export function SettingsModule() {
                     value={twilioConfig.auth_token}
                     onChange={(e) => setTwilioConfig({ ...twilioConfig, auth_token: e.target.value })}
                     placeholder="••••••••••••••••••••••••••••••••"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent font-mono text-sm"
+                    className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent font-mono text-sm"
                   />
-                  <p className="text-xs text-slate-500 mt-1">Token secreto para autenticación</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Token secreto para autenticación</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Número de Teléfono Twilio *
                   </label>
                   <input
@@ -1641,13 +1786,13 @@ export function SettingsModule() {
                     value={twilioConfig.phone_number}
                     onChange={(e) => setTwilioConfig({ ...twilioConfig, phone_number: e.target.value })}
                     placeholder="+15551234567"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent font-mono"
+                    className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent font-mono"
                   />
-                  <p className="text-xs text-slate-500 mt-1">Número de Twilio para llamadas salientes</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Número de Twilio para llamadas salientes</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Número del Agente *
                   </label>
                   <input
@@ -1655,18 +1800,18 @@ export function SettingsModule() {
                     value={twilioConfig.agent_number}
                     onChange={(e) => setTwilioConfig({ ...twilioConfig, agent_number: e.target.value })}
                     placeholder="+525512345678"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent font-mono"
+                    className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent font-mono"
                   />
-                  <p className="text-xs text-slate-500 mt-1">Tu número donde recibirás las llamadas entrantes</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Tu número donde recibirás las llamadas entrantes</p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-800 mb-4">Configuración Avanzada (Opcional)</h3>
+            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4">Configuración Avanzada (Opcional)</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     TwiML Application SID
                   </label>
                   <input
@@ -1674,14 +1819,14 @@ export function SettingsModule() {
                     value={twilioConfig.twiml_app_sid}
                     onChange={(e) => setTwilioConfig({ ...twilioConfig, twiml_app_sid: e.target.value })}
                     placeholder="APxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent font-mono text-sm"
+                    className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent font-mono text-sm"
                   />
-                  <p className="text-xs text-slate-500 mt-1">Para funciones de voz programables avanzadas</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Para funciones de voz programables avanzadas</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                       API Key SID
                     </label>
                     <input
@@ -1689,13 +1834,13 @@ export function SettingsModule() {
                       value={twilioConfig.api_key_sid}
                       onChange={(e) => setTwilioConfig({ ...twilioConfig, api_key_sid: e.target.value })}
                       placeholder="SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent font-mono text-sm"
+                      className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent font-mono text-sm"
                     />
-                    <p className="text-xs text-slate-500 mt-1">Alternativa más segura al Auth Token</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Alternativa más segura al Auth Token</p>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                       API Key Secret
                     </label>
                     <input
@@ -1703,14 +1848,14 @@ export function SettingsModule() {
                       value={twilioConfig.api_key_secret}
                       onChange={(e) => setTwilioConfig({ ...twilioConfig, api_key_secret: e.target.value })}
                       placeholder="••••••••••••••••••••••••••••••••"
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent font-mono text-sm"
+                      className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent font-mono text-sm"
                     />
-                    <p className="text-xs text-slate-500 mt-1">Secreto de la API Key</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Secreto de la API Key</p>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Voice URL
                   </label>
                   <input
@@ -1718,13 +1863,13 @@ export function SettingsModule() {
                     value={twilioConfig.voice_url}
                     onChange={(e) => setTwilioConfig({ ...twilioConfig, voice_url: e.target.value })}
                     placeholder="https://tu-dominio.com/voice"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   />
-                  <p className="text-xs text-slate-500 mt-1">URL webhook para manejar llamadas entrantes</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">URL webhook para manejar llamadas entrantes</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Status Callback URL
                   </label>
                   <input
@@ -1732,26 +1877,26 @@ export function SettingsModule() {
                     value={twilioConfig.status_callback_url}
                     onChange={(e) => setTwilioConfig({ ...twilioConfig, status_callback_url: e.target.value })}
                     placeholder="https://tu-dominio.com/status"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   />
-                  <p className="text-xs text-slate-500 mt-1">URL para recibir actualizaciones de estado de llamadas</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">URL para recibir actualizaciones de estado de llamadas</p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-800 mb-4">Opciones</h3>
+            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4">Opciones</h3>
               <div className="space-y-3">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={twilioConfig.is_active}
                     onChange={(e) => setTwilioConfig({ ...twilioConfig, is_active: e.target.checked })}
-                    className="w-5 h-5 text-green-600 border-slate-300 rounded focus:ring-2 focus:ring-green-500"
+                    className="w-5 h-5 text-brand-600 border-slate-300 dark:border-slate-600 rounded focus:ring-2 focus:ring-brand-500"
                   />
                   <div>
-                    <span className="text-sm font-medium text-slate-700">Configuración Activa</span>
-                    <p className="text-xs text-slate-500">Habilita esta configuración para usar Twilio</p>
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Configuración Activa</span>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Habilita esta configuración para usar Twilio</p>
                   </div>
                 </label>
 
@@ -1760,11 +1905,11 @@ export function SettingsModule() {
                     type="checkbox"
                     checked={twilioConfig.is_test_mode}
                     onChange={(e) => setTwilioConfig({ ...twilioConfig, is_test_mode: e.target.checked })}
-                    className="w-5 h-5 text-orange-600 border-slate-300 rounded focus:ring-2 focus:ring-orange-500"
+                    className="w-5 h-5 text-amber-600 border-slate-300 dark:border-slate-600 rounded focus:ring-2 focus:ring-amber-500"
                   />
                   <div>
-                    <span className="text-sm font-medium text-slate-700">Modo de Prueba</span>
-                    <p className="text-xs text-slate-500">Usa credenciales de prueba (no se realizarán llamadas reales)</p>
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Modo de Prueba</span>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Usa credenciales de prueba (no se realizarán llamadas reales)</p>
                   </div>
                 </label>
               </div>
@@ -1789,7 +1934,256 @@ export function SettingsModule() {
               </button>
             </div>
           </div>
-        </div>
+        </Card>
+      )}
+
+      {activeTab === 'freepbx' && (
+        <Card className="p-8">
+          {!isAdmin ? (
+            <div className="flex items-center gap-3 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 p-6">
+              <Shield className="h-6 w-6 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+              <p className="text-sm text-amber-800 dark:text-amber-300">
+                Solo un administrador puede configurar la conexión con FreePBX.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="bg-gradient-to-br from-brand-500 to-accent-500 p-3 rounded-xl">
+                  <Radio className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Configuración de FreePBX</h2>
+                  <p className="text-slate-600 dark:text-slate-400">Conexión SIP/WebRTC alternativa a Twilio para hacer y recibir llamadas</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Dominio SIP *</label>
+                  <input
+                    type="text"
+                    value={freepbxConfig.sip_domain}
+                    onChange={(e) => setFreepbxConfig({ ...freepbxConfig, sip_domain: e.target.value })}
+                    placeholder="pbx.sendcraft.net"
+                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Servidor WebSocket *</label>
+                  <input
+                    type="text"
+                    value={freepbxConfig.websocket_url}
+                    onChange={(e) => setFreepbxConfig({ ...freepbxConfig, websocket_url: e.target.value })}
+                    placeholder="wss://pbx.sendcraft.net:8089/ws"
+                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Código de país por defecto</label>
+                  <input
+                    type="text"
+                    value={freepbxConfig.default_country_code}
+                    onChange={(e) => setFreepbxConfig({ ...freepbxConfig, default_country_code: e.target.value })}
+                    placeholder="598"
+                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                  />
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Se antepone a los números marcados que no empiecen con +</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Caller ID saliente</label>
+                  <input
+                    type="text"
+                    value={freepbxConfig.outbound_caller_id}
+                    onChange={(e) => setFreepbxConfig({ ...freepbxConfig, outbound_caller_id: e.target.value })}
+                    placeholder="+13214858662"
+                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Servidor STUN</label>
+                  <input
+                    type="text"
+                    value={freepbxConfig.stun_server}
+                    onChange={(e) => setFreepbxConfig({ ...freepbxConfig, stun_server: e.target.value })}
+                    placeholder="stun:stun.l.google.com:19302"
+                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              <label className="mt-6 flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={freepbxConfig.is_default_provider}
+                  onChange={(e) => setFreepbxConfig({ ...freepbxConfig, is_default_provider: e.target.checked })}
+                  className="w-5 h-5 text-brand-600 border-slate-300 dark:border-slate-600 rounded focus:ring-2 focus:ring-brand-500"
+                />
+                <div>
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Usar como proveedor de llamadas por defecto</span>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Si está activo, el marcador se conecta a FreePBX en vez de Twilio para hacer y recibir llamadas.
+                  </p>
+                </div>
+              </label>
+
+              <div className="mt-6 flex justify-end">
+                <Button onClick={handleSaveFreepbx} disabled={saveStatus === 'saving'} icon={<Save className="w-5 h-5" />}>
+                  Guardar Configuración
+                </Button>
+              </div>
+            </>
+          )}
+        </Card>
+      )}
+
+      {activeTab === 'extensions' && (
+        <Card className="p-8">
+          {!isAdmin ? (
+            <div className="flex items-center gap-3 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 p-6">
+              <Shield className="h-6 w-6 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+              <p className="text-sm text-amber-800 dark:text-amber-300">
+                Solo un administrador puede asignar extensiones SIP.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="bg-gradient-to-br from-brand-500 to-accent-500 p-3 rounded-xl">
+                  <Users className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Extensiones SIP por usuario</h2>
+                  <p className="text-slate-600 dark:text-slate-400">Asigná una extensión de FreePBX a cada usuario para que pueda llamar desde el CRM</p>
+                </div>
+              </div>
+
+              {freepbxConfig.sip_domain && (
+                <div className="mb-6 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-4 text-sm text-slate-600 dark:text-slate-300">
+                  <span className="font-semibold">Dominio SIP:</span> {freepbxConfig.sip_domain}
+                  <span className="mx-2">·</span>
+                  <span className="font-semibold">WebSocket:</span> {freepbxConfig.websocket_url}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-xl border border-slate-200 dark:border-slate-700 p-6 bg-slate-50 dark:bg-slate-900/40">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Usuario *</label>
+                  <select
+                    value={extensionForm.user_id}
+                    onChange={(e) => setExtensionForm({ ...extensionForm, user_id: e.target.value })}
+                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                  >
+                    <option value="">Seleccionar usuario...</option>
+                    {systemUsersList.map((sysUser) => (
+                      <option key={sysUser.id} value={sysUser.id}>{sysUser.full_name} ({sysUser.email})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Extensión SIP *</label>
+                  <input
+                    type="text"
+                    value={extensionForm.sip_extension}
+                    onChange={(e) => setExtensionForm({ ...extensionForm, sip_extension: e.target.value })}
+                    placeholder="200"
+                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Usuario de autenticación</label>
+                  <input
+                    type="text"
+                    value={extensionForm.sip_auth_user}
+                    onChange={(e) => setExtensionForm({ ...extensionForm, sip_auth_user: e.target.value })}
+                    placeholder="Igual a la extensión si se deja vacío"
+                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Contraseña SIP *</label>
+                  <input
+                    type="password"
+                    value={extensionForm.sip_password}
+                    onChange={(e) => setExtensionForm({ ...extensionForm, sip_password: e.target.value })}
+                    placeholder="Secreto configurado en FreePBX"
+                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Nombre visible</label>
+                  <input
+                    type="text"
+                    value={extensionForm.display_name}
+                    onChange={(e) => setExtensionForm({ ...extensionForm, display_name: e.target.value })}
+                    placeholder="Nombre del agente"
+                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 flex justify-end gap-3">
+                {editingExtensionId && (
+                  <Button variant="secondary" onClick={resetExtensionForm}>
+                    Cancelar
+                  </Button>
+                )}
+                <Button onClick={handleSaveExtension} disabled={saveStatus === 'saving'} icon={editingExtensionId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}>
+                  {editingExtensionId ? 'Guardar cambios' : 'Agregar extensión'}
+                </Button>
+              </div>
+
+              <div className="mt-8 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                      <th className="pb-3 font-medium">Usuario</th>
+                      <th className="pb-3 font-medium">Extensión</th>
+                      <th className="pb-3 font-medium">Usuario auth</th>
+                      <th className="pb-3 font-medium">Nombre visible</th>
+                      <th className="pb-3 font-medium text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sipExtensions.map((extension) => {
+                      const owner = systemUsersList.find((u) => u.id === extension.user_id);
+                      return (
+                        <tr key={extension.id} className="border-b border-slate-100 dark:border-slate-800 last:border-b-0">
+                          <td className="py-3 text-slate-900 dark:text-white font-medium">{owner?.full_name || 'Usuario desconocido'}</td>
+                          <td className="py-3 text-slate-700 dark:text-slate-300">{extension.sip_extension}</td>
+                          <td className="py-3 text-slate-600 dark:text-slate-400">{extension.sip_auth_user}</td>
+                          <td className="py-3 text-slate-600 dark:text-slate-400">{extension.display_name || '—'}</td>
+                          <td className="py-3 text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button variant="secondary" size="sm" onClick={() => handleEditExtension(extension)}>
+                                Editar
+                              </Button>
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                onClick={() => handleDeleteExtension(extension.id)}
+                                icon={<Trash2 className="w-3.5 h-3.5" />}
+                              >
+                                Eliminar
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {sipExtensions.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-slate-500 dark:text-slate-400">
+                          Todavía no hay extensiones asignadas
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </Card>
       )}
 
       {activeTab === 'branches' && (

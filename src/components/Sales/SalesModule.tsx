@@ -5,7 +5,10 @@ import {
   BarChart3,
   Briefcase,
   Building2,
+  Calendar,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   CircleDollarSign,
   Clock,
   Download,
@@ -21,6 +24,7 @@ import {
   Sparkles,
   Tag,
   Trash2,
+  User,
   X,
   XCircle,
 } from 'lucide-react';
@@ -28,6 +32,7 @@ import { supabase } from '../../lib/supabase';
 import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
 import { getEnvVar, waitForConfig } from '../../lib/envLoader';
 import {
+  buildOrderCommunicationRequest,
   buildQuoteCommunicationMetadata,
   buildQuoteCommunicationRequest,
   getQuoteCommunicationPdfFilename,
@@ -40,6 +45,11 @@ import { resolveDefaultSalesOpportunityStageId } from '../../lib/salesOpportunit
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { usePermissions } from '../../hooks/usePermissions';
+import { PageHeader } from '../ui/PageHeader';
+import { StatCard } from '../ui/StatCard';
+import { Card } from '../ui/Card';
+import { Badge, type BadgeVariant } from '../ui/Badge';
+import { Button } from '../ui/Button';
 
 type SalesTab = 'quotes' | 'products';
 type ProductType = 'product' | 'service';
@@ -181,6 +191,14 @@ interface SalesQuote {
   items?: QuoteItem[] | null;
 }
 
+interface SystemUser {
+  id: string;
+  full_name: string;
+  email: string;
+  role: string | null;
+  is_active: boolean | null;
+}
+
 interface ProductFormState {
   sku: string;
   name: string;
@@ -233,6 +251,15 @@ const quoteStatusClasses: Record<QuoteStatus, string> = {
   rejected: 'bg-rose-100 text-rose-700 border-rose-200',
   expired: 'bg-amber-100 text-amber-700 border-amber-200',
   converted: 'bg-violet-100 text-violet-700 border-violet-200',
+};
+
+const quoteStatusBadgeVariant: Record<QuoteStatus, BadgeVariant> = {
+  draft: 'neutral',
+  sent: 'info',
+  accepted: 'success',
+  rejected: 'danger',
+  expired: 'warning',
+  converted: 'brand',
 };
 
 const productTypeLabels: Record<ProductType, string> = {
@@ -696,7 +723,16 @@ export function SalesModule() {
   const [quotes, setQuotes] = useState<SalesQuote[]>([]);
   const [clients, setClients] = useState<SalesClient[]>([]);
   const [opportunities, setOpportunities] = useState<SalesOpportunity[]>([]);
+  const [users, setUsers] = useState<SystemUser[]>([]);
   const [timeline, setTimeline] = useState<QuoteTimelineItem[]>([]);
+  const [assignedFilter, setAssignedFilter] = useState('');
+  const [currentMonthOnly, setCurrentMonthOnly] = useState(true);
+  const [customDateFrom, setCustomDateFrom] = useState('');
+  const [customDateTo, setCustomDateTo] = useState('');
+  const [quotesPage, setQuotesPage] = useState(1);
+  const [productsPage, setProductsPage] = useState(1);
+  const quotesPerPage = 6;
+  const productsPerPage = 9;
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
   const [showProductModal, setShowProductModal] = useState(false);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
@@ -710,6 +746,15 @@ export function SalesModule() {
   const { user } = useAuth();
   const { canCreate, canUpdate } = usePermissions();
   const toast = useToast();
+
+  const canViewAllUsers = user?.role === 'admin' || user?.role === 'manager';
+
+  const usersById = useMemo(() => {
+    return users.reduce<Record<string, SystemUser>>((acc, item) => {
+      acc[item.id] = item;
+      return acc;
+    }, {});
+  }, [users]);
 
   const loadTimeline = async (quoteId: string | null) => {
     if (!quoteId) {
@@ -737,6 +782,7 @@ export function SalesModule() {
         quotesResult,
         clientsResult,
         opportunitiesResult,
+        usersResult,
       ] = await Promise.all([
         supabase
           .from('sales_products')
@@ -831,6 +877,11 @@ export function SalesModule() {
           .from('sales_opportunities')
           .select('id, opportunity_number, title, client_id, stage, status, expected_amount, currency')
           .order('created_at', { ascending: false }),
+        supabase
+          .from('system_users')
+          .select('id, full_name, email, role, is_active')
+          .eq('is_active', true)
+          .order('full_name', { ascending: true }),
       ]);
 
       if (!productsResult.error && productsResult.data) {
@@ -852,6 +903,10 @@ export function SalesModule() {
 
       if (!opportunitiesResult.error && opportunitiesResult.data) {
         setOpportunities(opportunitiesResult.data as SalesOpportunity[]);
+      }
+
+      if (!usersResult.error && usersResult.data) {
+        setUsers(usersResult.data as SystemUser[]);
       }
 
       if (currentSelectedQuoteId && quotesResult.data) {
@@ -1006,6 +1061,13 @@ export function SalesModule() {
       selectedQuote.status !== 'accepted'
   );
 
+  const selectedOrderCanSend = Boolean(
+    selectedQuote &&
+      selectedQuote.status === 'converted' &&
+      selectedQuote.order_id &&
+      selectedQuoteRecipientEmail
+  );
+
   const filteredProducts = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     if (!term || activeTab !== 'products') return products;
@@ -1026,23 +1088,71 @@ export function SalesModule() {
 
   const filteredQuotes = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    if (!term || activeTab !== 'quotes') return quotes;
+    const now = new Date();
+    const fromDate = customDateFrom ? new Date(customDateFrom) : null;
+    const toDate = customDateTo ? new Date(customDateTo) : null;
+    if (toDate) toDate.setHours(23, 59, 59, 999);
 
-    return quotes.filter((quote) =>
-      [
-        quote.quote_number,
-        quote.client?.company_name,
-        quote.client?.contact_name,
-        quote.opportunity?.opportunity_number,
-        quote.opportunity?.title,
-        quote.status,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(term)
-    );
-  }, [activeTab, quotes, searchTerm]);
+    return quotes.filter((quote) => {
+      if (term) {
+        const haystack = [
+          quote.quote_number,
+          quote.client?.company_name,
+          quote.client?.contact_name,
+          quote.opportunity?.opportunity_number,
+          quote.opportunity?.title,
+          quote.status,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(term)) return false;
+      }
+
+      if (!canViewAllUsers) {
+        if (quote.created_by !== user?.id) return false;
+      } else if (assignedFilter && quote.created_by !== assignedFilter) {
+        return false;
+      }
+
+      const quoteDate = new Date(quote.quote_date);
+      const hasQuoteDate = !Number.isNaN(quoteDate.getTime());
+
+      if (fromDate || toDate) {
+        if (!hasQuoteDate) return false;
+        if (fromDate && quoteDate < fromDate) return false;
+        if (toDate && quoteDate > toDate) return false;
+      } else if (currentMonthOnly) {
+        if (
+          !hasQuoteDate ||
+          quoteDate.getFullYear() !== now.getFullYear() ||
+          quoteDate.getMonth() !== now.getMonth()
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [quotes, searchTerm, canViewAllUsers, assignedFilter, currentMonthOnly, customDateFrom, customDateTo, user?.id]);
+
+  useEffect(() => {
+    setQuotesPage(1);
+  }, [searchTerm, assignedFilter, currentMonthOnly, customDateFrom, customDateTo, activeTab]);
+
+  useEffect(() => {
+    setProductsPage(1);
+  }, [searchTerm, activeTab]);
+
+  const paginatedQuotes = useMemo(
+    () => filteredQuotes.slice((quotesPage - 1) * quotesPerPage, quotesPage * quotesPerPage),
+    [filteredQuotes, quotesPage]
+  );
+
+  const paginatedProducts = useMemo(
+    () => filteredProducts.slice((productsPage - 1) * productsPerPage, productsPage * productsPerPage),
+    [filteredProducts, productsPage]
+  );
 
   const quoteTotalsPreview = useMemo(
     () =>
@@ -1789,6 +1899,148 @@ export function SalesModule() {
     setSelectedQuoteId(quote.id);
   };
 
+  const sendOrderToClient = async (quote: SalesQuote) => {
+    if (!canUpdate('ventas')) {
+      toast.error('No tienes permisos para enviar la orden');
+      return;
+    }
+
+    if (quote.status !== 'converted' || !quote.order_id) {
+      toast.info('Esta cotizacion todavia no se convirtio en una orden');
+      return;
+    }
+
+    const orderNumber = quote.order?.order_number;
+    if (!orderNumber) {
+      toast.error('No se encontro el numero de la orden. Actualiza la pagina e intenta de nuevo');
+      return;
+    }
+
+    await waitForConfig().catch(() => undefined);
+
+    const emailUrl = getEnvVar('VITE_EMAIL_URL').trim();
+    const emailKey = getEnvVar('VITE_EMAIL_KEY').trim();
+
+    if (!emailUrl || !emailKey) {
+      toast.error('Falta configurar VITE_EMAIL_URL o VITE_EMAIL_KEY');
+      return;
+    }
+
+    const recipientEmail = (quote.client?.email || selectedQuoteClient?.email || '').trim();
+    if (!recipientEmail) {
+      toast.error('La orden no tiene un correo de cliente configurado');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Enviar la orden aprobada (cotizacion ${quote.quote_number}) a ${recipientEmail}?`
+    );
+
+    if (!confirmed) return;
+
+    const companySettings = await loadQuoteCompanySettings();
+    const publicToken = (selectedQuote?.id === quote.id ? selectedQuoteCommunicationToken : '') ||
+      getQuoteCommunicationPublicToken(quote) ||
+      crypto.randomUUID();
+    const generatedAt = new Date().toISOString();
+    const requestPayload = buildOrderCommunicationRequest(
+      quote,
+      { order_number: orderNumber, order_date: quote.converted_at },
+      quote.client || selectedQuoteClient,
+      companySettings,
+      getEnvVar('VITE_APP_URL') || window.location.origin,
+      publicToken,
+      generatedAt,
+      quote.accepted_at || quote.converted_at
+    );
+
+    toast.info('Enviando orden aprobada al cliente...');
+
+    let serviceResult: QuoteCommunicationResponse = { success: false };
+
+    try {
+      const response = await fetch(emailUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': emailKey,
+        },
+        body: JSON.stringify(requestPayload),
+      });
+
+      const responseText = await response.text();
+      try {
+        serviceResult = responseText ? JSON.parse(responseText) as QuoteCommunicationResponse : { success: response.ok };
+      } catch {
+        serviceResult = {
+          success: response.ok,
+          message: responseText || 'Respuesta no JSON del servicio de correo',
+        };
+      }
+
+      if (!response.ok || serviceResult.success === false) {
+        console.error('Respuesta del servicio de correo (enviar orden):', response.status, responseText);
+        throw new Error(serviceResult.message || `No se pudo enviar la orden (${response.status})`);
+      }
+    } catch (error) {
+      console.error('Error enviando la orden aprobada:', error);
+      toast.error(error instanceof Error ? error.message : 'No se pudo enviar la orden');
+      return;
+    }
+
+    const metadata = buildQuoteCommunicationMetadata(
+      quote,
+      requestPayload,
+      serviceResult,
+      publicToken,
+      generatedAt
+    );
+
+    const { error: quoteUpdateError } = await supabase
+      .from('sales_quotes')
+      .update({
+        updated_at: generatedAt,
+        metadata,
+      })
+      .eq('id', quote.id);
+
+    if (quoteUpdateError) {
+      toast.error(`El correo se envio, pero no se pudo guardar el enlace del PDF: ${quoteUpdateError.message}`);
+      return;
+    }
+
+    const { error: interactionError } = await insertClientInteractionSafely({
+      client_id: quote.client_id,
+      opportunity_id: quote.opportunity_id,
+      quote_id: quote.id,
+      type: 'email',
+      description: `Orden aprobada (cotizacion ${quote.quote_number}) enviada al cliente`,
+      metadata: {
+        quote_number: quote.quote_number,
+        order_id: quote.order_id,
+        recipient_email: recipientEmail,
+        log_id: serviceResult.log_id || null,
+        pdf_log_id: serviceResult.pdf_log_id || null,
+        pdf_public_url: serviceResult.pdf_public_url || null,
+        resend_email_id: serviceResult.resend_email_id || null,
+        processing_time_ms: serviceResult.processing_time_ms || null,
+        public_token: publicToken,
+        reference: 'order_confirmation',
+      },
+      created_by: user?.id || null,
+      created_at: generatedAt,
+    });
+
+    if (interactionError) {
+      toast.error(`La orden se envio, pero no se pudo registrar el historial: ${interactionError.message}`);
+    }
+
+    toast.success('Orden aprobada enviada al cliente');
+    await loadSalesData();
+    setSelectedQuoteId(quote.id);
+    await loadTimeline(quote.id);
+  };
+
   const updateQuoteStatus = async (quote: SalesQuote, nextStatus: QuoteStatus) => {
     if (!canUpdate('ventas')) {
       toast.error('No tienes permisos para actualizar cotizaciones');
@@ -2111,101 +2363,63 @@ export function SalesModule() {
   const selectedQuoteLastJourneyEvent = selectedQuoteJourney[selectedQuoteJourney.length - 1] || null;
 
   return (
-    <div className="min-h-full bg-slate-100">
-      <div className="relative overflow-hidden border-b border-slate-800 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white">
-        <div className="absolute inset-0 opacity-20">
-          <div className="absolute -top-24 right-10 h-64 w-64 rounded-full bg-amber-500 blur-3xl" />
-          <div className="absolute bottom-0 left-0 h-72 w-72 rounded-full bg-cyan-500 blur-3xl" />
-        </div>
-
-        <div className="relative px-6 py-8 lg:px-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-100">
-                <ShoppingCart className="h-3.5 w-3.5" />
-                Fase 2 - Ventas
-              </div>
-              <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
-                Cotizaciones y catalogo de productos
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm text-slate-300 sm:text-base">
-                Reutilizamos oportunidades, clientes y ordenes existentes para convertir solicitudes comerciales en cotizaciones, productos y ventas reales.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={handleRefresh}
-                className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/15"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Refrescar
-              </button>
-              <button
-                onClick={() => (activeTab === 'products' ? openProductModal() : openQuoteModal())}
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 px-4 py-3 text-sm font-semibold text-slate-950 shadow-lg transition hover:from-amber-300 hover:to-orange-400"
-              >
-                <Plus className="h-4 w-4" />
-                {activeTab === 'products' ? 'Nuevo producto' : 'Nueva cotizacion'}
-              </button>
-            </div>
+    <div className="p-4 sm:p-6 lg:p-8 min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+      <PageHeader
+        title="Cotizaciones y catalogo de productos"
+        subtitle="Reutilizamos oportunidades, clientes y ordenes existentes para convertir solicitudes comerciales en cotizaciones, productos y ventas reales."
+        action={
+          <div className="flex flex-wrap gap-3">
+            <Button variant="secondary" size="md" icon={<RefreshCw className="h-4 w-4" />} onClick={handleRefresh}>
+              Refrescar
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
+              icon={<Plus className="h-4 w-4" />}
+              onClick={() => (activeTab === 'products' ? openProductModal() : openQuoteModal())}
+            >
+              {activeTab === 'products' ? 'Nuevo producto' : 'Nueva cotizacion'}
+            </Button>
           </div>
+        }
+      />
 
-          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-2xl border border-white/10 bg-white/10 p-5 backdrop-blur">
-              <div className="flex items-center gap-3 text-slate-300">
-                <Package className="h-5 w-5" />
-                <span className="text-sm font-medium">Productos activos</span>
-              </div>
-              <div className="mt-3 text-3xl font-bold">{activeProductsCount}</div>
-              <p className="mt-1 text-xs text-slate-300">
-                {products.length} productos en el catalogo
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-white/10 p-5 backdrop-blur">
-              <div className="flex items-center gap-3 text-slate-300">
-                <FileText className="h-5 w-5" />
-                <span className="text-sm font-medium">Cotizaciones abiertas</span>
-              </div>
-              <div className="mt-3 text-3xl font-bold">{draftQuotesCount + sentQuotesCount + acceptedQuotesCount}</div>
-              <p className="mt-1 text-xs text-slate-300">
-                {draftQuotesCount} borradores y {sentQuotesCount} enviadas
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-white/10 p-5 backdrop-blur">
-              <div className="flex items-center gap-3 text-slate-300">
-                <CircleDollarSign className="h-5 w-5" />
-                <span className="text-sm font-medium">Valor abierto</span>
-              </div>
-              <div className="mt-3 text-3xl font-bold">{formatCurrency(openQuoteValue, 'USD')}</div>
-              <p className="mt-1 text-xs text-slate-300">Cotizaciones pendientes de cierre</p>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-white/10 p-5 backdrop-blur">
-              <div className="flex items-center gap-3 text-slate-300">
-                <BarChart3 className="h-5 w-5" />
-                <span className="text-sm font-medium">Conversion</span>
-              </div>
-              <div className="mt-3 text-3xl font-bold">{conversionRate}%</div>
-              <p className="mt-1 text-xs text-slate-300">
-                {convertedQuotesCount} cotizaciones convertidas
-              </p>
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+        <StatCard
+          color="warning"
+          icon={<Package />}
+          label="Productos activos"
+          value={activeProductsCount}
+        />
+        <StatCard
+          color="info"
+          icon={<FileText />}
+          label="Cotizaciones abiertas"
+          value={draftQuotesCount + sentQuotesCount + acceptedQuotesCount}
+        />
+        <StatCard
+          color="success"
+          icon={<CircleDollarSign />}
+          label="Valor abierto"
+          value={formatCurrency(openQuoteValue, 'USD')}
+        />
+        <StatCard
+          color="brand"
+          icon={<BarChart3 />}
+          label="Conversion"
+          value={`${conversionRate}%`}
+        />
       </div>
 
-      <div className="px-6 py-6 lg:px-8">
+      <div>
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div className="inline-flex rounded-2xl bg-white p-1 shadow-sm ring-1 ring-slate-200">
+          <div className="inline-flex rounded-2xl bg-white dark:bg-slate-800 p-1 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700">
             <button
               onClick={() => setActiveTab('quotes')}
               className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
                 activeTab === 'quotes'
-                  ? 'bg-slate-900 text-white shadow'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-slate-900 dark:bg-brand-600 text-white shadow'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               Cotizaciones
@@ -2214,8 +2428,8 @@ export function SalesModule() {
               onClick={() => setActiveTab('products')}
               className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
                 activeTab === 'products'
-                  ? 'bg-slate-900 text-white shadow'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-slate-900 dark:bg-brand-600 text-white shadow'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               Productos
@@ -2224,41 +2438,124 @@ export function SalesModule() {
 
           <div className="flex flex-1 items-center gap-3 xl:max-w-2xl">
             <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder={`Buscar ${activeTab === 'quotes' ? 'cotizaciones' : 'productos'}...`}
-                className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400"
+                className="w-full rounded-2xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 py-3 pl-11 pr-4 text-sm text-slate-900 dark:text-white shadow-sm outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-brand-500"
               />
             </div>
 
-            <button
+            <Button
+              variant="primary"
+              size="md"
+              className="shrink-0 !rounded-2xl"
+              icon={<Plus className="h-4 w-4" />}
               onClick={() => (activeTab === 'products' ? openProductModal() : openQuoteModal())}
-              className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
             >
-              <Plus className="h-4 w-4" />
               {activeTab === 'products' ? 'Producto' : 'Cotizacion'}
-            </button>
+            </Button>
           </div>
         </div>
 
-        {loading ? (
-          <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-10 text-center text-slate-500 shadow-sm">
-            Cargando ventas...
+        {activeTab === 'quotes' && (
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            {canViewAllUsers ? (
+              <div className="relative">
+                <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <select
+                  value={assignedFilter}
+                  onChange={(event) => setAssignedFilter(event.target.value)}
+                  className="w-full sm:w-56 appearance-none rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 py-2.5 pl-10 pr-4 text-sm text-slate-800 dark:text-white outline-none transition focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                >
+                  <option value="">Todos los usuarios</option>
+                  {users.map((systemUser) => (
+                    <option key={systemUser.id} value={systemUser.id}>
+                      {systemUser.full_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <Badge variant="brand" icon={<User className="h-3 w-3" />}>
+                Mostrando tus cotizaciones
+              </Badge>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setCurrentMonthOnly((prev) => !prev);
+                setCustomDateFrom('');
+                setCustomDateTo('');
+              }}
+              className={[
+                'inline-flex items-center gap-2 whitespace-nowrap rounded-xl border px-3.5 py-2.5 text-sm font-medium transition',
+                currentMonthOnly && !customDateFrom && !customDateTo
+                  ? 'border-brand-500 bg-brand-50 text-brand-700 dark:border-brand-500/50 dark:bg-brand-500/10 dark:text-brand-400'
+                  : 'border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700',
+              ].join(' ')}
+            >
+              <Calendar className="h-4 w-4" />
+              Solo este mes
+            </button>
+
+            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+              <span>Desde</span>
+              <input
+                type="date"
+                value={customDateFrom}
+                onChange={(event) => setCustomDateFrom(event.target.value)}
+                className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-white outline-none transition focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+              />
+              <span>Hasta</span>
+              <input
+                type="date"
+                value={customDateTo}
+                onChange={(event) => setCustomDateTo(event.target.value)}
+                className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-white outline-none transition focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+              />
+            </div>
+
+            {(assignedFilter || customDateFrom || customDateTo || !currentMonthOnly) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<X className="h-4 w-4" />}
+                onClick={() => {
+                  setAssignedFilter('');
+                  setCurrentMonthOnly(true);
+                  setCustomDateFrom('');
+                  setCustomDateTo('');
+                }}
+              >
+                Limpiar
+              </Button>
+            )}
+
+            <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
+              {filteredQuotes.length} resultado{filteredQuotes.length === 1 ? '' : 's'}
+            </span>
           </div>
+        )}
+
+        {loading ? (
+          <Card className="mt-6 p-10 text-center text-slate-500 dark:text-slate-400">
+            Cargando ventas...
+          </Card>
         ) : activeTab === 'products' ? (
           <div className="mt-6 grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
-            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <Card className="p-6">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-xl font-bold text-slate-900">Catalogo de productos</h2>
-                  <p className="text-sm text-slate-500">
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-white">Catalogo de productos</h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
                     Productos y servicios que puedes reutilizar en cada cotizacion.
                   </p>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-slate-500">
+                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                   <Tag className="h-4 w-4" />
                   {filteredProducts.length} resultados
                 </div>
@@ -2266,49 +2563,48 @@ export function SalesModule() {
 
               {filteredProducts.length ? (
                 <div className="mt-6 grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-                  {filteredProducts.map((product) => (
-                    <div
+                  {paginatedProducts.map((product) => (
+                    <Card
                       key={product.id}
-                      className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-slate-300 hover:bg-white"
+                      hover
+                      className="p-4 bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <div className="text-sm font-semibold text-slate-900">{product.name}</div>
-                          <div className="mt-1 text-xs text-slate-500">
+                          <div className="text-sm font-semibold text-slate-900 dark:text-white">{product.name}</div>
+                          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                             {product.sku || 'Sin SKU'} · {productTypeLabels[product.product_type]}
                           </div>
                         </div>
-                        <span
-                          className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                            product.is_active
-                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                              : 'border-slate-200 bg-slate-100 text-slate-500'
-                          }`}
-                        >
+                        <Badge variant={product.is_active ? 'success' : 'neutral'}>
                           {product.is_active ? 'Activo' : 'Inactivo'}
-                        </span>
+                        </Badge>
                       </div>
 
-                      <p className="mt-3 line-clamp-3 text-sm text-slate-600">
+                      <p className="mt-3 line-clamp-3 text-sm text-slate-600 dark:text-slate-300">
                         {product.description || 'Sin descripcion'}
                       </p>
 
                       <div className="mt-4 flex items-center justify-between gap-3">
                         <div>
-                          <div className="text-xs text-slate-500">Precio</div>
-                          <div className="text-lg font-bold text-slate-900">
+                          <div className="text-xs text-slate-500 dark:text-slate-400">Precio</div>
+                          <div className="text-lg font-bold text-slate-900 dark:text-white">
                             {formatCurrency(parseDecimal(product.unit_price), product.currency)}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <button
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            icon={<Edit2 className="h-3.5 w-3.5" />}
                             onClick={() => openProductModal(product)}
-                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:border-slate-300 hover:text-slate-900"
                           >
-                            <Edit2 className="h-3.5 w-3.5" />
                             Editar
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            icon={product.is_active ? <XCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                             onClick={async () => {
                               const now = new Date().toISOString();
                               const { error } = await supabase
@@ -2329,89 +2625,104 @@ export function SalesModule() {
                               );
                               await loadSalesData();
                             }}
-                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:border-slate-300 hover:text-slate-900"
                           >
-                            {product.is_active ? (
-                              <>
-                                <XCircle className="h-3.5 w-3.5" />
-                                Desactivar
-                              </>
-                            ) : (
-                              <>
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                Activar
-                              </>
-                            )}
-                          </button>
+                            {product.is_active ? 'Desactivar' : 'Activar'}
+                          </Button>
                         </div>
                       </div>
-                    </div>
+                    </Card>
                   ))}
                 </div>
-              ) : (
-                <div className="mt-8 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
-                  <Package className="mx-auto h-10 w-10 text-slate-400" />
-                  <h3 className="mt-4 text-lg font-semibold text-slate-900">No hay productos todavia</h3>
-                  <p className="mt-2 text-sm text-slate-500">
-                    Crea tu primer producto o servicio para acelerar la generacion de cotizaciones.
-                  </p>
+              ) : null}
+
+              {filteredProducts.length > productsPerPage && (
+                <div className="mt-6 flex items-center justify-center gap-3">
                   <button
-                    onClick={() => openProductModal()}
-                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+                    onClick={() => setProductsPage((page) => Math.max(1, page - 1))}
+                    disabled={productsPage === 1}
+                    className="flex items-center gap-1 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
                   >
-                    <Plus className="h-4 w-4" />
-                    Nuevo producto
+                    <ChevronLeft className="h-4 w-4" />
+                    Anterior
+                  </button>
+                  <span className="text-sm text-slate-500 dark:text-slate-400">
+                    Pagina {productsPage} de {Math.ceil(filteredProducts.length / productsPerPage)}
+                  </span>
+                  <button
+                    onClick={() =>
+                      setProductsPage((page) =>
+                        Math.min(Math.ceil(filteredProducts.length / productsPerPage), page + 1)
+                      )
+                    }
+                    disabled={productsPage >= Math.ceil(filteredProducts.length / productsPerPage)}
+                    className="flex items-center gap-1 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                  >
+                    Siguiente
+                    <ChevronRight className="h-4 w-4" />
                   </button>
                 </div>
               )}
-            </section>
 
-            <aside className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              {!filteredProducts.length && (
+                <div className="mt-8 rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/40 px-6 py-10 text-center">
+                  <Package className="mx-auto h-10 w-10 text-slate-400 dark:text-slate-500" />
+                  <h3 className="mt-4 text-lg font-semibold text-slate-900 dark:text-white">No hay productos todavia</h3>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                    Crea tu primer producto o servicio para acelerar la generacion de cotizaciones.
+                  </p>
+                  <Button variant="primary" size="md" className="mt-5" icon={<Plus className="h-4 w-4" />} onClick={() => openProductModal()}>
+                    Nuevo producto
+                  </Button>
+                </div>
+              )}
+            </Card>
+
+            <Card className="p-6">
               <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-amber-100 p-3 text-amber-700">
+                <div className="rounded-2xl bg-amber-100 dark:bg-amber-500/10 p-3 text-amber-700 dark:text-amber-400">
                   <Sparkles className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">Consejo comercial</h3>
-                  <p className="text-sm text-slate-500">Usa productos para estandarizar y cotizar mas rapido.</p>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Consejo comercial</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Usa productos para estandarizar y cotizar mas rapido.</p>
                 </div>
               </div>
 
               <div className="mt-6 space-y-4">
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <div className="rounded-2xl bg-slate-50 dark:bg-slate-900/40 p-4">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     Lineas del catalogo
                   </div>
-                  <div className="mt-2 text-3xl font-bold text-slate-900">{products.length}</div>
+                  <div className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">{products.length}</div>
                 </div>
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <div className="rounded-2xl bg-slate-50 dark:bg-slate-900/40 p-4">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     Productos activos
                   </div>
-                  <div className="mt-2 text-3xl font-bold text-slate-900">{activeProductsCount}</div>
+                  <div className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">{activeProductsCount}</div>
                 </div>
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <div className="rounded-2xl bg-slate-50 dark:bg-slate-900/40 p-4">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     Servicios
                   </div>
-                  <div className="mt-2 text-3xl font-bold text-slate-900">
+                  <div className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">
                     {products.filter((product) => product.product_type === 'service').length}
                   </div>
                 </div>
               </div>
-            </aside>
+            </Card>
           </div>
         ) : (
           <div className="mt-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <Card className="p-6">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-xl font-bold text-slate-900">Cotizaciones</h2>
-                  <p className="text-sm text-slate-500">
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-white">Cotizaciones</h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
                     Crea, envía y convierte propuestas comerciales en ordenes.
                   </p>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-slate-500">
+                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                   <FileText className="h-4 w-4" />
                   {filteredQuotes.length} resultados
                 </div>
@@ -2419,16 +2730,15 @@ export function SalesModule() {
 
               {filteredQuotes.length ? (
                 <div className="mt-6 space-y-4">
-                  {filteredQuotes.map((quote) => {
-                    const meta = getQuoteStatusMeta(quote.status);
+                  {paginatedQuotes.map((quote) => {
                     return (
                       <button
                         key={quote.id}
                         onClick={() => setSelectedQuoteId(quote.id)}
                         className={`w-full rounded-2xl border p-4 text-left transition ${
                           selectedQuoteId === quote.id
-                            ? 'border-slate-900 bg-slate-900 text-white shadow-lg'
-                            : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white'
+                            ? 'border-slate-900 dark:border-brand-500 bg-slate-900 dark:bg-brand-600 text-white shadow-lg'
+                            : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-white dark:hover:bg-slate-800'
                         }`}
                       >
                         <div className="flex items-start justify-between gap-4">
@@ -2436,23 +2746,25 @@ export function SalesModule() {
                             <div className="text-sm font-semibold">
                               {quote.quote_number}
                             </div>
-                            <div
-                              className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                                selectedQuoteId === quote.id
-                                  ? 'border-white/20 bg-white/10 text-white'
-                                  : meta.className
-                              }`}
+                            <Badge
+                              variant={quoteStatusBadgeVariant[quote.status]}
+                              className={`mt-2 ${selectedQuoteId === quote.id ? '!border-white/20 !bg-white/10 !text-white' : ''}`}
                             >
-                              {meta.label}
-                            </div>
+                              {quoteStatusLabels[quote.status]}
+                            </Badge>
                           </div>
                           <div className="text-right">
-                            <div className="text-xs text-slate-500 dark:text-slate-200">
+                            <div className={`text-xs ${selectedQuoteId === quote.id ? 'text-slate-200' : 'text-slate-500 dark:text-slate-400'}`}>
                               {quote.client?.company_name || 'Sin cliente'}
                             </div>
+                            {canViewAllUsers && quote.created_by && usersById[quote.created_by] && (
+                              <div className={`text-[11px] ${selectedQuoteId === quote.id ? 'text-slate-300' : 'text-slate-400 dark:text-slate-500'}`}>
+                                {usersById[quote.created_by].full_name}
+                              </div>
+                            )}
                             <div
                               className={`mt-1 text-lg font-bold ${
-                                selectedQuoteId === quote.id ? 'text-white' : 'text-slate-900'
+                                selectedQuoteId === quote.id ? 'text-white' : 'text-slate-900 dark:text-white'
                               }`}
                             >
                               {formatCurrency(parseDecimal(quote.total_amount), quote.currency)}
@@ -2462,7 +2774,7 @@ export function SalesModule() {
 
                         <div
                           className={`mt-4 grid gap-3 text-xs ${
-                            selectedQuoteId === quote.id ? 'text-slate-200' : 'text-slate-500'
+                            selectedQuoteId === quote.id ? 'text-slate-200' : 'text-slate-500 dark:text-slate-400'
                           } sm:grid-cols-3`}
                         >
                           <div className="rounded-xl bg-white/10 p-3">
@@ -2484,88 +2796,110 @@ export function SalesModule() {
                     );
                   })}
                 </div>
-              ) : (
-                <div className="mt-8 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
-                  <FileText className="mx-auto h-10 w-10 text-slate-400" />
-                  <h3 className="mt-4 text-lg font-semibold text-slate-900">No hay cotizaciones todavia</h3>
-                  <p className="mt-2 text-sm text-slate-500">
-                    Crea la primera cotizacion para empezar a cerrar ventas.
-                  </p>
+              ) : null}
+
+              {filteredQuotes.length > quotesPerPage && (
+                <div className="mt-6 flex items-center justify-center gap-3">
                   <button
-                    onClick={() => openQuoteModal()}
-                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+                    onClick={() => setQuotesPage((page) => Math.max(1, page - 1))}
+                    disabled={quotesPage === 1}
+                    className="flex items-center gap-1 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
                   >
-                    <Plus className="h-4 w-4" />
-                    Nueva cotizacion
+                    <ChevronLeft className="h-4 w-4" />
+                    Anterior
+                  </button>
+                  <span className="text-sm text-slate-500 dark:text-slate-400">
+                    Pagina {quotesPage} de {Math.ceil(filteredQuotes.length / quotesPerPage)}
+                  </span>
+                  <button
+                    onClick={() =>
+                      setQuotesPage((page) => Math.min(Math.ceil(filteredQuotes.length / quotesPerPage), page + 1))
+                    }
+                    disabled={quotesPage >= Math.ceil(filteredQuotes.length / quotesPerPage)}
+                    className="flex items-center gap-1 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                  >
+                    Siguiente
+                    <ChevronRight className="h-4 w-4" />
                   </button>
                 </div>
               )}
-            </section>
+
+              {!filteredQuotes.length && (
+                <div className="mt-8 rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/40 px-6 py-10 text-center">
+                  <FileText className="mx-auto h-10 w-10 text-slate-400 dark:text-slate-500" />
+                  <h3 className="mt-4 text-lg font-semibold text-slate-900 dark:text-white">No hay cotizaciones todavia</h3>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                    Crea la primera cotizacion para empezar a cerrar ventas.
+                  </p>
+                  <Button variant="primary" size="md" className="mt-5" icon={<Plus className="h-4 w-4" />} onClick={() => openQuoteModal()}>
+                    Nueva cotizacion
+                  </Button>
+                </div>
+              )}
+            </Card>
 
             <aside className="space-y-6">
               {selectedQuote ? (
-                <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <Card className="p-6">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
                         Detalle
                       </div>
-                      <h3 className="mt-2 text-2xl font-bold text-slate-900">
+                      <h3 className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
                         {selectedQuote.quote_number}
                       </h3>
-                      <p className="mt-1 text-sm text-slate-500">
+                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                         {selectedQuote.client?.company_name || 'Sin cliente vinculado'}
                       </p>
                     </div>
-                    <div
-                      className={`rounded-full border px-3 py-1 text-xs font-semibold ${getQuoteStatusMeta(selectedQuote.status).className}`}
-                    >
-                      {getQuoteStatusMeta(selectedQuote.status).label}
-                    </div>
+                    <Badge variant={quoteStatusBadgeVariant[selectedQuote.status]}>
+                      {quoteStatusLabels[selectedQuote.status]}
+                    </Badge>
                   </div>
 
                   <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                    <div className="rounded-2xl bg-slate-50 p-4">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <div className="rounded-2xl bg-slate-50 dark:bg-slate-900/40 p-4">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                         Total
                       </div>
-                      <div className="mt-2 text-2xl font-bold text-slate-900">
+                      <div className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
                         {formatCurrency(parseDecimal(selectedQuote.total_amount), selectedQuote.currency)}
                       </div>
                     </div>
-                    <div className="rounded-2xl bg-slate-50 p-4">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <div className="rounded-2xl bg-slate-50 dark:bg-slate-900/40 p-4">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                         Vence
                       </div>
-                      <div className="mt-2 text-2xl font-bold text-slate-900">
+                      <div className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
                         {formatDate(selectedQuote.expiry_date)}
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-6 grid gap-3 text-sm text-slate-600">
-                    <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+                  <div className="mt-6 grid gap-3 text-sm text-slate-600 dark:text-slate-300">
+                    <div className="flex items-center justify-between rounded-2xl bg-slate-50 dark:bg-slate-900/40 px-4 py-3">
                       <span>Cliente</span>
-                      <strong className="text-slate-900">
+                      <strong className="text-slate-900 dark:text-white">
                         {selectedQuote.client?.company_name || 'Sin cliente'}
                       </strong>
                     </div>
-                    <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+                    <div className="flex items-center justify-between rounded-2xl bg-slate-50 dark:bg-slate-900/40 px-4 py-3">
                       <span>Oportunidad</span>
-                      <strong className="text-slate-900">
+                      <strong className="text-slate-900 dark:text-white">
                         {selectedQuote.opportunity?.opportunity_number || 'No vinculada'}
                       </strong>
                     </div>
-                    <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+                    <div className="flex items-center justify-between rounded-2xl bg-slate-50 dark:bg-slate-900/40 px-4 py-3">
                       <span>Orden</span>
-                      <strong className="text-slate-900">
+                      <strong className="text-slate-900 dark:text-white">
                         {selectedQuote.order?.order_number || 'Pendiente'}
                       </strong>
                     </div>
                   </div>
 
-                  <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50">
-                    <div className="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900">
+                  <div className="mt-6 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40">
+                    <div className="border-b border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white">
                       Estado y recorrido
                     </div>
                     <div className="p-4">
@@ -2576,34 +2910,34 @@ export function SalesModule() {
                           >
                             {getQuoteStatusMeta(selectedQuote.status).label}
                           </div>
-                          <p className="text-sm text-slate-600">
+                          <p className="text-sm text-slate-600 dark:text-slate-300">
                             {quoteStatusDescriptions[selectedQuote.status]}
                           </p>
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
                             Acción sugerida: {quoteNextActionLabels[selectedQuote.status]}.
                           </p>
                         </div>
 
                         <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:min-w-[360px]">
-                          <div className="rounded-xl border border-white bg-white p-3 shadow-sm">
-                            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                          <div className="rounded-xl border border-white dark:border-slate-700 bg-white dark:bg-slate-800 p-3 shadow-sm">
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
                               Último movimiento
                             </div>
-                            <div className="mt-1 text-sm font-semibold text-slate-900">
+                            <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">
                               {selectedQuoteLastJourneyEvent?.label || 'Creada'}
                             </div>
-                            <div className="mt-0.5 text-xs text-slate-500">
+                            <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                               {selectedQuoteLastJourneyEvent?.timestamp
                                 ? formatDateTime(selectedQuoteLastJourneyEvent.timestamp)
                                 : formatDateTime(selectedQuote.created_at)}
                             </div>
                           </div>
 
-                          <div className="rounded-xl border border-white bg-white p-3 shadow-sm">
-                            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                          <div className="rounded-xl border border-white dark:border-slate-700 bg-white dark:bg-slate-800 p-3 shadow-sm">
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
                               Siguiente acción
                             </div>
-                            <div className="mt-1 text-sm font-semibold text-slate-900">
+                            <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">
                               {selectedQuote.status === 'converted'
                                 ? 'La cotización ya se convirtió'
                                 : selectedQuote.status === 'rejected'
@@ -2612,7 +2946,7 @@ export function SalesModule() {
                                     ? 'Renovar propuesta'
                                     : quoteNextActionLabels[selectedQuote.status]}
                             </div>
-                            <div className="mt-0.5 text-xs text-slate-500">
+                            <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                               Usa las acciones del panel para moverla al siguiente estado.
                             </div>
                           </div>
@@ -2621,21 +2955,21 @@ export function SalesModule() {
 
                       <div className="mt-4 space-y-3">
                         {selectedQuoteJourney.map((event) => (
-                          <div key={event.key} className="flex gap-3 rounded-2xl bg-white p-3 shadow-sm">
+                          <div key={event.key} className="flex gap-3 rounded-2xl bg-white dark:bg-slate-800 p-3 shadow-sm">
                             <div className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${quoteTimelineTypeMeta[event.type]?.dotClassName || 'bg-slate-400'}`} />
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
-                                <div className="text-sm font-semibold text-slate-900">
+                                <div className="text-sm font-semibold text-slate-900 dark:text-white">
                                   {event.label}
                                 </div>
                                 <div className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${event.className}`}>
                                   {event.type}
                                 </div>
                               </div>
-                              <div className="mt-1 text-sm text-slate-600">
+                              <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">
                                 {event.detail}
                               </div>
-                              <div className="mt-1 text-xs text-slate-500">
+                              <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                                 {formatDateTime(event.timestamp)}
                               </div>
                             </div>
@@ -2645,124 +2979,148 @@ export function SalesModule() {
                     </div>
                   </div>
 
-                  <div className="mt-6 rounded-2xl border border-slate-200">
-                    <div className="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900">
+                  <div className="mt-6 rounded-2xl border border-slate-200 dark:border-slate-700">
+                    <div className="border-b border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white">
                       Acciones
                     </div>
                     <div className="grid gap-2 p-4 sm:grid-cols-2">
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="md"
+                        icon={<Edit2 className="h-4 w-4" />}
                         onClick={() => selectedQuote && !selectedQuoteLocked && openQuoteModal(selectedQuote)}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:border-slate-300 hover:text-slate-900 disabled:opacity-50"
                         disabled={selectedQuoteLocked}
                       >
-                        <Edit2 className="h-4 w-4" />
                         Editar
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="md"
+                        className="!bg-rose-50 dark:!bg-rose-500/10 !text-rose-700 dark:!text-rose-400 !border !border-rose-200 dark:!border-rose-500/30 !shadow-none hover:!bg-rose-100 dark:hover:!bg-rose-500/20"
+                        icon={<Trash2 className="h-4 w-4" />}
                         onClick={() => selectedQuote && !selectedQuoteLocked && handleDeleteQuote(selectedQuote)}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-medium text-rose-700 hover:border-rose-300 disabled:opacity-50"
                         disabled={selectedQuoteLocked}
                       >
-                        <Trash2 className="h-4 w-4" />
                         Eliminar
-                      </button>
-                      <button
-                        onClick={() => selectedQuote && sendQuoteToClient(selectedQuote)}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:border-slate-300 hover:text-slate-900 disabled:opacity-50"
-                        disabled={!selectedQuoteCanSend}
-                      >
-                        <Send className="h-4 w-4" />
-                        {selectedQuoteSendLabel}
-                      </button>
-                      <button
+                      </Button>
+                      {selectedQuote?.status === 'converted' ? (
+                        <Button
+                          variant="secondary"
+                          size="md"
+                          className="!bg-emerald-50 dark:!bg-emerald-500/10 !text-emerald-700 dark:!text-emerald-400 !border !border-emerald-200 dark:!border-emerald-500/30 hover:!bg-emerald-100 dark:hover:!bg-emerald-500/20"
+                          icon={<Send className="h-4 w-4" />}
+                          onClick={() => selectedQuote && sendOrderToClient(selectedQuote)}
+                          disabled={!selectedOrderCanSend}
+                        >
+                          Enviar orden aprobada
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="secondary"
+                          size="md"
+                          icon={<Send className="h-4 w-4" />}
+                          onClick={() => selectedQuote && sendQuoteToClient(selectedQuote)}
+                          disabled={!selectedQuoteCanSend}
+                        >
+                          {selectedQuoteSendLabel}
+                        </Button>
+                      )}
+                      <Button
+                        variant="secondary"
+                        size="md"
+                        className="!bg-emerald-50 dark:!bg-emerald-500/10 !text-emerald-700 dark:!text-emerald-400 !border !border-emerald-200 dark:!border-emerald-500/30 hover:!bg-emerald-100 dark:hover:!bg-emerald-500/20"
+                        icon={<CheckCircle2 className="h-4 w-4" />}
                         onClick={() => updateQuoteStatus(selectedQuote, 'accepted')}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 hover:border-emerald-300 disabled:opacity-50"
                         disabled={selectedQuoteLocked}
                       >
-                        <CheckCircle2 className="h-4 w-4" />
                         Marcar como aceptada
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="md"
+                        className="!bg-rose-50 dark:!bg-rose-500/10 !text-rose-700 dark:!text-rose-400 !border !border-rose-200 dark:!border-rose-500/30 !shadow-none hover:!bg-rose-100 dark:hover:!bg-rose-500/20"
+                        icon={<XCircle className="h-4 w-4" />}
                         onClick={() => updateQuoteStatus(selectedQuote, 'rejected')}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-medium text-rose-700 hover:border-rose-300 disabled:opacity-50"
                         disabled={selectedQuoteLocked}
                       >
-                        <XCircle className="h-4 w-4" />
                         Marcar como rechazada
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="primary"
+                        size="md"
+                        icon={<ArrowRight className="h-4 w-4" />}
                         onClick={() => convertQuoteToOrder(selectedQuote)}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
                         disabled={selectedQuoteLocked}
                       >
-                        <ArrowRight className="h-4 w-4" />
                         Convertir a orden
-                      </button>
+                      </Button>
                     </div>
                     {selectedQuotePdfUrl ? (
-                      <div className="border-t border-slate-200 px-4 py-4">
+                      <div className="border-t border-slate-200 dark:border-slate-700 px-4 py-4">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div>
-                            <div className="text-sm font-semibold text-slate-900">PDF generado</div>
-                            <div className="mt-1 text-xs text-slate-500">
+                            <div className="text-sm font-semibold text-slate-900 dark:text-white">PDF generado</div>
+                            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                               {selectedQuotePdfFilename}
                             </div>
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            <button
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              icon={<Eye className="h-4 w-4" />}
                               onClick={() => handleOpenQuotePdf(selectedQuotePdfUrl)}
-                              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:border-slate-300 hover:text-slate-900"
                             >
-                              <Eye className="h-4 w-4" />
                               Ver PDF
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              icon={<Download className="h-4 w-4" />}
                               onClick={() => handleDownloadQuotePdf(selectedQuotePdfUrl, selectedQuotePdfFilename)}
-                              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
                             >
-                              <Download className="h-4 w-4" />
                               Descargar PDF
-                            </button>
+                            </Button>
                           </div>
                         </div>
                       </div>
                     ) : (
-                      <div className="border-t border-slate-200 px-4 py-3 text-xs text-slate-500">
+                      <div className="border-t border-slate-200 dark:border-slate-700 px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
                         Envía la cotización para generar el PDF y dejar el enlace disponible aquí.
                       </div>
                     )}
                     {selectedQuoteLocked ? (
-                      <div className="border-t border-slate-200 px-4 py-3 text-xs text-slate-500">
+                      <div className="border-t border-slate-200 dark:border-slate-700 px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
                         Esta cotizacion ya fue convertida a una orden. Para proteger la trazabilidad no se puede editar ni eliminar.
                       </div>
                     ) : (
-                      <div className="border-t border-slate-200 px-4 py-3 text-xs text-slate-500">
+                      <div className="border-t border-slate-200 dark:border-slate-700 px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
                         Cada cambio de estado queda registrado en el recorrido superior y en el historial completo.
                       </div>
                     )}
                   </div>
 
-                  <div className="mt-6 rounded-2xl border border-slate-200">
-                    <div className="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900">
+                  <div className="mt-6 rounded-2xl border border-slate-200 dark:border-slate-700">
+                    <div className="border-b border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white">
                       Items
                     </div>
-                    <div className="divide-y divide-slate-200">
+                    <div className="divide-y divide-slate-200 dark:divide-slate-700">
                       {selectedQuoteItems.map((item) => (
                         <div key={item.id} className="px-4 py-4">
                           <div className="flex items-start justify-between gap-4">
                             <div>
-                              <div className="text-sm font-semibold text-slate-900">
+                              <div className="text-sm font-semibold text-slate-900 dark:text-white">
                                 {item.product_name || item.description}
                               </div>
-                              <div className="mt-1 text-xs text-slate-500">
+                              <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                                 {productTypeLabels[item.item_type]} · {parseDecimal(item.quantity)} u
                               </div>
                             </div>
                             <div className="text-right">
-                              <div className="text-sm font-semibold text-slate-900">
+                              <div className="text-sm font-semibold text-slate-900 dark:text-white">
                                 {formatCurrency(parseDecimal(item.line_total), item.currency)}
                               </div>
-                              <div className="text-xs text-slate-500">
+                              <div className="text-xs text-slate-500 dark:text-slate-400">
                                 {formatCurrency(parseDecimal(item.unit_price), item.currency)} c/u
                               </div>
                             </div>
@@ -2771,25 +3129,25 @@ export function SalesModule() {
                       ))}
                     </div>
                   </div>
-                </div>
+                </Card>
               ) : (
-                <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-sm">
-                  <AlertCircle className="mx-auto h-10 w-10 text-slate-400" />
-                  <h3 className="mt-4 text-lg font-semibold text-slate-900">Selecciona una cotizacion</h3>
-                  <p className="mt-2 text-sm text-slate-500">
+                <div className="rounded-3xl border border-dashed border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 p-8 text-center shadow-sm">
+                  <AlertCircle className="mx-auto h-10 w-10 text-slate-400 dark:text-slate-500" />
+                  <h3 className="mt-4 text-lg font-semibold text-slate-900 dark:text-white">Selecciona una cotizacion</h3>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                     Aqui veras el detalle completo, el historial y las acciones de cierre.
                   </p>
                 </div>
               )}
 
-              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <Card className="p-6">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-2xl bg-slate-100 p-3 text-slate-700">
+                  <div className="rounded-2xl bg-slate-100 dark:bg-slate-700 p-3 text-slate-700 dark:text-slate-200">
                     <Clock className="h-5 w-5" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-900">Historial de la cotizacion</h3>
-                    <p className="text-sm text-slate-500">
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">Historial de la cotizacion</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
                       Cada cambio de estado y cada nota quedan registrados en orden cronologico.
                     </p>
                   </div>
@@ -2798,10 +3156,10 @@ export function SalesModule() {
                 <div className="mt-5 space-y-4">
                   {timeline.length ? (
                     timeline.map((item) => (
-                      <div key={item.id} className="flex gap-3 rounded-2xl bg-slate-50 p-4">
+                      <div key={item.id} className="flex gap-3 rounded-2xl bg-slate-50 dark:bg-slate-900/40 p-4">
                         <div className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${getTimelineEventMeta(item).dotClassName}`} />
                         <div className="min-w-0 flex-1">
-                          <div className="text-sm font-semibold text-slate-900">
+                          <div className="text-sm font-semibold text-slate-900 dark:text-white">
                             {item.description || getTimelineEventMeta(item).label}
                           </div>
                           <div className="mt-1">
@@ -2809,11 +3167,11 @@ export function SalesModule() {
                               {getTimelineEventMeta(item).label}
                             </span>
                           </div>
-                          <div className="mt-1 text-xs text-slate-500">
+                          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                             {getTimelineEventType(item)} | {formatDateTime(item.created_at)}
                           </div>
                           {getTimelineEventType(item) !== item.type ? (
-                            <div className="mt-1 text-[11px] text-slate-400">
+                            <div className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
                               Tipo original preservado desde el historial
                             </div>
                           ) : null}
@@ -2821,12 +3179,12 @@ export function SalesModule() {
                       </div>
                     ))
                   ) : (
-                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
+                    <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/40 p-6 text-sm text-slate-500 dark:text-slate-400">
                       Todavia no hay eventos para esta cotizacion.
                     </div>
                   )}
                 </div>
-              </div>
+              </Card>
             </aside>
           </div>
         )}
@@ -2834,13 +3192,13 @@ export function SalesModule() {
 
       {showProductModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white dark:bg-slate-800 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-6 py-4">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                   {editingProductId ? 'Editar producto' : 'Nuevo producto'}
                 </h3>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-slate-500 dark:text-slate-400">
                   Configura un producto o servicio reutilizable para tus cotizaciones.
                 </p>
               </div>
@@ -2849,7 +3207,7 @@ export function SalesModule() {
                   setShowProductModal(false);
                   resetProductForm();
                 }}
-                className="rounded-xl p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                className="rounded-xl p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-white"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -2857,47 +3215,47 @@ export function SalesModule() {
 
             <div className="grid gap-4 px-6 py-6 md:grid-cols-2">
               <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">SKU</span>
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">SKU</span>
                 <input
                   value={productForm.sku}
                   onChange={(event) => setProductForm((prev) => ({ ...prev, sku: event.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                   placeholder="SKU-001"
                 />
               </label>
               <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">Nombre</span>
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Nombre</span>
                 <input
                   value={productForm.name}
                   onChange={(event) => setProductForm((prev) => ({ ...prev, name: event.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                   placeholder="Hosting premium"
                 />
               </label>
               <label className="space-y-2 md:col-span-2">
-                <span className="text-sm font-medium text-slate-700">Descripcion</span>
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Descripcion</span>
                 <textarea
                   value={productForm.description}
                   onChange={(event) =>
                     setProductForm((prev) => ({ ...prev, description: event.target.value }))
                   }
-                  className="min-h-28 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                  className="min-h-28 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                   placeholder="Descripcion comercial del producto o servicio"
                 />
               </label>
               <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">Categoria</span>
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Categoria</span>
                 <input
                   value={productForm.category}
                   onChange={(event) =>
                     setProductForm((prev) => ({ ...prev, category: event.target.value }))
                   }
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                   placeholder="Hosting, Consultoria, Licencias"
                 />
               </label>
               <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">Tipo</span>
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Tipo</span>
                 <select
                   value={productForm.product_type}
                   onChange={(event) =>
@@ -2906,14 +3264,14 @@ export function SalesModule() {
                       product_type: event.target.value as ProductType,
                     }))
                   }
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                 >
                   <option value="product">Producto</option>
                   <option value="service">Servicio</option>
                 </select>
               </label>
               <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">Precio de venta</span>
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Precio de venta</span>
                 <input
                   type="number"
                   min="0"
@@ -2922,12 +3280,12 @@ export function SalesModule() {
                   onChange={(event) =>
                     setProductForm((prev) => ({ ...prev, unit_price: event.target.value }))
                   }
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                   placeholder="120.00"
                 />
               </label>
               <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">Costo</span>
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Costo</span>
                 <input
                   type="number"
                   min="0"
@@ -2936,53 +3294,51 @@ export function SalesModule() {
                   onChange={(event) =>
                     setProductForm((prev) => ({ ...prev, cost_price: event.target.value }))
                   }
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                   placeholder="80.00"
                 />
               </label>
               <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">Moneda</span>
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Moneda</span>
                 <input
                   value={productForm.currency}
                   onChange={(event) =>
                     setProductForm((prev) => ({ ...prev, currency: event.target.value }))
                   }
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                   placeholder="USD"
                 />
               </label>
-              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3">
+              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-slate-600 px-4 py-3">
                 <input
                   type="checkbox"
                   checked={productForm.is_active}
                   onChange={(event) =>
                     setProductForm((prev) => ({ ...prev, is_active: event.target.checked }))
                   }
-                  className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
+                  className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-slate-900 dark:text-brand-500 focus:ring-slate-400"
                 />
                 <div>
-                  <div className="text-sm font-medium text-slate-900">Activo</div>
-                  <div className="text-xs text-slate-500">Visible en cotizaciones</div>
+                  <div className="text-sm font-medium text-slate-900 dark:text-white">Activo</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">Visible en cotizaciones</div>
                 </div>
               </label>
             </div>
 
-            <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-4">
-              <button
+            <div className="flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-700 px-6 py-4">
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={() => {
                   setShowProductModal(false);
                   resetProductForm();
                 }}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 Cancelar
-              </button>
-              <button
-                onClick={handleSaveProduct}
-                className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
-              >
+              </Button>
+              <Button variant="primary" size="md" onClick={handleSaveProduct}>
                 {editingProductId ? 'Guardar cambios' : 'Crear producto'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -2990,13 +3346,13 @@ export function SalesModule() {
 
       {showQuoteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-3xl bg-white dark:bg-slate-800 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-6 py-4">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                   {editingQuoteId ? 'Editar cotizacion' : 'Nueva cotizacion'}
                 </h3>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-slate-500 dark:text-slate-400">
                   {editingQuoteId
                     ? 'Actualiza los datos, los items y los montos de la propuesta comercial.'
                     : 'Vincula cliente, oportunidad y productos para generar una propuesta comercial.'}
@@ -3004,7 +3360,7 @@ export function SalesModule() {
               </div>
               <button
                 onClick={closeQuoteModal}
-                className="rounded-xl p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                className="rounded-xl p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-white"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -3014,7 +3370,7 @@ export function SalesModule() {
               <div className="space-y-6">
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="space-y-2 md:col-span-2">
-                    <span className="text-sm font-medium text-slate-700">Cliente</span>
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Cliente</span>
                     <select
                       value={quoteForm.client_id}
                       onChange={(event) =>
@@ -3024,7 +3380,7 @@ export function SalesModule() {
                           opportunity_id: '',
                         }))
                       }
-                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                     >
                       <option value="">Seleccionar cliente</option>
                       {clients.map((client) => (
@@ -3036,7 +3392,7 @@ export function SalesModule() {
                   </label>
 
                   <label className="space-y-2 md:col-span-2">
-                    <span className="text-sm font-medium text-slate-700">Oportunidad</span>
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Oportunidad</span>
                     <select
                       value={quoteForm.opportunity_id}
                       onChange={(event) =>
@@ -3048,7 +3404,7 @@ export function SalesModule() {
                             prev.client_id,
                         }))
                       }
-                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                     >
                       <option value="">Sin oportunidad</option>
                       {opportunityOptions.map((opportunity) => (
@@ -3060,29 +3416,29 @@ export function SalesModule() {
                   </label>
 
                   <label className="space-y-2">
-                    <span className="text-sm font-medium text-slate-700">Fecha</span>
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Fecha</span>
                     <input
                       type="date"
                       value={quoteForm.quote_date}
                       onChange={(event) =>
                         setQuoteForm((prev) => ({ ...prev, quote_date: event.target.value }))
                       }
-                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                     />
                   </label>
                   <label className="space-y-2">
-                    <span className="text-sm font-medium text-slate-700">Vence</span>
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Vence</span>
                     <input
                       type="date"
                       value={quoteForm.expiry_date}
                       onChange={(event) =>
                         setQuoteForm((prev) => ({ ...prev, expiry_date: event.target.value }))
                       }
-                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                     />
                   </label>
                   <label className="space-y-2">
-                    <span className="text-sm font-medium text-slate-700">Moneda</span>
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Moneda</span>
                     <input
                       value={quoteForm.currency}
                       onChange={(event) => {
@@ -3092,12 +3448,12 @@ export function SalesModule() {
                           currentItems.map((item) => ({ ...item, currency: value }))
                         );
                       }}
-                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                       placeholder="USD"
                     />
                   </label>
                   <label className="space-y-2">
-                    <span className="text-sm font-medium text-slate-700">IVA %</span>
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">IVA %</span>
                     <input
                       type="number"
                       min="0"
@@ -3106,11 +3462,11 @@ export function SalesModule() {
                       onChange={(event) =>
                         setQuoteForm((prev) => ({ ...prev, tax_rate: event.target.value }))
                       }
-                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                     />
                   </label>
                   <label className="space-y-2">
-                    <span className="text-sm font-medium text-slate-700">Descuento global</span>
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Descuento global</span>
                     <input
                       type="number"
                       min="0"
@@ -3119,66 +3475,62 @@ export function SalesModule() {
                       onChange={(event) =>
                         setQuoteForm((prev) => ({ ...prev, discount_amount: event.target.value }))
                       }
-                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                     />
                   </label>
                 </div>
 
                 <label className="space-y-2">
-                  <span className="text-sm font-medium text-slate-700">Notas internas</span>
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Notas internas</span>
                   <textarea
                     value={quoteForm.notes}
                     onChange={(event) =>
                       setQuoteForm((prev) => ({ ...prev, notes: event.target.value }))
                     }
-                    className="min-h-24 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                    className="min-h-24 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                     placeholder="Contexto comercial, negociacion, observaciones..."
                   />
                 </label>
 
                 <label className="space-y-2">
-                  <span className="text-sm font-medium text-slate-700">Terminos</span>
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Terminos</span>
                   <textarea
                     value={quoteForm.terms}
                     onChange={(event) =>
                       setQuoteForm((prev) => ({ ...prev, terms: event.target.value }))
                     }
-                    className="min-h-24 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                    className="min-h-24 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                     placeholder="Valida por 15 dias, pago contado, etc."
                   />
                 </label>
 
-                <div className="rounded-2xl border border-slate-200 p-4">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <h4 className="text-sm font-semibold text-slate-900">Resumen preliminar</h4>
-                      <p className="text-xs text-slate-500">Se recalcula con cada linea.</p>
+                      <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Resumen preliminar</h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Se recalcula con cada linea.</p>
                     </div>
-                    <button
-                      onClick={addQuoteItem}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:border-slate-300 hover:text-slate-900"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
+                    <Button variant="secondary" size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={addQuoteItem}>
                       Agregar linea
-                    </button>
+                    </Button>
                   </div>
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-xl bg-slate-50 p-3">
-                      <div className="text-xs text-slate-500">Subtotal</div>
-                      <div className="mt-1 text-lg font-bold text-slate-900">
+                    <div className="rounded-xl bg-slate-50 dark:bg-slate-900/40 p-3">
+                      <div className="text-xs text-slate-500 dark:text-slate-400">Subtotal</div>
+                      <div className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
                         {formatCurrency(quoteTotalsPreview.subtotal, quoteForm.currency)}
                       </div>
                     </div>
-                    <div className="rounded-xl bg-slate-50 p-3">
-                      <div className="text-xs text-slate-500">IVA</div>
-                      <div className="mt-1 text-lg font-bold text-slate-900">
+                    <div className="rounded-xl bg-slate-50 dark:bg-slate-900/40 p-3">
+                      <div className="text-xs text-slate-500 dark:text-slate-400">IVA</div>
+                      <div className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
                         {formatCurrency(quoteTotalsPreview.taxAmount, quoteForm.currency)}
                       </div>
                     </div>
-                    <div className="rounded-xl bg-slate-50 p-3">
-                      <div className="text-xs text-slate-500">Total</div>
-                      <div className="mt-1 text-lg font-bold text-slate-900">
+                    <div className="rounded-xl bg-slate-50 dark:bg-slate-900/40 p-3">
+                      <div className="text-xs text-slate-500 dark:text-slate-400">Total</div>
+                      <div className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
                         {formatCurrency(quoteTotalsPreview.total, quoteForm.currency)}
                       </div>
                     </div>
@@ -3186,37 +3538,33 @@ export function SalesModule() {
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+              <div className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-5">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-base font-bold text-slate-900">Lineas de cotizacion</h4>
-                    <p className="text-sm text-slate-500">
+                    <h4 className="text-base font-bold text-slate-900 dark:text-white">Lineas de cotizacion</h4>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
                       Elige productos del catalogo o escribe items manuales.
                     </p>
                   </div>
-                  <button
-                    onClick={addQuoteItem}
-                    className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
+                  <Button variant="primary" size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={addQuoteItem}>
                     Agregar
-                  </button>
+                  </Button>
                 </div>
 
                 <div className="mt-4 space-y-4">
                   {quoteItems.map((item, index) => (
                     <div
                       key={item.id}
-                      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                      className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-sm"
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
                           <Tag className="h-4 w-4" />
                           Linea {index + 1}
                         </div>
                         <button
                           onClick={() => removeQuoteItem(item.id)}
-                          className="inline-flex items-center gap-1 rounded-xl px-2 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50"
+                          className="inline-flex items-center gap-1 rounded-xl px-2 py-1 text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                           Quitar
@@ -3225,13 +3573,13 @@ export function SalesModule() {
 
                       <div className="mt-4 grid gap-4 md:grid-cols-2">
                         <label className="space-y-2 md:col-span-2">
-                          <span className="text-sm font-medium text-slate-700">Producto</span>
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Producto</span>
                           <select
                             value={item.product_id}
                             onChange={(event) =>
                               handleQuoteItemChange(item.id, 'product_id', event.target.value)
                             }
-                            className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                            className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                           >
                             <option value="">Manual</option>
                             {products
@@ -3245,19 +3593,19 @@ export function SalesModule() {
                         </label>
 
                         <label className="space-y-2 md:col-span-2">
-                          <span className="text-sm font-medium text-slate-700">Descripcion</span>
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Descripcion</span>
                           <input
                             value={item.description}
                             onChange={(event) =>
                               handleQuoteItemChange(item.id, 'description', event.target.value)
                             }
-                            className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                            className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                             placeholder="Descripcion del item"
                           />
                         </label>
 
                         <label className="space-y-2">
-                          <span className="text-sm font-medium text-slate-700">Cantidad</span>
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Cantidad</span>
                           <input
                             type="number"
                             min="1"
@@ -3266,12 +3614,12 @@ export function SalesModule() {
                             onChange={(event) =>
                               handleQuoteItemChange(item.id, 'quantity', event.target.value)
                             }
-                            className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                            className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                           />
                         </label>
 
                         <label className="space-y-2">
-                          <span className="text-sm font-medium text-slate-700">Precio unitario</span>
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Precio unitario</span>
                           <input
                             type="number"
                             min="0"
@@ -3280,12 +3628,12 @@ export function SalesModule() {
                             onChange={(event) =>
                               handleQuoteItemChange(item.id, 'unit_price', event.target.value)
                             }
-                            className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                            className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                           />
                         </label>
 
                         <label className="space-y-2">
-                          <span className="text-sm font-medium text-slate-700">Descuento %</span>
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Descuento %</span>
                           <input
                             type="number"
                             min="0"
@@ -3294,18 +3642,18 @@ export function SalesModule() {
                             onChange={(event) =>
                               handleQuoteItemChange(item.id, 'discount_percent', event.target.value)
                             }
-                            className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                            className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                           />
                         </label>
 
                         <label className="space-y-2">
-                          <span className="text-sm font-medium text-slate-700">Tipo</span>
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Tipo</span>
                           <select
                             value={item.item_type}
                             onChange={(event) =>
                               handleQuoteItemChange(item.id, 'item_type', event.target.value)
                             }
-                            className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                            className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-brand-500"
                           >
                             <option value="product">Producto</option>
                             <option value="service">Servicio</option>
@@ -3318,7 +3666,7 @@ export function SalesModule() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-4">
+            <div className="flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-700 px-6 py-4">
               <button
                 onClick={closeQuoteModal}
                 className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"

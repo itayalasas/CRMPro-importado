@@ -4,7 +4,7 @@ import type { Call } from '@twilio/voice-sdk';
 import { twilioService } from '../lib/twilioService';
 import { useToast } from '../contexts/ToastContext';
 
-export function useTwilioDevice() {
+export function useTwilioDevice(enabled: boolean = true) {
   const [device, setDevice] = useState<Device | null>(null);
   const [activeCall, setActiveCall] = useState<Call | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -21,6 +21,7 @@ export function useTwilioDevice() {
   }, [toast]);
 
   useEffect(() => {
+    if (!enabled) return;
     let mounted = true;
 
     const setupDevice = async () => {
@@ -141,7 +142,7 @@ export function useTwilioDevice() {
         }
       }
     };
-  }, []); // Empty dependency array - only run once
+  }, [enabled]);
 
   const makeCall = async (phoneNumber: string): Promise<Call | null> => {
     if (!device || !isReady) {

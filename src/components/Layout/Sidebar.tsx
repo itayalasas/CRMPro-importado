@@ -9,14 +9,18 @@ import {
   MessageCircle,
   KanbanSquare,
   ShoppingCart,
+  CalendarDays,
   Settings,
   LogOut,
   Menu,
   X,
-  User
+  User,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { usePermissions, ModuleKey } from '../../hooks/usePermissions';
 import { supabase } from '../../lib/supabase';
 
@@ -30,6 +34,7 @@ const menuItems = [
   { id: 'clients', label: 'Clientes', icon: Users, moduleKey: 'clientes' as ModuleKey },
   { id: 'pipeline', label: 'Pipeline', icon: KanbanSquare, moduleKey: 'clientes' as ModuleKey },
   { id: 'ventas', label: 'Ventas', icon: ShoppingCart, moduleKey: 'ventas' as ModuleKey },
+  { id: 'agenda', label: 'Agenda', icon: CalendarDays, moduleKey: 'agenda' as ModuleKey },
   { id: 'campaigns', label: 'Campañas', icon: Mail, moduleKey: 'campanas' as ModuleKey },
   { id: 'calls', label: 'Llamadas', icon: Phone, moduleKey: 'llamadas' as ModuleKey },
   { id: 'tickets', label: 'Tickets', icon: Ticket, moduleKey: 'tickets' as ModuleKey },
@@ -42,6 +47,7 @@ const menuItems = [
 export function Sidebar({ activeModule, onModuleChange }: SidebarProps) {
   const { signOut, user } = useAuth();
   const toast = useToast();
+  const { theme, toggleTheme } = useTheme();
   const { hasModuleAccess } = usePermissions();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [webchatUnread, setWebchatUnread] = useState(0);
@@ -148,13 +154,13 @@ export function Sidebar({ activeModule, onModuleChange }: SidebarProps) {
             className="w-12 h-12 rounded-xl shadow-lg"
           />
           <div>
-            <h1 className="text-xl font-bold bg-gradient-to-r from-white to-blue-200 bg-clip-text text-transparent">Calve CRM</h1>
+            <h1 className="text-xl font-bold bg-gradient-to-r from-white to-accent-300 bg-clip-text text-transparent">Calve CRM</h1>
             <p className="text-xs text-slate-400">Sistema Integral</p>
           </div>
         </div>
       </div>
 
-      <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
+      <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
         {accessibleMenuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeModule === item.id;
@@ -164,20 +170,23 @@ export function Sidebar({ activeModule, onModuleChange }: SidebarProps) {
             <button
               key={item.id}
               onClick={() => handleModuleChange(item.id)}
-              className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all group ${
+              className={`relative w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors group ${
                 isActive
-                  ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg scale-[1.02]'
-                  : 'text-slate-300 hover:bg-slate-700/70 hover:text-white active:scale-95'
+                  ? 'bg-slate-700/60 text-white'
+                  : 'text-slate-300 hover:bg-slate-700/40 hover:text-white'
               }`}
             >
+              {isActive && (
+                <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-full bg-gradient-to-b from-brand-400 to-accent-400" />
+              )}
               <div className="flex items-center space-x-3">
                 <Icon className={`w-5 h-5 transition-transform ${
-                  isActive ? '' : 'group-hover:scale-110'
+                  isActive ? 'text-accent-300' : 'group-hover:scale-110'
                 }`} />
                 <span className="font-medium text-sm">{item.label}</span>
               </div>
               {showWebchatBadge && (
-                <span className="bg-indigo-500 text-white text-xs px-2 py-0.5 rounded-full">
+                <span className="bg-accent-500 text-white text-xs px-2 py-0.5 rounded-full">
                   {webchatUnread}
                 </span>
               )}
@@ -187,10 +196,20 @@ export function Sidebar({ activeModule, onModuleChange }: SidebarProps) {
       </nav>
 
       <div className="p-4 border-t border-slate-700/50 space-y-3">
+        <button
+          onClick={toggleTheme}
+          className="w-full flex items-center justify-between px-4 py-2.5 text-slate-300 hover:bg-slate-700/40 hover:text-white rounded-lg transition-colors"
+        >
+          <span className="flex items-center space-x-3">
+            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            <span className="text-sm font-medium">{theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}</span>
+          </span>
+        </button>
+
         {user && (
           <div className="px-4 py-3 bg-slate-700/50 rounded-xl border border-slate-600/50">
             <div className="flex items-start space-x-3">
-              <div className="flex-shrink-0 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full p-2 shadow-lg">
+              <div className="flex-shrink-0 bg-gradient-to-br from-brand-500 to-accent-500 rounded-full p-2 shadow-lg">
                 <User className="w-4 h-4" />
               </div>
               <div className="flex-1 min-w-0">
@@ -207,9 +226,9 @@ export function Sidebar({ activeModule, onModuleChange }: SidebarProps) {
 
         <button
           onClick={signOut}
-          className="w-full flex items-center space-x-3 px-4 py-3 text-slate-300 hover:bg-red-600/20 hover:text-red-400 rounded-xl transition-all active:scale-95 group"
+          className="w-full flex items-center space-x-3 px-4 py-3 text-slate-300 hover:bg-rose-600/20 hover:text-rose-400 rounded-xl transition-colors group"
         >
-          <LogOut className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+          <LogOut className="w-5 h-5" />
           <span className="font-medium text-sm">Cerrar Sesión</span>
         </button>
       </div>

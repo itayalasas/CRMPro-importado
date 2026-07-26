@@ -4,6 +4,7 @@ interface NavigationContextType {
   navigateToInbox: (
     recipientEmail?: string,
     context?: {
+      clientId?: string | null;
       webchatConversationId?: string;
       sourceChannel?: string;
       emailSubject?: string;
@@ -12,6 +13,7 @@ interface NavigationContextType {
   ) => void;
   inboxRecipient: string | null;
   inboxContext: {
+    clientId?: string | null;
     webchatConversationId?: string;
     sourceChannel?: string;
     emailSubject?: string;
@@ -27,6 +29,7 @@ const NavigationContext = createContext<NavigationContextType | undefined>(undef
 export function NavigationProvider({ children }: { children: ReactNode }) {
   const [inboxRecipient, setInboxRecipient] = useState<string | null>(null);
   const [inboxContext, setInboxContext] = useState<{
+    clientId?: string | null;
     webchatConversationId?: string;
     sourceChannel?: string;
     emailSubject?: string;
@@ -37,6 +40,7 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
   const navigateToInbox = (
     recipientEmail?: string,
     context?: {
+      clientId?: string | null;
       webchatConversationId?: string;
       sourceChannel?: string;
       emailSubject?: string;

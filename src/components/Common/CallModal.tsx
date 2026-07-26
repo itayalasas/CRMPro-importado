@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { saveTicketCreateDraft } from '../../lib/ticketDraft';
+import { recordClientInteractionSafely } from '../../lib/clientInteractionLogger';
 import { twilioService } from '../../lib/twilioService';
 import type { Call } from '@twilio/voice-sdk';
 
@@ -238,6 +239,21 @@ export function CallModal({ isOpen, onClose, phoneNumber, callSid, contactInfo, 
       if (data) {
         console.log('Call record created successfully:', data);
         setCallId(data.id);
+
+        void recordClientInteractionSafely({
+          client_id: currentContactInfo?.id || null,
+          type: 'call',
+          description: `Llamada ${isIncoming ? 'entrante' : 'saliente'} a ${currentContactInfo?.company_name || currentContactInfo?.contact_name || phoneNumber}`,
+          metadata: {
+            call_id: data.id,
+            call_sid: callSid || null,
+            phone_number: phoneNumber,
+            direction: isIncoming ? 'inbound' : 'outbound',
+            status: 'in_progress',
+          },
+          created_by: user?.id || null,
+          created_at: callStartTime.toISOString(),
+        });
       }
     } catch (error) {
       console.error('Exception in createCallRecord:', error);

@@ -15,3 +15,28 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+@layer base {
+  body {
+    @apply bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+  }
+}
+
+/* Custom scrollbar (no Tailwind scrollbar plugin is installed) */
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thumb-slate-700::-webkit-scrollbar-thumb {
+  background-color: theme('colors.slate.700');
+  border-radius: 9999px;
+}
+
+.scrollbar-track-slate-900::-webkit-scrollbar-track {
+  background-color: theme('colors.slate.900');
+}

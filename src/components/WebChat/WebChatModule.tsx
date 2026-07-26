@@ -28,10 +28,7 @@ import { searchUsers } from '../../lib/userService';
 import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
 import { externalAuth } from '../../lib/externalAuth';
 import { saveTicketCreateDraft } from '../../lib/ticketDraft';
-import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
-import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
-import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
-import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
+import { recordClientInteractionSafely } from '../../lib/clientInteractionLogger';
 
 const sourceLabels: Record<string, string> = {
   widget: 'Widget',
@@ -2690,6 +2687,7 @@ import {
   UserPlus,
   FileText,
   ShoppingCart,
+  Globe,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { getEnvVar } from '../../lib/envLoader';
@@ -2701,6 +2699,11 @@ import { searchUsers } from '../../lib/userService';
 import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
 import { externalAuth } from '../../lib/externalAuth';
 import { saveTicketCreateDraft } from '../../lib/ticketDraft';
+import { recordClientInteractionSafely } from '../../lib/clientInteractionLogger';
+import { PageHeader } from '../ui/PageHeader';
+import { Card } from '../ui/Card';
+import { Badge, BadgeVariant } from '../ui/Badge';
+import { Button } from '../ui/Button';
 
 interface WebChatConversation {
   id: string;
@@ -2821,7 +2824,8 @@ export function WebChatModule() {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('active');
-  const [channelFilter, _setChannelFilter] = useState('all');
+  const [channelFilter, setChannelFilter] = useState('all');
+  const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'mine' | 'unassigned'>('all');
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferQuery, setTransferQuery] = useState('');
   const [transferResults, setTransferResults] = useState<{ id: string; name: string; email: string }[]>([]);
@@ -2945,6 +2949,28 @@ export function WebChatModule() {
   const isClosed = selectedConversation?.status === 'closed';
   const isFormConversation = selectedConversation?.source_channel === 'form';
   const linkedClientId = createdClientId || selectedConversation?.client_id || null;
+
+  useEffect(() => {
+    const rawFocus = localStorage.getItem('webchat_focus_client');
+    if (!rawFocus) return;
+
+    try {
+      const focus = JSON.parse(rawFocus) as { company_name?: string; contact_name?: string; email?: string; phone?: string };
+      const search = [focus.company_name, focus.contact_name, focus.email, focus.phone]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+
+      if (search) {
+        setSearchQuery(search);
+        setStatusFilter('all');
+      }
+    } catch {
+      // ignore malformed focus payloads
+    } finally {
+      localStorage.removeItem('webchat_focus_client');
+    }
+  }, []);
 
   const latestVisitorMessage = useMemo(() => {
     return [...messages]
@@ -3626,32 +3652,32 @@ export function WebChatModule() {
   const getTicketStatusClasses = (status: TicketRecord['status']) => {
     switch (status) {
       case 'open':
-        return 'bg-red-100 text-red-700 border-red-200';
+        return 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/30';
       case 'in_progress':
-        return 'bg-blue-100 text-blue-700 border-blue-200';
+        return 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/30';
       case 'waiting':
-        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+        return 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30';
       case 'resolved':
-        return 'bg-green-100 text-green-700 border-green-200';
+        return 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30';
       case 'closed':
-        return 'bg-slate-100 text-slate-700 border-slate-200';
+        return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-700/50 dark:text-slate-300 dark:border-slate-600';
       default:
-        return 'bg-slate-100 text-slate-700 border-slate-200';
+        return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-700/50 dark:text-slate-300 dark:border-slate-600';
     }
   };
 
   const getTicketPriorityClasses = (priority: TicketRecord['priority']) => {
     switch (priority) {
       case 'low':
-        return 'bg-blue-100 text-blue-700 border-blue-200';
+        return 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/30';
       case 'medium':
-        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+        return 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30';
       case 'high':
-        return 'bg-orange-100 text-orange-700 border-orange-200';
+        return 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/30';
       case 'urgent':
-        return 'bg-red-100 text-red-700 border-red-200';
+        return 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/30';
       default:
-        return 'bg-slate-100 text-slate-700 border-slate-200';
+        return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-700/50 dark:text-slate-300 dark:border-slate-600';
     }
   };
 
@@ -3843,7 +3869,7 @@ export function WebChatModule() {
       .find((msg) => msg.sender_type === 'visitor')?.message || '';
 
     saveTicketCreateDraft({
-      client_id: createdClientId || undefined,
+      client_id: linkedClientId || createdClientId || undefined,
       subject: `Chat web - ${selectedConversation.visitor_name || selectedConversation.visitor_email || selectedConversation.visitor_phone || 'Visitante'}`,
       description: `Solicitud desde Chat Web\n\n${lastVisitorMessage}`.trim(),
       priority: 'medium',
@@ -4122,6 +4148,20 @@ export function WebChatModule() {
       })
       .eq('id', selectedConversation.id);
 
+    void recordClientInteractionSafely({
+      client_id: linkedClientId || selectedConversation.client_id || null,
+      type: 'chat_message_sent',
+      description: `Mensaje enviado por chat a ${selectedConversation.visitor_name || selectedConversation.visitor_email || 'visitante'}`,
+      metadata: {
+        conversation_id: selectedConversation.id,
+        source_channel: selectedConversation.source_channel || null,
+        message_length: messageText.trim().length,
+        attachments_count: uploadedAttachments.length,
+      },
+      created_by: user.id,
+      created_at: new Date().toISOString(),
+    });
+
     setMessageText('');
     setAttachments([]);
     loadMessages(selectedConversation.id);
@@ -4177,6 +4217,19 @@ export function WebChatModule() {
       }
 
       toast.success('Email enviado correctamente');
+      void recordClientInteractionSafely({
+        client_id: linkedClientId || selectedConversation.client_id || null,
+        type: 'email',
+        description: `Email enviado desde chat a ${selectedConversation.visitor_email}`,
+        metadata: {
+          conversation_id: selectedConversation.id,
+          source_channel: selectedConversation.source_channel || null,
+          subject: emailSubject,
+          body_length: emailBody.length,
+        },
+        created_by: user.id,
+        created_at: new Date().toISOString(),
+      });
       if (isFormConversation) {
         const prefill = buildFormEmailPrefill();
         setEmailBody(prefill.body);
@@ -4230,6 +4283,10 @@ export function WebChatModule() {
       return conv.source_domain && `domain:${conv.source_domain}` === channelFilter;
     }
     return conv.source_channel === channelFilter;
+  }).filter(conv => {
+    if (assignmentFilter === 'mine') return conv.assigned_user_id === user?.id;
+    if (assignmentFilter === 'unassigned') return !conv.assigned_user_id;
+    return true;
   });
 
   const unreadCount = filteredConversations.filter(conv => {
@@ -4248,56 +4305,115 @@ export function WebChatModule() {
     resolved: conversations.filter(c => c.status === 'resolved' || normalizeResult(c.result) === 'resuelto').length,
     closed: conversations.filter(c => c.status === 'closed').length,
     unassigned: conversations.filter(c => !c.assigned_user_id && c.status !== 'closed' && c.status !== 'resolved').length,
+    mine: conversations.filter(c => c.assigned_user_id === user?.id && c.status !== 'closed').length,
   };
+
+  const channelOptions: { value: string; label: string }[] = [
+    { value: 'widget', label: 'Widget' },
+    { value: 'form', label: 'Formulario web' },
+    { value: 'email', label: 'Email' },
+    { value: 'whatsapp', label: 'WhatsApp' },
+    { value: 'instagram', label: 'Instagram' },
+    { value: 'facebook', label: 'Facebook' },
+  ];
+  const getChannelLabel = (value: string) => channelOptions.find((c) => c.value === value)?.label || value;
+  const channelCounts = channelOptions.reduce<Record<string, number>>((acc, option) => {
+    acc[option.value] = conversations.filter((c) => c.source_channel === option.value).length;
+    return acc;
+  }, {});
+  const activeChannelOptions = channelOptions.filter((option) => channelCounts[option.value] > 0);
 
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-xl shadow-slate-200/60 backdrop-blur">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 text-white shadow-lg">
-                <MessageCircle className="h-6 w-6" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-slate-900">Chat Web</h2>
-                <p className="text-slate-500">Solicitudes de chat desde dogcatify.com</p>
-              </div>
-            </div>
-            {conversationLoadError && (
-              <p className="mt-2 text-sm text-red-600">
-                {conversationLoadError}
-              </p>
-            )}
-          </div>
-          <button
+      <PageHeader
+        title="Chat Web"
+        subtitle="Solicitudes de chat desde dogcatify.com"
+        action={
+          <Button
+            variant="secondary"
             onClick={loadConversations}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            icon={<RefreshCw className={`h-4 w-4 ${loadingConversations ? 'animate-spin' : ''}`} />}
           >
-            <RefreshCw className={`h-4 w-4 ${loadingConversations ? 'animate-spin' : ''}`} />
-            <span>Actualizar</span>
-          </button>
-        </div>
+            Actualizar
+          </Button>
+        }
+      />
+      {conversationLoadError && (
+        <p className="-mt-4 text-sm text-rose-600 dark:text-rose-400">
+          {conversationLoadError}
+        </p>
+      )}
 
+      <Card className="p-4">
         <div className="flex gap-4 overflow-x-auto pb-2">
-        <KpiCard label="Total" value={kpi.total} tone="slate" />
-        <KpiCard label="Abiertos" value={kpi.open} tone="orange" />
-        <KpiCard label="Tomados" value={kpi.assigned} tone="emerald" />
-        <KpiCard label="Resueltos" value={kpi.resolved} tone="teal" />
-        <KpiCard label="Cerrados" value={kpi.closed} tone="slate" />
-        <KpiCard label="Sin asignar" value={kpi.unassigned} tone="teal" />
-        <KpiCard label="No leídos" value={unreadCount} tone="indigo" />
-      </div>
-      </div>
+          <KpiCard
+            label="Total"
+            value={kpi.total}
+            tone="slate"
+            active={assignmentFilter === 'all'}
+            onClick={() => setAssignmentFilter('all')}
+          />
+          <KpiCard label="Abiertos" value={kpi.open} tone="orange" />
+          <KpiCard label="Tomados" value={kpi.assigned} tone="emerald" />
+          <KpiCard label="Resueltos" value={kpi.resolved} tone="teal" />
+          <KpiCard label="Cerrados" value={kpi.closed} tone="slate" />
+          <KpiCard
+            label="Mías"
+            value={kpi.mine}
+            tone="indigo"
+            active={assignmentFilter === 'mine'}
+            onClick={() => setAssignmentFilter(assignmentFilter === 'mine' ? 'all' : 'mine')}
+          />
+          <KpiCard
+            label="Sin asignar"
+            value={kpi.unassigned}
+            tone="teal"
+            active={assignmentFilter === 'unassigned'}
+            onClick={() => setAssignmentFilter(assignmentFilter === 'unassigned' ? 'all' : 'unassigned')}
+          />
+          <KpiCard label="No leídos" value={unreadCount} tone="indigo" />
+        </div>
+      </Card>
 
-      <div className="md:hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+      <Card className="p-3">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          <span className="flex-shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 px-1">
+            Canal
+          </span>
+          <button
+            onClick={() => setChannelFilter('all')}
+            className={`flex-shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
+              channelFilter === 'all'
+                ? 'bg-gradient-to-r from-brand-600 to-accent-600 text-white shadow'
+                : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+            }`}
+          >
+            Todos ({conversations.length})
+          </button>
+          {activeChannelOptions.map((option) => (
+            <button
+              key={option.value}
+              onClick={() => setChannelFilter(channelFilter === option.value ? 'all' : option.value)}
+              className={`flex-shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
+                channelFilter === option.value
+                  ? 'bg-gradient-to-r from-brand-600 to-accent-600 text-white shadow'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+              }`}
+            >
+              {option.label} ({channelCounts[option.value]})
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      <div className="md:hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 shadow-sm">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setMobileTab('list')}
             className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition ${
               mobileTab === 'list'
-                ? 'bg-teal-600 text-white shadow'
-                : 'bg-slate-100 text-slate-700'
+                ? 'bg-gradient-to-r from-brand-600 to-accent-600 text-white shadow'
+                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
             }`}
           >
             Lista
@@ -4307,8 +4423,8 @@ export function WebChatModule() {
             disabled={!selectedConversationId}
             className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition disabled:opacity-50 ${
               mobileTab === 'chat'
-                ? 'bg-teal-600 text-white shadow'
-                : 'bg-slate-100 text-slate-700'
+                ? 'bg-gradient-to-r from-brand-600 to-accent-600 text-white shadow'
+                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
             }`}
           >
             Chat
@@ -4318,8 +4434,8 @@ export function WebChatModule() {
             disabled={!selectedConversationId}
             className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition disabled:opacity-50 ${
               mobileTab === 'details'
-                ? 'bg-teal-600 text-white shadow'
-                : 'bg-slate-100 text-slate-700'
+                ? 'bg-gradient-to-r from-brand-600 to-accent-600 text-white shadow'
+                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
             }`}
           >
             Detalles
@@ -4332,8 +4448,8 @@ export function WebChatModule() {
           sidePanelMode ? 'md:grid-cols-[360px_1fr_360px]' : 'md:grid-cols-[360px_1fr]'
         }`}
       >
-        <div className={`${mobileTab === 'list' ? 'flex' : 'hidden'} md:flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50`}>
-          <div className="border-b border-slate-200/80 bg-slate-50/80 p-4 space-y-3">
+        <Card className={`${mobileTab === 'list' ? 'flex' : 'hidden'} md:flex h-full flex-col overflow-hidden`}>
+          <div className="border-b border-slate-200/80 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 p-4 space-y-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
@@ -4341,13 +4457,13 @@ export function WebChatModule() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Buscar por nombre, correo, teléfono o fecha..."
-                className="w-full rounded-xl border border-slate-200 bg-white/80 py-2.5 pl-9 pr-3 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 py-2.5 pl-9 pr-3 text-sm shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-500/30"
               />
             </div>
             <select
               value={causeFilter}
               onChange={(e) => setCauseFilter(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-white/80 py-2 text-sm text-slate-700 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-800 py-2 text-sm text-slate-700 dark:text-slate-200 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-500/30"
             >
               <option value="all">Todas las causas</option>
               {causeOptions.map((cause) => (
@@ -4357,7 +4473,7 @@ export function WebChatModule() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-white/80 py-2 text-sm text-slate-700 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-800 py-2 text-sm text-slate-700 dark:text-slate-200 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-500/30"
             >
               <option value="active">Activas (sin cerrados)</option>
               <option value="all">Todos los estados</option>
@@ -4370,8 +4486,8 @@ export function WebChatModule() {
           </div>
           <div className="flex-1 overflow-y-auto">
             {filteredConversations.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-500">
-                <MessageCircle className="h-10 w-10 text-slate-300" />
+              <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-500 dark:text-slate-400">
+                <MessageCircle className="h-10 w-10 text-slate-300 dark:text-slate-600" />
                 <p className="text-sm">No hay conversaciones</p>
               </div>
             ) : (
@@ -4382,6 +4498,22 @@ export function WebChatModule() {
                     conv.last_message_at &&
                     (!lastViewed || new Date(conv.last_message_at).getTime() > new Date(lastViewed).getTime())
                   );
+                  const statusBadgeVariant: BadgeVariant =
+                    conv.status === 'open'
+                      ? 'warning'
+                      : conv.status === 'assigned' || conv.status === 'taken'
+                        ? 'success'
+                        : conv.status === 'resolved'
+                          ? 'brand'
+                          : 'neutral';
+                  const statusLabel =
+                    conv.status === 'open'
+                      ? 'Abierto'
+                      : conv.status === 'assigned' || conv.status === 'taken'
+                        ? 'Tomado'
+                        : conv.status === 'resolved'
+                          ? 'Resuelto'
+                          : 'Cerrado';
 
                   return (
                     <button
@@ -4392,44 +4524,40 @@ export function WebChatModule() {
                       }}
                       className={`w-full rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md ${
                         selectedConversationId === conv.id
-                          ? 'border-teal-500 bg-teal-50/70 shadow-md'
-                          : 'border-slate-200 bg-white'
+                          ? 'border-brand-500 bg-brand-50/70 dark:border-brand-500 dark:bg-brand-500/10 shadow-md'
+                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800'
                       }`}
                     >
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="flex items-center gap-2 font-semibold text-slate-800 underline decoration-teal-200 decoration-2 underline-offset-4">
+                          <p className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100 underline decoration-brand-200 dark:decoration-brand-500/40 decoration-2 underline-offset-4">
                             {conv.visitor_name || 'Visitante anónimo'}
-                            {hasUnread && <span className="h-2 w-2 rounded-full bg-indigo-500" />}
+                            {hasUnread && <span className="h-2 w-2 rounded-full bg-accent-500" />}
                           </p>
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
                             {conv.visitor_email || conv.visitor_phone || conv.source_domain || 'sin contacto'}
                           </p>
                         </div>
-                        <span className={`rounded-full px-2 py-1 text-xs font-medium ${
-                          conv.status === 'open'
-                            ? 'bg-orange-100 text-orange-700'
-                            : conv.status === 'assigned' || conv.status === 'taken'
-                              ? 'bg-green-100 text-green-700'
-                              : conv.status === 'resolved'
-                                ? 'bg-teal-100 text-teal-700'
-                                : 'bg-slate-100 text-slate-600'
-                        }`}>
-                          {conv.status === 'open'
-                            ? 'Abierto'
-                            : conv.status === 'assigned' || conv.status === 'taken'
-                              ? 'Tomado'
-                              : conv.status === 'resolved'
-                                ? 'Resuelto'
-                                : 'Cerrado'}
-                        </span>
+                        <div className="flex flex-col items-end gap-1">
+                          <Badge variant={statusBadgeVariant}>{statusLabel}</Badge>
+                          {conv.source_channel && (
+                            <Badge variant="neutral">{getChannelLabel(conv.source_channel)}</Badge>
+                          )}
+                        </div>
                       </div>
                       <div className="mt-3 space-y-2">
-                        <div className="flex items-center justify-between text-xs text-slate-400">
+                        <div className="flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
                           Último mensaje: {conv.last_message_at ? new Date(conv.last_message_at).toLocaleString() : '—'}
                           {hasUnread ? (
-                            <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-semibold text-white">Nuevo</span>
+                            <span className="rounded-full bg-accent-600 px-2 py-0.5 text-[10px] font-semibold text-white">Nuevo</span>
                           ) : null}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          {conv.assigned_user_id
+                            ? conv.assigned_user_id === user?.id
+                              ? 'Asignada a mí'
+                              : `Asignada a ${conv.assigned_user_name || 'otro agente'}`
+                            : 'Sin asignar'}
                         </div>
                       {(conv.cause || conv.cause_custom || conv.result) && (
                         <div className="flex flex-wrap gap-2 text-[11px]">
@@ -4444,20 +4572,40 @@ export function WebChatModule() {
               </div>
             )}
           </div>
-        </div>
+        </Card>
 
-        <div className={`${mobileTab === 'chat' ? 'flex' : 'hidden'} md:flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50`}>
+        <Card className={`${mobileTab === 'chat' ? 'flex' : 'hidden'} md:flex h-full flex-col overflow-hidden`}>
           {selectedConversation ? (
             <>
-              <div className="border-b border-slate-200/80 bg-slate-50/80 px-5 py-4">
+              <div className="border-b border-slate-200/80 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 px-5 py-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h3 className="text-lg font-semibold text-slate-900">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
                       {selectedConversation.visitor_name || selectedConversation.visitor_email || selectedConversation.visitor_phone || 'Visitante anónimo'}
                     </h3>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
                       {selectedConversation.visitor_email || selectedConversation.visitor_phone || selectedConversation.source_domain || 'sin contacto'}
                     </p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                      <span className="inline-flex items-center gap-1">
+                        <Globe className="h-3.5 w-3.5" />
+                        {selectedConversation.source_channel
+                          ? getChannelLabel(selectedConversation.source_channel)
+                          : 'Origen desconocido'}
+                        {selectedConversation.source_domain ? ` · ${selectedConversation.source_domain}` : ''}
+                      </span>
+                      {selectedConversation.page_url && (
+                        <a
+                          href={selectedConversation.page_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="max-w-[220px] truncate text-brand-600 dark:text-brand-400 hover:underline"
+                          title={selectedConversation.page_url}
+                        >
+                          {selectedConversation.page_url}
+                        </a>
+                      )}
+                    </div>
                     {(selectedConversation.cause || selectedConversation.cause_custom || selectedConversation.result) && (
                       <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
                         <CauseBadge cause={selectedConversation.cause} custom={selectedConversation.cause_custom} />
@@ -4465,51 +4613,47 @@ export function WebChatModule() {
                       </div>
                     )}
                     {isConversationLocked && (
-                      <p className="mt-1 text-xs text-red-500">
+                      <p className="mt-1 text-xs text-rose-500 dark:text-rose-400">
                         Conversación asignada a otro usuario. Solo un administrador puede liberarla.
                       </p>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
                     {selectedConversation.assigned_user_id ? (
-                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                      <Badge variant="neutral">
                         Asignado a {selectedConversation.assigned_user_name || 'Agente'}
-                      </span>
+                      </Badge>
                     ) : (
-                      <button
-                        onClick={handleAssignToMe}
-                        className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 px-4 py-2 text-white shadow-md transition hover:-translate-y-0.5"
-                      >
-                        <UserCheck className="h-4 w-4" />
-                        <span>Tomar</span>
-                      </button>
+                      <Button onClick={handleAssignToMe} icon={<UserCheck className="h-4 w-4" />}>
+                        Tomar
+                      </Button>
                     )}
                     {isAdmin && selectedConversation.assigned_user_id && (
-                      <button
+                      <Button
+                        variant="danger"
                         onClick={() => handleUpdateStatus('open')}
-                        disabled={isConversationLocked}
-                        className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-red-600 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isConversationLocked && !isAdmin}
+                        icon={<X className="h-4 w-4" />}
                       >
-                        <X className="h-4 w-4" />
-                        <span>Liberar</span>
-                      </button>
+                        Liberar
+                      </Button>
                     )}
-                    <button
+                    <Button
+                      variant="secondary"
                       onClick={() => setShowTransfer(true)}
-                      className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={isConversationLocked}
+                      disabled={isConversationLocked && !isAdmin}
+                      icon={<Users className="h-4 w-4" />}
                     >
-                      <Users className="h-4 w-4" />
-                      <span>Transferir</span>
-                    </button>
+                      Transferir
+                    </Button>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 border-b border-slate-200/80 bg-white px-5 py-4">
+              <div className="flex items-center gap-3 border-b border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4">
                 <button
                   onClick={openEmailComposer}
-                  className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-700 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={
                     isConversationLocked ||
                     isClosed ||
@@ -4522,7 +4666,7 @@ export function WebChatModule() {
                 </button>
                 <button
                   onClick={openDialer}
-                  className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-700 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={isConversationLocked || isClosed}
                 >
                   <Phone className="h-4 w-4" />
@@ -4536,7 +4680,7 @@ export function WebChatModule() {
                   className={
                     linkedTicketNumber && linkedTicketStatus
                       ? `flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 ${getTicketStatusClasses(linkedTicketStatus)}`
-                      : 'flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60'
+                      : 'flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-700 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60'
                   }
                   disabled={isConversationLocked || (!linkedTicketNumber && isClosed)}
                 >
@@ -4544,7 +4688,7 @@ export function WebChatModule() {
                   <span className="flex flex-col leading-tight">
                     <span>{linkedTicketNumber ? 'Ver Ticket' : 'Crear Ticket'}</span>
                     {linkedTicketNumber && (
-                      <span className="text-[10px] font-normal text-slate-500">{linkedTicketNumber}</span>
+                      <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400">{linkedTicketNumber}</span>
                     )}
                   </span>
                 </button>
@@ -4553,7 +4697,7 @@ export function WebChatModule() {
                     setMobileTab('details');
                     openClientPanel();
                   }}
-                  className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-700 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={isConversationLocked || isClosed}
                 >
                   <UserPlus className="h-4 w-4" />
@@ -4564,7 +4708,7 @@ export function WebChatModule() {
                     setMobileTab('details');
                     handleQuoteButtonClick();
                   }}
-                  className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex items-center gap-2 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-700 dark:text-amber-400 transition hover:bg-amber-100 dark:hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={isConversationLocked || isClosed}
                 >
                   <ShoppingCart className="h-4 w-4" />
@@ -4572,15 +4716,15 @@ export function WebChatModule() {
                 </button>
                 <div className="ml-auto flex items-center gap-2">
                   {selectedConversation.status === 'closed' && !isConversationLocked && (
-                    <button
+                    <Button
+                      variant="secondary"
                       onClick={() => handleUpdateStatus('open', { preserveAssignment: true })}
-                      className="flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-700 shadow-sm transition hover:-translate-y-0.5"
+                      icon={<RefreshCw className="h-4 w-4" />}
                     >
-                      <RefreshCw className="h-4 w-4" />
-                      <span>Reabrir chat</span>
-                    </button>
+                      Reabrir chat
+                    </Button>
                   )}
-                  <button
+                  <Button
                     onClick={() => {
                       const ticketBlocksClose =
                         !!linkedTicketNumber &&
@@ -4603,25 +4747,24 @@ export function WebChatModule() {
                         ? 'No puedes cerrar el chat mientras el ticket esté abierto.'
                         : undefined
                     }
-                    className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                    icon={<CheckCircle className="h-4 w-4" />}
                   >
-                    <CheckCircle className="h-4 w-4" />
-                    <span>Cerrar chat</span>
-                  </button>
+                    Cerrar chat
+                  </Button>
                 </div>
               </div>
 
-              <div ref={messageListRef} className="flex-1 overflow-y-auto bg-slate-50/80 p-6">
+              <div ref={messageListRef} className="flex-1 overflow-y-auto bg-slate-50/80 dark:bg-slate-900/40 p-6">
                 {!selectedConversation?.assigned_user_id && !isClosed ? (
-                  <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                  <div className="flex h-full items-center justify-center text-sm text-slate-500 dark:text-slate-400">
                     Toma este chat para ver los mensajes.
                   </div>
                 ) : isConversationLocked || isClosed ? (
-                  <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                  <div className="flex h-full items-center justify-center text-sm text-slate-500 dark:text-slate-400">
                     {isClosed ? 'Conversación cerrada. Reabre para ver mensajes.' : 'No tienes acceso a los mensajes de esta conversación.'}
                   </div>
                 ) : loadingMessages ? (
-                  <div className="text-center text-slate-500">Cargando mensajes...</div>
+                  <div className="text-center text-slate-500 dark:text-slate-400">Cargando mensajes...</div>
                 ) : (
                   <div className="space-y-4">
                     {messages.map((msg) => (
@@ -4629,8 +4772,8 @@ export function WebChatModule() {
                         key={msg.id}
                         className={`max-w-2xl rounded-2xl px-4 py-3 shadow-sm ${
                           (msg.sender_type === 'agent' || msg.sender_type === 'bot')
-                            ? 'ml-auto bg-gradient-to-r from-blue-600 to-indigo-600 text-white'
-                            : 'bg-white text-slate-800 border border-slate-200'
+                            ? 'ml-auto bg-gradient-to-r from-brand-600 to-accent-600 text-white'
+                            : 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-600'
                         }`}
                       >
                         <div className="mb-2 text-xs opacity-80">
@@ -4646,7 +4789,7 @@ export function WebChatModule() {
                                 target="_blank"
                                 rel="noreferrer"
                                 className={`flex items-center gap-2 text-sm ${
-                                  (msg.sender_type === 'agent' || msg.sender_type === 'bot') ? 'text-white/90' : 'text-blue-600'
+                                  (msg.sender_type === 'agent' || msg.sender_type === 'bot') ? 'text-white/90' : 'text-brand-600 dark:text-brand-400'
                                 }`}
                               >
                                 <FileText className="h-4 w-4" />
@@ -4661,20 +4804,20 @@ export function WebChatModule() {
                 )}
               </div>
 
-              <div className="border-t border-slate-200/80 bg-white p-5">
+              <div className="border-t border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 p-5">
                 {emailComposerOpen ? (
                   <div className="space-y-3">
-                    <div className="text-xs font-medium text-slate-500">Respuesta por correo</div>
+                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400">Respuesta por correo</div>
                     <input
                       value={selectedConversation.visitor_email || ''}
                       readOnly
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-3 py-2 text-sm text-slate-600 dark:text-slate-300"
                     />
                     <input
                       value={emailSubject}
                       onChange={(e) => setEmailSubject(e.target.value)}
                       placeholder="Asunto"
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-500/30"
                       disabled={isConversationLocked || isClosed || sendingEmail}
                     />
                     <textarea
@@ -4682,22 +4825,18 @@ export function WebChatModule() {
                       onChange={(e) => setEmailBody(e.target.value)}
                       rows={5}
                       placeholder="Escribe tu respuesta por correo..."
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-50"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-500/30 disabled:cursor-not-allowed disabled:bg-slate-50 dark:disabled:bg-slate-800"
                       disabled={isConversationLocked || isClosed || sendingEmail}
                     />
                     <div className="flex items-center justify-end gap-2">
                       {!isFormConversation && (
-                        <button
-                          onClick={() => setEmailComposerOpen(false)}
-                          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm transition hover:-translate-y-0.5"
-                          disabled={sendingEmail}
-                        >
+                        <Button variant="secondary" onClick={() => setEmailComposerOpen(false)} disabled={sendingEmail}>
                           Cancelar
-                        </button>
+                        </Button>
                       )}
-                      <button
+                      <Button
                         onClick={handleSendEmailFromChat}
-                        className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-600 px-5 py-3 text-white shadow-lg transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                        icon={<Send className="h-4 w-4" />}
                         disabled={
                           isConversationLocked ||
                           isClosed ||
@@ -4707,13 +4846,12 @@ export function WebChatModule() {
                           !emailBody.trim()
                         }
                       >
-                        <Send className="h-4 w-4" />
-                        <span>{sendingEmail ? 'Enviando...' : 'Enviar email'}</span>
-                      </button>
+                        {sendingEmail ? 'Enviando...' : 'Enviar email'}
+                      </Button>
                     </div>
                   </div>
                 ) : isFormConversation ? (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-4 text-sm text-slate-600 dark:text-slate-300">
                     {!selectedConversation.assigned_user_id
                       ? 'Toma el chat para habilitar la respuesta por email.'
                       : 'Haz clic en “Responder por Email” para preparar y enviar una sola respuesta completa.'}
@@ -4731,12 +4869,12 @@ export function WebChatModule() {
                       />
                       <button
                         onClick={() => fileInputRef.current?.click()}
-                        className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                         disabled={isConversationLocked || isClosed}
                       >
-                        <Paperclip className="h-4 w-4" />
+                        <Paperclip className="h-4 w-4 text-slate-600 dark:text-slate-300" />
                       </button>
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
                         {attachments.length > 0 ? `${attachments.length} adjunto(s)` : 'Sin adjuntos'}
                       </div>
                     </div>
@@ -4754,32 +4892,32 @@ export function WebChatModule() {
                         }}
                         rows={2}
                         placeholder="Escribe un mensaje..."
-                        className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-50"
+                        className="flex-1 rounded-2xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 px-4 py-3 text-sm shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-500/30 disabled:cursor-not-allowed disabled:bg-slate-50 dark:disabled:bg-slate-800"
                         disabled={isConversationLocked || isClosed}
                       />
-                      <button
+                      <Button
                         onClick={handleSendMessage}
-                        className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-600 px-5 py-3 text-white shadow-lg transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                        size="lg"
+                        icon={<Send className="h-4 w-4" />}
                         disabled={isConversationLocked || isClosed}
                       >
-                        <Send className="h-4 w-4" />
-                        <span>Enviar</span>
-                      </button>
+                        Enviar
+                      </Button>
                     </div>
                   </>
                 )}
               </div>
             </>
           ) : (
-            <div className="flex h-full items-center justify-center text-sm text-slate-500">
+            <div className="flex h-full items-center justify-center text-sm text-slate-500 dark:text-slate-400">
               Selecciona una conversación para empezar.
             </div>
           )}
-        </div>
+        </Card>
 
         {sidePanelMode && selectedConversation && (
-          <div className={`${mobileTab === 'details' ? 'flex' : 'hidden'} md:flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50`}>
-            <div className="flex items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-5 py-4">
+          <Card className={`${mobileTab === 'details' ? 'flex' : 'hidden'} md:flex h-full flex-col overflow-hidden`}>
+            <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 px-5 py-4">
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">
                   {sidePanelMode === 'client'
@@ -4790,7 +4928,7 @@ export function WebChatModule() {
                       ? 'Ver Ticket'
                       : 'Crear Ticket'}
                 </h3>
-                <p className="text-xs text-slate-500 flex items-center gap-2">
+                <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
                   <span>
                     {sidePanelMode === 'ticket_view' && ticketViewTicket?.ticket_number
                       ? ticketViewTicket.ticket_number
@@ -4799,9 +4937,7 @@ export function WebChatModule() {
                   {sidePanelMode === 'ticket_view' &&
                     ticketViewHasUpdates &&
                     (ticketViewTicket?.status === 'resolved' || ticketViewTicket?.status === 'closed') && (
-                      <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700">
-                        Actualizado
-                      </span>
+                      <Badge variant="danger">Actualizado</Badge>
                     )}
                 </p>
               </div>
@@ -4819,7 +4955,7 @@ export function WebChatModule() {
                   setClientViewClient(null);
                   setClientViewLoading(false);
                 }}
-                className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 shadow-sm transition hover:-translate-y-0.5"
+                className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 text-slate-600 dark:text-slate-300 shadow-sm transition hover:-translate-y-0.5"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -4828,19 +4964,19 @@ export function WebChatModule() {
             <div className="flex-1 overflow-y-auto p-5">
               {sidePanelMode === 'client' ? (
                 <div className="space-y-4">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 space-y-2">
-                    <label className="text-xs font-semibold text-slate-600">Buscar cliente existente</label>
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 p-3 space-y-2">
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Buscar cliente existente</label>
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                       <input
                         value={clientSearch}
                         onChange={(e) => setClientSearch(e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 bg-white/80 py-2 pl-9 pr-3 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-800 text-slate-900 dark:text-white py-2 pl-9 pr-3 text-sm shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-500/30"
                         placeholder="Nombre, email, teléfono o empresa"
                       />
                     </div>
                     {clientSearchLoading ? (
-                      <p className="text-xs text-slate-500">Buscando...</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Buscando...</p>
                     ) : clientSearch.trim().length >= 2 ? (
                       clientResults.length > 0 ? (
                         <div className="space-y-2">
@@ -4848,71 +4984,71 @@ export function WebChatModule() {
                             <button
                               key={client.id}
                               onClick={() => handleAssignExistingClient(client)}
-                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm shadow-sm transition hover:-translate-y-0.5 hover:border-teal-300"
+                              className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-left text-sm shadow-sm transition hover:-translate-y-0.5 hover:border-brand-300 dark:hover:border-brand-500"
                             >
                               <div className="flex items-center justify-between">
                                 <div>
-                                  <p className="font-semibold text-slate-800">{client.contact_name || client.company_name || 'Cliente'}</p>
-                                  <p className="text-xs text-slate-500">{client.email || client.phone || 'Sin contacto'}</p>
+                                  <p className="font-semibold text-slate-800 dark:text-slate-100">{client.contact_name || client.company_name || 'Cliente'}</p>
+                                  <p className="text-xs text-slate-500 dark:text-slate-400">{client.email || client.phone || 'Sin contacto'}</p>
                                 </div>
-                                <span className="text-[10px] uppercase text-slate-400">{client.status}</span>
+                                <span className="text-[10px] uppercase text-slate-400 dark:text-slate-500">{client.status}</span>
                               </div>
                               {client.company_name && (
-                                <p className="text-xs text-slate-500 mt-1">{client.company_name}</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{client.company_name}</p>
                               )}
                             </button>
                           ))}
                         </div>
                       ) : (
-                        <p className="text-xs text-slate-500">Sin resultados</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Sin resultados</p>
                       )
                     ) : (
-                      <p className="text-xs text-slate-400">Escribe al menos 2 caracteres.</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">Escribe al menos 2 caracteres.</p>
                     )}
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Nombre del contacto</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Nombre del contacto</label>
                     <input
                       value={clientDraft.contact_name}
                       onChange={(e) => setClientDraft({ ...clientDraft, contact_name: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="Nombre y apellido"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Email</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Email</label>
                     <input
                       value={clientDraft.email}
                       onChange={(e) => setClientDraft({ ...clientDraft, email: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="correo@dominio.com"
                       type="email"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Teléfono</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Teléfono</label>
                     <input
                       value={clientDraft.phone}
                       onChange={(e) => setClientDraft({ ...clientDraft, phone: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="+1 809 000 0000"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Empresa</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Empresa</label>
                     <input
                       value={clientDraft.company_name}
                       onChange={(e) => setClientDraft({ ...clientDraft, company_name: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="Nombre de la empresa"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Estado</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Estado</label>
                     <select
                       value={clientDraft.status}
                       onChange={(e) => setClientDraft({ ...clientDraft, status: e.target.value as ClientDraft['status'] })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 py-2 text-sm"
                     >
                       <option value="prospect">Prospecto</option>
                       <option value="active">Activo</option>
@@ -4922,32 +5058,32 @@ export function WebChatModule() {
                 </div>
               ) : sidePanelMode === 'client_view' ? (
                 <div className="space-y-4">
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-                    <div className="text-xs font-semibold text-emerald-800">Cliente cargado</div>
+                  <div className="rounded-2xl border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 px-4 py-3">
+                    <div className="text-xs font-semibold text-emerald-800 dark:text-emerald-400">Cliente cargado</div>
                     {createdClientId && (
-                      <div className="mt-1 text-[11px] text-emerald-700">ID: {createdClientId.slice(0, 8)}...</div>
+                      <div className="mt-1 text-[11px] text-emerald-700 dark:text-emerald-400">ID: {createdClientId.slice(0, 8)}...</div>
                     )}
                   </div>
 
                   {clientViewLoading ? (
-                    <div className="text-sm text-slate-500">Cargando cliente...</div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400">Cargando cliente...</div>
                   ) : !clientViewClient ? (
-                    <div className="text-sm text-slate-500">No hay cliente para mostrar.</div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400">No hay cliente para mostrar.</div>
                   ) : (
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="font-semibold text-slate-900 truncate">
+                          <div className="font-semibold text-slate-900 dark:text-white truncate">
                             {clientViewClient.contact_name || clientViewClient.company_name || 'Cliente'}
                           </div>
-                          <div className="mt-1 text-xs text-slate-600 truncate">
+                          <div className="mt-1 text-xs text-slate-600 dark:text-slate-300 truncate">
                             {clientViewClient.email || clientViewClient.phone || 'Sin contacto'}
                           </div>
                           {clientViewClient.company_name && (
-                            <div className="mt-1 text-xs text-slate-500 truncate">{clientViewClient.company_name}</div>
+                            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400 truncate">{clientViewClient.company_name}</div>
                           )}
                         </div>
-                        <span className="text-[10px] uppercase text-slate-400">{clientViewClient.status}</span>
+                        <span className="text-[10px] uppercase text-slate-400 dark:text-slate-500">{clientViewClient.status}</span>
                       </div>
                     </div>
                   )}
@@ -4955,7 +5091,7 @@ export function WebChatModule() {
                   <button
                     type="button"
                     onClick={() => openClientPanel({ forceChange: true })}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5"
+                    className="w-full rounded-2xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 shadow-sm transition hover:-translate-y-0.5"
                   >
                     Cambiar cliente
                   </button>
@@ -4963,17 +5099,17 @@ export function WebChatModule() {
               ) : sidePanelMode === 'ticket_view' ? (
                 <div className="space-y-4">
                   {ticketViewLoading ? (
-                    <div className="text-sm text-slate-500">Cargando ticket...</div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400">Cargando ticket...</div>
                   ) : !ticketViewTicket ? (
-                    <div className="text-sm text-slate-500">No hay ticket para mostrar.</div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400">No hay ticket para mostrar.</div>
                   ) : (
                     <>
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                      <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <div className="text-xs text-slate-500">{ticketViewTicket.ticket_number}</div>
-                            <div className="mt-1 font-semibold text-slate-900 truncate">{ticketViewTicket.subject}</div>
-                            <div className="mt-1 text-xs text-slate-600 truncate">
+                            <div className="text-xs text-slate-500 dark:text-slate-400">{ticketViewTicket.ticket_number}</div>
+                            <div className="mt-1 font-semibold text-slate-900 dark:text-white truncate">{ticketViewTicket.subject}</div>
+                            <div className="mt-1 text-xs text-slate-600 dark:text-slate-300 truncate">
                               {ticketViewTicket.assigned_user?.full_name
                                 ? `Asignado a ${ticketViewTicket.assigned_user.full_name}`
                                 : 'No asignado'}
@@ -4991,20 +5127,20 @@ export function WebChatModule() {
                       </div>
 
                       <div>
-                        <label className="text-xs font-semibold text-slate-600">Descripción</label>
-                        <div className="mt-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 whitespace-pre-wrap">
+                        <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Descripción</label>
+                        <div className="mt-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-3 text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
                           {ticketViewTicket.description}
                         </div>
                       </div>
 
                       <div>
-                        <label className="text-xs font-semibold text-slate-600">Acciones rápidas</label>
+                        <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Acciones rápidas</label>
                         <div className="mt-2 flex flex-wrap gap-2">
                           {(ticketViewTicket.status === 'resolved' || ticketViewTicket.status === 'closed') && (
                             <button
                               type="button"
                               onClick={() => handleTicketViewUpdateStatus('open')}
-                              className="rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 transition hover:bg-teal-100"
+                              className="rounded-xl border border-brand-200 dark:border-brand-500/30 bg-brand-50 dark:bg-brand-500/10 px-3 py-2 text-xs font-semibold text-brand-700 dark:text-brand-400 transition hover:bg-brand-100 dark:hover:bg-brand-500/20"
                             >
                               Reabrir
                             </button>
@@ -5013,7 +5149,7 @@ export function WebChatModule() {
                             type="button"
                             onClick={() => handleTicketViewUpdateStatus('in_progress')}
                             disabled={true}
-                            className="rounded-xl bg-blue-100 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-200 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-xl bg-sky-100 dark:bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-700 dark:text-sky-400 transition hover:bg-sky-200 dark:hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             En Progreso
                           </button>
@@ -5021,7 +5157,7 @@ export function WebChatModule() {
                             type="button"
                             onClick={() => handleTicketViewUpdateStatus('waiting')}
                             disabled={true}
-                            className="rounded-xl bg-yellow-100 px-3 py-2 text-xs font-semibold text-yellow-700 transition hover:bg-yellow-200 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-xl bg-amber-100 dark:bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-400 transition hover:bg-amber-200 dark:hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             En Espera
                           </button>
@@ -5029,7 +5165,7 @@ export function WebChatModule() {
                             type="button"
                             onClick={() => handleTicketViewUpdateStatus('resolved')}
                             disabled={true}
-                            className="rounded-xl bg-green-100 px-3 py-2 text-xs font-semibold text-green-700 transition hover:bg-green-200 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-xl bg-emerald-100 dark:bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400 transition hover:bg-emerald-200 dark:hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             Resolver
                           </button>
@@ -5037,7 +5173,7 @@ export function WebChatModule() {
                             type="button"
                             onClick={() => handleTicketViewUpdateStatus('closed')}
                             disabled={true}
-                            className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-xl bg-slate-100 dark:bg-slate-700 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             Cerrar
                           </button>
@@ -5045,14 +5181,14 @@ export function WebChatModule() {
                       </div>
 
                       <div className="mt-2">
-                        <div className="flex gap-2 border-b border-slate-200">
+                        <div className="flex gap-2 border-b border-slate-200 dark:border-slate-700">
                           <button
                             type="button"
                             onClick={() => setTicketViewTab('comments')}
                             className={`px-2 pb-2 text-xs font-semibold border-b-2 transition ${
                               ticketViewTab === 'comments'
-                                ? 'text-teal-700 border-teal-600'
-                                : 'text-slate-500 border-transparent hover:text-slate-700'
+                                ? 'text-brand-700 dark:text-brand-400 border-brand-600 dark:border-brand-500'
+                                : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-200'
                             }`}
                           >
                             Comentarios ({ticketViewComments.length})
@@ -5062,8 +5198,8 @@ export function WebChatModule() {
                             onClick={() => setTicketViewTab('activity')}
                             className={`px-2 pb-2 text-xs font-semibold border-b-2 transition ${
                               ticketViewTab === 'activity'
-                                ? 'text-teal-700 border-teal-600'
-                                : 'text-slate-500 border-transparent hover:text-slate-700'
+                                ? 'text-brand-700 dark:text-brand-400 border-brand-600 dark:border-brand-500'
+                                : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-200'
                             }`}
                           >
                             Actividad ({ticketViewActivities.length})
@@ -5074,44 +5210,44 @@ export function WebChatModule() {
                           <>
                             <div className="mt-3 space-y-3 max-h-56 overflow-y-auto">
                               {ticketViewComments.length === 0 ? (
-                                <div className="text-xs text-slate-500">No hay comentarios.</div>
+                                <div className="text-xs text-slate-500 dark:text-slate-400">No hay comentarios.</div>
                               ) : (
                                 ticketViewComments.map((c) => (
                                   <div
                                     key={c.id}
                                     className={`rounded-2xl border p-3 text-sm ${
                                       c.is_internal
-                                        ? 'border-amber-200 bg-amber-50'
-                                        : 'border-slate-200 bg-white'
+                                        ? 'border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10'
+                                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800'
                                     }`}
                                   >
                                     <div className="flex items-center justify-between gap-3">
                                       <div className="min-w-0">
-                                        <div className="text-xs font-semibold text-slate-700 truncate">
+                                        <div className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">
                                           {c.user_name || 'Usuario'}
                                         </div>
-                                        {c.user_email && <div className="text-[11px] text-slate-400 truncate">{c.user_email}</div>}
+                                        {c.user_email && <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{c.user_email}</div>}
                                       </div>
-                                      <div className="text-[11px] text-slate-400">
+                                      <div className="text-[11px] text-slate-400 dark:text-slate-500">
                                         {new Date(c.created_at).toLocaleString()}
                                       </div>
                                     </div>
-                                    <div className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{c.comment}</div>
+                                    <div className="mt-2 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">{c.comment}</div>
                                     {c.is_internal && (
-                                      <div className="mt-2 text-[10px] font-semibold text-amber-700">Interno</div>
+                                      <div className="mt-2 text-[10px] font-semibold text-amber-700 dark:text-amber-400">Interno</div>
                                     )}
                                   </div>
                                 ))
                               )}
                             </div>
 
-                            <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3">
-                              <label className="flex items-center gap-2 text-xs text-slate-600">
+                            <div className="mt-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3">
+                              <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
                                 <input
                                   type="checkbox"
                                   checked={ticketViewIsInternal}
                                   onChange={(e) => setTicketViewIsInternal(e.target.checked)}
-                                  className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                                  className="rounded border-slate-300 dark:border-slate-600 text-brand-600 focus:ring-brand-500"
                                 />
                                 Comentario interno
                               </label>
@@ -5127,33 +5263,32 @@ export function WebChatModule() {
                                 disabled={ticketViewTicket.status === 'resolved' || ticketViewTicket.status === 'closed'}
                                 rows={3}
                                 placeholder="Escribe un comentario..."
-                                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-slate-50"
+                                className="mt-2 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-slate-50 dark:disabled:bg-slate-900"
                               />
-                              <button
-                                type="button"
+                              <Button
                                 onClick={handleTicketViewAddComment}
                                 disabled={ticketViewTicket.status === 'resolved' || ticketViewTicket.status === 'closed'}
-                                className="mt-2 w-full rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="mt-2 w-full"
                               >
                                 Enviar
-                              </button>
+                              </Button>
                             </div>
                           </>
                         ) : (
                           <div className="mt-3 space-y-3 max-h-72 overflow-y-auto">
                             {ticketViewActivities.length === 0 ? (
-                              <div className="text-xs text-slate-500">No hay actividad registrada.</div>
+                              <div className="text-xs text-slate-500 dark:text-slate-400">No hay actividad registrada.</div>
                             ) : (
                               ticketViewActivities.map((a) => (
-                                <div key={a.id} className="rounded-2xl border border-slate-200 bg-white p-3">
-                                  <div className="text-xs font-semibold text-slate-800">{a.action}</div>
+                                <div key={a.id} className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3">
+                                  <div className="text-xs font-semibold text-slate-800 dark:text-slate-100">{a.action}</div>
                                   {a.field_changed && (
-                                    <div className="mt-1 text-xs text-slate-600">
+                                    <div className="mt-1 text-xs text-slate-600 dark:text-slate-300">
                                       {a.field_changed}: {a.old_value} → {a.new_value}
                                     </div>
                                   )}
-                                  {a.description && <div className="mt-1 text-xs text-slate-600">{a.description}</div>}
-                                  <div className="mt-2 text-[11px] text-slate-400">{new Date(a.created_at).toLocaleString()}</div>
+                                  {a.description && <div className="mt-1 text-xs text-slate-600 dark:text-slate-300">{a.description}</div>}
+                                  <div className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">{new Date(a.created_at).toLocaleString()}</div>
                                 </div>
                               ))
                             )}
@@ -5166,35 +5301,35 @@ export function WebChatModule() {
               ) : (
                 <div className="space-y-4">
                   {createdClientId && (
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                    <div className="rounded-xl border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400">
                       Cliente vinculado: {createdClientId.slice(0, 8)}...
                     </div>
                   )}
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Asunto</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Asunto</label>
                     <input
                       value={ticketDraft.subject}
                       onChange={(e) => setTicketDraft({ ...ticketDraft, subject: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="Asunto del ticket"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Descripción</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Descripción</label>
                     <textarea
                       value={ticketDraft.description}
                       onChange={(e) => setTicketDraft({ ...ticketDraft, description: e.target.value })}
                       rows={6}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="Detalle del caso"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Prioridad</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Prioridad</label>
                     <select
                       value={ticketDraft.priority}
                       onChange={(e) => setTicketDraft({ ...ticketDraft, priority: e.target.value as TicketDraft['priority'] })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 py-2 text-sm"
                     >
                       <option value="low">Baja</option>
                       <option value="medium">Media</option>
@@ -5207,17 +5342,17 @@ export function WebChatModule() {
             </div>
 
             {(sidePanelMode === 'client' || sidePanelMode === 'ticket') && (
-              <div className="border-t border-slate-200/80 bg-white px-5 py-4">
-                <button
+              <div className="border-t border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4">
+                <Button
                   onClick={sidePanelMode === 'client' ? handleSaveClient : handleSaveTicket}
                   disabled={sidePanelSaving}
-                  className="w-full rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="w-full"
                 >
                   {sidePanelSaving ? 'Guardando...' : sidePanelMode === 'client' ? 'Crear Cliente' : 'Crear Ticket'}
-                </button>
+                </Button>
               </div>
             )}
-          </div>
+          </Card>
         )}
       </div>
 
@@ -5344,7 +5479,19 @@ export function WebChatModule() {
   );
 }
 
-function KpiCard({ label, value, tone }: { label: string; value: number; tone: 'slate' | 'orange' | 'emerald' | 'teal' | 'indigo' }) {
+function KpiCard({
+  label,
+  value,
+  tone,
+  onClick,
+  active,
+}: {
+  label: string;
+  value: number;
+  tone: 'slate' | 'orange' | 'emerald' | 'teal' | 'indigo';
+  onClick?: () => void;
+  active?: boolean;
+}) {
   const toneClasses = {
     slate: 'from-slate-600 to-slate-500',
     orange: 'from-orange-500 to-amber-500',
@@ -5353,13 +5500,23 @@ function KpiCard({ label, value, tone }: { label: string; value: number; tone: '
     indigo: 'from-indigo-500 to-purple-500'
   };
 
+  const Component = onClick ? 'button' : 'div';
+
   return (
-    <div className="min-w-[180px] rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <Component
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      className={`min-w-[180px] rounded-2xl border p-5 shadow-sm text-left transition ${
+        active
+          ? 'border-brand-400 dark:border-brand-500 bg-brand-50 dark:bg-brand-500/10 ring-2 ring-brand-200 dark:ring-brand-500/30'
+          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800'
+      } ${onClick ? 'cursor-pointer hover:shadow-md' : ''}`}
+    >
       <div className={`inline-flex rounded-xl bg-gradient-to-r ${toneClasses[tone]} px-3 py-1 text-xs font-semibold text-white`}>
         {label}
       </div>
-      <div className="mt-3 text-2xl font-bold text-slate-900">{value}</div>
-    </div>
+      <div className="mt-3 text-2xl font-bold text-slate-900 dark:text-white">{value}</div>
+    </Component>
   );
 }
 

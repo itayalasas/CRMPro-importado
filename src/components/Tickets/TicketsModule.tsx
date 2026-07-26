@@ -10,6 +10,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
 import { consumeTicketCreateDraft, type TicketCreateDraft } from '../../lib/ticketDraft';
+import { recordClientInteractionSafely } from '../../lib/clientInteractionLogger';
+import { PageHeader } from '../ui/PageHeader';
+import { StatCard } from '../ui/StatCard';
+import { Card } from '../ui/Card';
+import { Badge, BadgeVariant } from '../ui/Badge';
+import { Button } from '../ui/Button';
 
 interface Ticket {
   id: string;
@@ -152,6 +158,8 @@ const getSourceLabel = (source: string | null | undefined): string => {
     case 'webchat':
     case 'chat':
       return 'Chat Web';
+    case 'agenda':
+      return 'Agenda';
     case 'llamadas':
     case 'llamada':
     case 'llamada_modal':
@@ -164,24 +172,54 @@ const getSourceLabel = (source: string | null | undefined): string => {
   }
 };
 
-const getSourceBadgeClass = (source: string | null | undefined): string => {
+const getSourceBadgeVariant = (source: string | null | undefined): BadgeVariant => {
   switch ((source || '').toLowerCase()) {
     case 'email':
     case 'mail':
     case 'correo':
     case 'buzon':
-      return 'bg-blue-50 text-blue-700 border-blue-200';
+      return 'info';
     case 'chat_web':
     case 'webchat':
     case 'chat':
-      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      return 'success';
+    case 'agenda':
     case 'llamadas':
     case 'llamada':
     case 'llamada_modal':
     case 'call':
-      return 'bg-violet-50 text-violet-700 border-violet-200';
+      return 'brand';
     default:
-      return 'bg-slate-100 text-slate-700 border-slate-200';
+      return 'neutral';
+  }
+};
+
+const getStatusBadgeVariant = (statusCode: string): BadgeVariant => {
+  switch (statusCode) {
+    case 'open':
+    case 'in_progress':
+      return 'info';
+    case 'waiting':
+      return 'warning';
+    case 'resolved':
+    case 'closed':
+      return 'success';
+    default:
+      return 'neutral';
+  }
+};
+
+const getPriorityBadgeVariant = (priority: string): BadgeVariant => {
+  switch (priority) {
+    case 'low':
+      return 'info';
+    case 'medium':
+      return 'warning';
+    case 'high':
+    case 'urgent':
+      return 'danger';
+    default:
+      return 'neutral';
   }
 };
 
@@ -817,6 +855,26 @@ export function TicketsModule() {
       setWebchatDraft(null);
     }
 
+    void recordClientInteractionSafely({
+      client_id: ticketData.client_id || null,
+      type: 'ticket_created',
+      description: `Ticket ${ticketData.ticket_number} creado`,
+      metadata: {
+        ticket_number: ticketData.ticket_number,
+        subject: ticketData.subject,
+        priority: ticketData.priority,
+        status: selectedStatus,
+        source_module: ticketData.source_module || null,
+        source_name: draftSourceContact?.name || null,
+        source_email: draftSourceContact?.email || null,
+        source_phone: draftSourceContact?.phone || null,
+        conversation_id: webchatDraft?.conversationId || null,
+        order_id: draftOrderId || null,
+      },
+      created_by: user?.id || null,
+      created_at: new Date().toISOString(),
+    });
+
     showToast('Ticket creado exitosamente', 'success');
     loadTickets();
     resetForm();
@@ -1122,16 +1180,6 @@ export function TicketsModule() {
     // eslint-disable-next-line
   }, [selectedTicket]);
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'low': return 'bg-blue-100 text-blue-800 border-blue-300';
-      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'high': return 'bg-orange-100 text-orange-800 border-orange-300';
-      case 'urgent': return 'bg-red-100 text-red-800 border-red-300';
-      default: return 'bg-slate-100 text-slate-800 border-slate-300';
-    }
-  };
-
   const getStatusConfig = (statusCode: string) => {
     const config = ticketStatuses.find((item) => item.code === statusCode);
     if (config) return config;
@@ -1211,85 +1259,41 @@ export function TicketsModule() {
   };
 
   return (
-    <div className="p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-4xl font-bold text-slate-900">Tickets de Soporte</h1>
-          <p className="text-slate-600 mt-2">Gestiona y resuelve tickets de clientes</p>
-        </div>
-        <button
-          onClick={openCreateModal}
-          className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition shadow-lg hover:shadow-xl"
-        >
-          <Plus className="w-5 h-5" />
-          <span className="font-semibold">Nuevo Ticket</span>
-        </button>
-      </div>
+    <div className="p-4 sm:p-6 lg:p-8 min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+      <PageHeader
+        title="Tickets de Soporte"
+        subtitle="Gestiona y resuelve tickets de clientes"
+        action={
+          <Button onClick={openCreateModal} icon={<Plus className="w-5 h-5" />}>
+            Nuevo Ticket
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition">
-          <div className="flex items-center justify-between mb-3">
-            <div className="bg-indigo-500 p-3 rounded-xl">
-              <Ticket className="w-6 h-6 text-white" />
-            </div>
-            <span className="text-3xl font-bold text-slate-900">{totalCount}</span>
-          </div>
-          <p className="text-sm font-medium text-slate-600">Total tickets</p>
-        </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition">
-          <div className="flex items-center justify-between mb-3">
-            <div className="bg-emerald-500 p-3 rounded-xl">
-              <CheckCircle className="w-6 h-6 text-white" />
-            </div>
-            <span className="text-3xl font-bold text-slate-900">{completedCount}</span>
-          </div>
-          <p className="text-sm font-medium text-slate-600">Completados</p>
-        </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition">
-          <div className="flex items-center justify-between mb-3">
-            <div className="bg-blue-500 p-3 rounded-xl">
-              <Clock className="w-6 h-6 text-white" />
-            </div>
-            <span className="text-3xl font-bold text-slate-900">{inProgressCount}</span>
-          </div>
-          <p className="text-sm font-medium text-slate-600">En gestión</p>
-        </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition">
-          <div className="flex items-center justify-between mb-3">
-            <div className="bg-amber-500 p-3 rounded-xl">
-              <AlertCircle className="w-6 h-6 text-white" />
-            </div>
-            <span className="text-3xl font-bold text-slate-900">{urgentCount}</span>
-          </div>
-          <p className="text-sm font-medium text-slate-600">Alta/Urgente</p>
-        </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition">
-          <div className="flex items-center justify-between mb-3">
-            <div className="bg-rose-500 p-3 rounded-xl">
-              <AlertTriangle className="w-6 h-6 text-white" />
-            </div>
-            <span className="text-3xl font-bold text-slate-900">{overdueCount}</span>
-          </div>
-          <p className="text-sm font-medium text-slate-600">Vencidos</p>
-        </div>
+        <StatCard color="brand" icon={<Ticket />} label="Total tickets" value={totalCount} />
+        <StatCard color="success" icon={<CheckCircle />} label="Completados" value={completedCount} />
+        <StatCard color="info" icon={<Clock />} label="En gestión" value={inProgressCount} />
+        <StatCard color="warning" icon={<AlertCircle />} label="Alta/Urgente" value={urgentCount} />
+        <StatCard color="danger" icon={<AlertTriangle />} label="Vencidos" value={overdueCount} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         {ticketStatuses.slice(0, 4).map((status) => (
-          <div key={status.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition">
+          <Card key={status.id} hover className="p-6">
             <div className="flex items-center justify-between mb-3">
               <div className="p-3 rounded-xl" style={{ backgroundColor: status.color }}>
                 {getStatusIcon(status.code) || <Ticket className="w-6 h-6 text-white" />}
               </div>
-              <span className="text-3xl font-bold text-slate-900">{filteredTickets.filter((ticket) => ticket.status === status.code).length}</span>
+              <span className="text-3xl font-bold text-slate-900 dark:text-white">{filteredTickets.filter((ticket) => ticket.status === status.code).length}</span>
             </div>
-            <p className="text-sm font-medium text-slate-600">{status.name}</p>
-          </div>
+            <p className="text-sm font-medium text-slate-600 dark:text-slate-400">{status.name}</p>
+          </Card>
         ))}
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 mb-6">
-        <div className="p-6 border-b border-slate-200">
+      <Card className="mb-6">
+        <div className="p-6 border-b border-slate-200 dark:border-slate-700">
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -1298,13 +1302,13 @@ export function TicketsModule() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Buscar tickets por número, asunto, cliente..."
-                className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent"
               />
             </div>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent"
             >
               <option value="all">Todos los estados</option>
               {ticketStatuses.map((status) => (
@@ -1314,7 +1318,7 @@ export function TicketsModule() {
             <select
               value={filterPriority}
               onChange={(e) => setFilterPriority(e.target.value)}
-              className="px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent"
             >
               <option value="all">Todas las prioridades</option>
               <option value="low">Baja</option>
@@ -1325,7 +1329,7 @@ export function TicketsModule() {
             <select
               value={filterAssignedTo}
               onChange={(e) => setFilterAssignedTo(e.target.value)}
-              className="px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent"
             >
               <option value="all">Todos los asignados</option>
               <option value="unassigned">Sin asignar</option>
@@ -1333,17 +1337,17 @@ export function TicketsModule() {
                 <option key={item.id} value={item.id}>{item.name}</option>
               ))}
             </select>
-            <label className="flex items-center gap-2 px-4 py-3 border border-slate-300 rounded-xl text-sm text-slate-700">
+            <label className="flex items-center gap-2 px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 rounded-xl text-sm text-slate-700 dark:text-slate-200">
               <input
                 type="checkbox"
                 checked={onlyOverdue}
                 onChange={(e) => setOnlyOverdue(e.target.checked)}
-                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                className="rounded border-slate-300 dark:border-slate-600 text-brand-600 focus:ring-brand-500"
               />
               Solo vencidos
             </label>
           </div>
-          <div className="mt-4 text-sm text-slate-600 flex items-center gap-6">
+          <div className="mt-4 text-sm text-slate-600 dark:text-slate-400 flex items-center gap-6">
             <span>Total: <strong>{filteredTickets.length}</strong></span>
             <span>Sin asignar: <strong>{unassignedCount}</strong></span>
             <span>Vencidos: <strong>{overdueCount}</strong></span>
@@ -1353,34 +1357,33 @@ export function TicketsModule() {
         <div className="overflow-x-auto">
           {filteredTickets.length === 0 ? (
             <div className="p-12 text-center">
-              <MessageSquare className="w-16 h-16 mx-auto mb-4 text-slate-300" />
-              <h3 className="text-lg font-semibold text-slate-800 mb-1">No se encontraron tickets</h3>
-              <p className="text-sm text-slate-600">Intenta ajustar la búsqueda o los filtros.</p>
+              <MessageSquare className="w-16 h-16 mx-auto mb-4 text-slate-300 dark:text-slate-600" />
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-1">No se encontraron tickets</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400">Intenta ajustar la búsqueda o los filtros.</p>
             </div>
           ) : (
             <table className="w-full min-w-[1180px]">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Ticket</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Cliente</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Origen</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Estado</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Prioridad</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Asignado</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Vencimiento</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Creado</th>
+                <tr className="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-700">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Ticket</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Cliente</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Origen</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Estado</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Prioridad</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Asignado</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Vencimiento</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Creado</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
                 {paginatedTickets.map((ticket) => {
-                  const statusStyle = getStatusBadgeStyle(ticket.status);
                   const isOverdue = ticket.due_date && new Date(ticket.due_date) < new Date() && !isClosedStatus(ticket.status);
 
                   return (
                     <tr
                       key={ticket.id}
                       onClick={() => handleTicketClick(ticket)}
-                      className="hover:bg-slate-50 cursor-pointer transition"
+                      className="hover:bg-slate-50 dark:hover:bg-slate-900/60 cursor-pointer transition"
                     >
                       <td className="px-4 py-4">
                         <div className="flex items-start gap-3">
@@ -1391,45 +1394,41 @@ export function TicketsModule() {
                             {ticket.ticket_categories ? getCategoryIcon(ticket.ticket_categories.icon) : <AlertCircle className="w-4 h-4" />}
                           </div>
                           <div className="min-w-0">
-                            <p className="text-xs text-slate-500 font-mono">{ticket.ticket_number}</p>
-                            <p className="text-sm font-semibold text-slate-900 truncate max-w-[300px]">{ticket.subject}</p>
-                            <p className="text-xs text-slate-500 truncate max-w-[320px]">{stripHtmlTags(ticket.description || '')}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">{ticket.ticket_number}</p>
+                            <p className="text-sm font-semibold text-slate-900 dark:text-white truncate max-w-[300px]">{ticket.subject}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[320px]">{stripHtmlTags(ticket.description || '')}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">
+                      <td className="px-4 py-4 text-sm text-slate-700 dark:text-slate-300">
                         {ticket.clients?.company_name || ticket.clients?.contact_name || 'Sin cliente'}
                       </td>
                       <td className="px-4 py-4">
-                        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold border ${getSourceBadgeClass(ticket.source_module)}`}>
+                        <Badge variant={getSourceBadgeVariant(ticket.source_module)}>
                           {getSourceLabel(ticket.source_module)}
-                        </span>
+                        </Badge>
                       </td>
                       <td className="px-4 py-4">
-                        <span
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border"
-                          style={statusStyle}
-                        >
-                          {getStatusIcon(ticket.status)}
+                        <Badge variant={getStatusBadgeVariant(ticket.status)} icon={getStatusIcon(ticket.status)}>
                           {getStatusLabel(ticket.status)}
-                        </span>
+                        </Badge>
                       </td>
                       <td className="px-4 py-4">
-                        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold border ${getPriorityColor(ticket.priority)}`}>
+                        <Badge variant={getPriorityBadgeVariant(ticket.priority)}>
                           {ticket.priority.toUpperCase()}
-                        </span>
+                        </Badge>
                       </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{getAssignedUserLabel(ticket.assigned_to)}</td>
+                      <td className="px-4 py-4 text-sm text-slate-700 dark:text-slate-300">{getAssignedUserLabel(ticket.assigned_to)}</td>
                       <td className="px-4 py-4 text-sm">
                         {ticket.due_date ? (
-                          <span className={isOverdue ? 'text-rose-600 font-semibold' : 'text-slate-700'}>
+                          <span className={isOverdue ? 'text-rose-600 dark:text-rose-400 font-semibold' : 'text-slate-700 dark:text-slate-300'}>
                             {new Date(ticket.due_date).toLocaleDateString()}
                           </span>
                         ) : (
-                          <span className="text-slate-400">Sin fecha</span>
+                          <span className="text-slate-400 dark:text-slate-500">Sin fecha</span>
                         )}
                       </td>
-                      <td className="px-4 py-4 text-sm text-slate-600">{new Date(ticket.created_at).toLocaleDateString()}</td>
+                      <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400">{new Date(ticket.created_at).toLocaleDateString()}</td>
                     </tr>
                   );
                 })}
@@ -1437,49 +1436,47 @@ export function TicketsModule() {
             </table>
           )}
         </div>
-        <div className="p-4 border-t border-slate-200 flex items-center justify-between">
-          <p className="text-sm text-slate-600">
+        <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <p className="text-sm text-slate-600 dark:text-slate-400">
             Página {currentPage} de {totalPages}
           </p>
           <div className="flex items-center gap-2">
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
-              className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50"
             >
               Anterior
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
               disabled={currentPage === totalPages}
-              className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50"
             >
               Siguiente
-            </button>
+            </Button>
           </div>
         </div>
-      </div>
+      </Card>
 
       {showModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-6 flex-shrink-0">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="bg-gradient-to-r from-brand-700 to-slate-900 text-white p-6 flex-shrink-0">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2 flex-wrap">
                     <span className="text-sm font-mono bg-white/20 px-3 py-1 rounded-lg">
                       {ticketPreviewNumber || 'TKT-XXXXXX-XXX'}
                     </span>
-                    <span
-                      className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold border"
-                      style={getStatusBadgeStyle(formData.status)}
-                    >
-                      {getStatusIcon(formData.status)}
+                    <Badge variant={getStatusBadgeVariant(formData.status)} icon={getStatusIcon(formData.status)}>
                       {getStatusLabel(formData.status)}
-                    </span>
-                    <span className={`inline-block px-3 py-1 rounded-lg text-xs font-semibold border ${getPriorityColor(formData.priority)}`}>
+                    </Badge>
+                    <Badge variant={getPriorityBadgeVariant(formData.priority)}>
                       {formData.priority.toUpperCase()}
-                    </span>
+                    </Badge>
                   </div>
                   <h2 className="text-2xl font-bold mb-2">Nuevo Ticket de Soporte</h2>
                   <p className="text-slate-300 mt-1 text-sm">Complete toda la información necesaria para registrar el ticket</p>
@@ -1493,40 +1490,40 @@ export function TicketsModule() {
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 bg-slate-50">
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
-                  <div className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-3">Descripción</h3>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Descripción</h3>
                     <div className="space-y-4">
                       <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">Asunto *</label>
+                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Asunto *</label>
                         <input
                           type="text"
                           value={formData.subject}
                           onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                          className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                          className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
                           placeholder="Resumen breve del problema"
                           required
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">Descripción Detallada *</label>
+                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Descripción Detallada *</label>
                         <textarea
                           value={formData.description}
                           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                           rows={7}
-                          className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                          className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
                           placeholder="Describe el problema en detalle..."
                           required
                         />
                       </div>
                       {draftSourceModule === 'email' && draftRichDescription && (
                         <div>
-                          <label className="block text-sm font-semibold text-slate-700 mb-2">Vista previa del correo</label>
-                          <div className="max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white p-4">
+                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Vista previa del correo</label>
+                          <div className="max-h-72 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
                             <div
-                              className="prose prose-sm max-w-none break-words"
+                              className="prose prose-sm dark:prose-invert max-w-none break-words"
                               dangerouslySetInnerHTML={{ __html: sanitizeHtmlForTicketView(draftRichDescription) }}
                             />
                           </div>
@@ -1535,26 +1532,26 @@ export function TicketsModule() {
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-3">Historial / Comentarios</h3>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Historial / Comentarios</h3>
                     <textarea
                       value={initialComment}
                       onChange={(e) => setInitialComment(e.target.value)}
                       rows={4}
-                      className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                      className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
                       placeholder="Comentario inicial para el historial (opcional)"
                     />
                   </div>
 
-                  <div className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-3">Actividades / Cambios de estado</h3>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Actividades / Cambios de estado</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">Estado inicial</label>
+                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Estado inicial</label>
                         <select
                           value={formData.status}
                           onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                          className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                          className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
                         >
                           {ticketStatuses.map((status) => (
                             <option key={status.id} value={status.code}>{status.name}</option>
@@ -1562,11 +1559,11 @@ export function TicketsModule() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">Categoría</label>
+                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Categoría</label>
                         <select
                           value={formData.category_id}
                           onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-                          className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                          className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
                         >
                           <option value="">Sin categoría</option>
                           {categories.map((cat) => (
@@ -1579,19 +1576,19 @@ export function TicketsModule() {
                 </div>
 
                 <div className="space-y-6">
-                  <div className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-3">Asignado</h3>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Asignado</h3>
                     <div className="relative user-dropdown-container">
                       <input
                         type="text"
                         value={userSearchTerm}
                         onChange={(e) => handleUserSearch(e.target.value)}
                         onFocus={() => setShowUserDropdown(true)}
-                        className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                        className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
                         placeholder="Buscar usuario por nombre o email..."
                       />
                       {showUserDropdown && filteredUsers.length > 0 && (
-                        <div className="absolute z-10 w-full mt-1 bg-white border-2 border-slate-300 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                        <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-600 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                           {filteredUsers.map((u) => (
                             <button
                               key={u.id}
@@ -1601,10 +1598,10 @@ export function TicketsModule() {
                                 setUserSearchTerm(u.name);
                                 setShowUserDropdown(false);
                               }}
-                              className="w-full px-4 py-3 text-left hover:bg-blue-50 transition border-b border-slate-100 last:border-0"
+                              className="w-full px-4 py-3 text-left hover:bg-brand-50 dark:hover:bg-brand-500/10 transition border-b border-slate-100 dark:border-slate-700 last:border-0"
                             >
-                              <div className="font-medium text-slate-900">{u.name}</div>
-                              <div className="text-xs text-slate-500">{u.email} • {u.role}</div>
+                              <div className="font-medium text-slate-900 dark:text-white">{u.name}</div>
+                              <div className="text-xs text-slate-500 dark:text-slate-400">{u.email} • {u.role}</div>
                             </button>
                           ))}
                         </div>
@@ -1612,15 +1609,15 @@ export function TicketsModule() {
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-3">SLA</h3>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">SLA</h3>
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">Prioridad *</label>
+                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Prioridad *</label>
                         <select
                           value={formData.priority}
                           onChange={(e) => handlePriorityChange(e.target.value as Ticket['priority'])}
-                          className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                          className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
                         >
                           <option value="low">🟢 Baja</option>
                           <option value="medium">🟡 Media</option>
@@ -1629,30 +1626,30 @@ export function TicketsModule() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">Fecha de vencimiento</label>
+                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Fecha de vencimiento</label>
                         <input
                           type="date"
                           value={formData.due_date}
                           onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                          className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                          className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">Horas estimadas</label>
+                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Horas estimadas</label>
                         <input
                           type="number"
                           step="0.5"
                           value={formData.estimated_hours}
                           onChange={(e) => setFormData({ ...formData, estimated_hours: e.target.value })}
-                          className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                          className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
                           placeholder="0.0"
                         />
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-3">Cliente</h3>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Cliente</h3>
                     <div className="relative client-dropdown-container">
                       <input
                         type="text"
@@ -1668,14 +1665,14 @@ export function TicketsModule() {
                           setFilteredClients(clients);
                           setShowClientDropdown(true);
                         }}
-                        className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                        className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
                         placeholder="Buscar por nombre, teléfono o correo"
                         required
                       />
                       {showClientDropdown && (
-                        <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                        <div className="absolute z-20 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-56 overflow-y-auto">
                           {filteredClients.length === 0 ? (
-                            <p className="px-4 py-3 text-sm text-slate-500">Sin resultados</p>
+                            <p className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">Sin resultados</p>
                           ) : (
                             filteredClients.map((client) => (
                               <button
@@ -1686,10 +1683,10 @@ export function TicketsModule() {
                                   setClientSearchTerm(client.company_name || client.contact_name || client.email || '');
                                   setShowClientDropdown(false);
                                 }}
-                                className="w-full px-4 py-3 text-left hover:bg-blue-50 transition border-b border-slate-100 last:border-0"
+                                className="w-full px-4 py-3 text-left hover:bg-brand-50 dark:hover:bg-brand-500/10 transition border-b border-slate-100 dark:border-slate-700 last:border-0"
                               >
-                                <div className="font-medium text-slate-900">{client.company_name || client.contact_name || 'Sin nombre'}</div>
-                                <div className="text-xs text-slate-500">
+                                <div className="font-medium text-slate-900 dark:text-white">{client.company_name || client.contact_name || 'Sin nombre'}</div>
+                                <div className="text-xs text-slate-500 dark:text-slate-400">
                                   {client.contact_name || 'Sin contacto'}
                                   {client.email ? ` • ${client.email}` : ''}
                                   {client.phone ? ` • ${client.phone}` : ''}
@@ -1701,18 +1698,18 @@ export function TicketsModule() {
                       )}
                     </div>
                     <div className="mt-3">
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">Etiquetas</label>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Etiquetas</label>
                       <input
                         type="text"
                         value={formData.tags}
                         onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-                        className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                        className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
                         placeholder="bug, urgente"
                       />
                     </div>
                     {draftSourceContact && (
-                      <div className="mt-4 p-3 rounded-lg border border-slate-200 bg-slate-50 text-xs text-slate-600 space-y-1">
-                        <p className="font-semibold text-slate-700">Contacto origen ({draftSourceContact.module})</p>
+                      <div className="mt-4 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 text-xs text-slate-600 dark:text-slate-400 space-y-1">
+                        <p className="font-semibold text-slate-700 dark:text-slate-300">Contacto origen ({draftSourceContact.module})</p>
                         {draftSourceContact.name && <p>Nombre: {draftSourceContact.name}</p>}
                         {draftSourceContact.email && <p>Email: {draftSourceContact.email}</p>}
                         {draftSourceContact.phone && <p>Teléfono: {draftSourceContact.phone}</p>}
@@ -1720,8 +1717,8 @@ export function TicketsModule() {
                     )}
                   </div>
 
-                  <div className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-3">Archivos adjuntos</h3>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Archivos adjuntos</h3>
                     <input
                       type="file"
                       multiple
@@ -1729,25 +1726,25 @@ export function TicketsModule() {
                         addPendingAttachments(e.target.files);
                         e.currentTarget.value = '';
                       }}
-                      className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition text-sm"
+                      className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition text-sm"
                     />
                     {pendingAttachments.length === 0 ? (
-                      <p className="text-sm text-slate-500 mt-3">Aún no hay archivos seleccionados.</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400 mt-3">Aún no hay archivos seleccionados.</p>
                     ) : (
                       <div className="mt-3 space-y-2 max-h-40 overflow-y-auto">
                         {pendingAttachments.map((file, index) => (
                           <div
                             key={`${file.name}-${file.size}-${file.lastModified}`}
-                            className="flex items-center justify-between gap-3 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                            className="flex items-center justify-between gap-3 px-3 py-2 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg"
                           >
                             <div className="min-w-0">
-                              <p className="text-sm text-slate-900 truncate">{file.name}</p>
-                              <p className="text-xs text-slate-500">{(file.size / 1024).toFixed(1)} KB</p>
+                              <p className="text-sm text-slate-900 dark:text-white truncate">{file.name}</p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">{(file.size / 1024).toFixed(1)} KB</p>
                             </div>
                             <button
                               type="button"
                               onClick={() => removePendingAttachment(index)}
-                              className="text-xs text-rose-600 hover:text-rose-700 font-semibold"
+                              className="text-xs text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 font-semibold"
                             >
                               Quitar
                             </button>
@@ -1759,22 +1756,13 @@ export function TicketsModule() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-6 sticky bottom-0 bg-slate-50">
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="px-8 py-3 border-2 border-slate-300 text-slate-700 rounded-xl hover:bg-white hover:border-slate-400 transition font-semibold"
-                >
+              <div className="flex justify-end gap-3 pt-6 sticky bottom-0 bg-slate-50 dark:bg-slate-900">
+                <Button type="button" variant="secondary" size="lg" onClick={resetForm}>
                   Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={uploadingAttachments}
-                  className="px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition font-semibold shadow-lg flex items-center gap-2"
-                >
-                  <Ticket className="w-5 h-5" />
+                </Button>
+                <Button type="submit" size="lg" loading={uploadingAttachments} icon={<Ticket className="w-5 h-5" />}>
                   {uploadingAttachments ? 'Subiendo adjuntos...' : 'Crear Ticket'}
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -1783,24 +1771,20 @@ export function TicketsModule() {
 
       {showDetailModal && selectedTicket && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-6 flex-shrink-0 border-b border-slate-700">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="bg-gradient-to-r from-brand-700 to-slate-900 text-white p-6 flex-shrink-0 border-b border-slate-700">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2 flex-wrap">
                     <span className="text-sm font-mono bg-white/20 px-3 py-1 rounded-lg">
                       {selectedTicket.ticket_number}
                     </span>
-                    <span
-                      className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold border"
-                      style={getStatusBadgeStyle(selectedTicket.status)}
-                    >
-                      {getStatusIcon(selectedTicket.status)}
+                    <Badge variant={getStatusBadgeVariant(selectedTicket.status)} icon={getStatusIcon(selectedTicket.status)}>
                       {getStatusLabel(selectedTicket.status)}
-                    </span>
-                    <span className={`inline-block px-3 py-1 rounded-lg text-xs font-semibold border ${getPriorityColor(selectedTicket.priority)}`}>
+                    </Badge>
+                    <Badge variant={getPriorityBadgeVariant(selectedTicket.priority)}>
                       {selectedTicket.priority.toUpperCase()}
-                    </span>
+                    </Badge>
                   </div>
                   <h2 className="text-2xl font-bold mb-2">{selectedTicket.subject}</h2>
                   <div className="flex items-center gap-4 text-sm text-white/80">
@@ -1819,66 +1803,64 @@ export function TicketsModule() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
-                  <div className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-3">Descripción</h3>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Descripción</h3>
                     {hasHtmlContent(selectedTicket.description || '') ? (
                       <div
-                        className="prose max-w-none text-sm text-slate-700 leading-relaxed"
+                        className="prose dark:prose-invert max-w-none text-sm text-slate-700 dark:text-slate-300 leading-relaxed"
                         dangerouslySetInnerHTML={{ __html: sanitizeHtmlForTicketView(selectedTicket.description || '') }}
                       />
                     ) : (
-                      <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                      <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
                         {selectedTicket.description}
                       </div>
                     )}
                   </div>
 
-                  <div className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-3">Historial / Comentarios</h3>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Historial / Comentarios</h3>
                     <div className="space-y-4 mb-6 max-h-72 overflow-y-auto">
                       {comments.length === 0 ? (
-                        <p className="text-center text-slate-500 py-4">No hay comentarios aún</p>
+                        <p className="text-center text-slate-500 dark:text-slate-400 py-4">No hay comentarios aún</p>
                       ) : (
                         comments.map((comment) => (
-                          <div key={comment.id} className={`rounded-xl p-4 ${comment.is_internal ? 'bg-amber-50 border border-amber-200' : 'bg-slate-50'}`}>
+                          <div key={comment.id} className={`rounded-xl p-4 ${comment.is_internal ? 'bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30' : 'bg-slate-50 dark:bg-slate-900/60'}`}>
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-2">
                                 <div className="flex flex-col">
-                                  <span className="text-sm font-semibold text-slate-900">
+                                  <span className="text-sm font-semibold text-slate-900 dark:text-white">
                                     {comment.user_name || 'Usuario Desconocido'}
                                   </span>
-                                  <span className="text-xs text-slate-500">
+                                  <span className="text-xs text-slate-500 dark:text-slate-400">
                                     {comment.user_email || 'Sin email'}
                                   </span>
                                 </div>
                                 {comment.is_internal && (
-                                  <span className="text-xs px-2 py-0.5 bg-amber-200 text-amber-800 rounded-full">
-                                    Interno
-                                  </span>
+                                  <Badge variant="warning">Interno</Badge>
                                 )}
                               </div>
-                              <span className="text-xs text-slate-500">
+                              <span className="text-xs text-slate-500 dark:text-slate-400">
                                 {new Date(comment.created_at).toLocaleString()}
                               </span>
                             </div>
-                            <p className="text-sm text-slate-700 whitespace-pre-wrap">{comment.comment}</p>
+                            <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{comment.comment}</p>
                           </div>
                         ))
                       )}
                     </div>
 
                     {history.length > 0 && (
-                      <div className="mb-6 border-t border-slate-200 pt-4">
-                        <h4 className="text-xs font-semibold text-slate-600 mb-2">Eventos de historial</h4>
+                      <div className="mb-6 border-t border-slate-200 dark:border-slate-700 pt-4">
+                        <h4 className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">Eventos de historial</h4>
                         <div className="space-y-2 max-h-40 overflow-y-auto">
                           {history.map((event) => (
-                            <div key={event.id} className="text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-lg">
+                            <div key={event.id} className="text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/60 px-3 py-2 rounded-lg">
                               {event.action || event.event || 'Cambio registrado'}
                               {event.created_at && (
-                                <span className="ml-2 text-slate-400">{new Date(event.created_at).toLocaleString()}</span>
+                                <span className="ml-2 text-slate-400 dark:text-slate-500">{new Date(event.created_at).toLocaleString()}</span>
                               )}
                             </div>
                           ))}
@@ -1886,14 +1868,14 @@ export function TicketsModule() {
                       </div>
                     )}
 
-                    <div className="border-t border-slate-200 pt-4">
+                    <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
                       <div className="mb-3">
-                        <label className="flex items-center gap-2 text-sm text-slate-600">
+                        <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                           <input
                             type="checkbox"
                             checked={isInternalComment}
                             onChange={(e) => setIsInternalComment(e.target.checked)}
-                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            className="rounded border-slate-300 dark:border-slate-600 text-brand-600 focus:ring-brand-500"
                           />
                           Comentario interno (no visible para el cliente)
                         </label>
@@ -1904,51 +1886,47 @@ export function TicketsModule() {
                           onChange={(e) => setNewComment(e.target.value)}
                           placeholder="Escribe un comentario..."
                           rows={3}
-                          className="flex-1 px-4 py-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                          className="flex-1 px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl text-sm focus:ring-2 focus:ring-brand-500 focus:border-transparent resize-none"
                           onKeyPress={(e) => {
                             if (e.key === 'Enter' && e.ctrlKey) {
                               handleAddComment();
                             }
                           }}
                         />
-                        <button
-                          onClick={handleAddComment}
-                          className="px-6 h-fit bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition flex items-center gap-2 font-medium shadow-lg"
-                        >
-                          <Send className="w-4 h-4" />
+                        <Button onClick={handleAddComment} icon={<Send className="w-4 h-4" />} className="h-fit">
                           Enviar
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-3">Actividades / Cambios de estado</h3>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Actividades / Cambios de estado</h3>
                     <div className="space-y-3 max-h-96 overflow-y-auto">
                       {activities.length === 0 ? (
-                        <p className="text-center text-slate-500 py-4">No hay actividad registrada</p>
+                        <p className="text-center text-slate-500 dark:text-slate-400 py-4">No hay actividad registrada</p>
                       ) : (
                         activities.map((activity) => (
-                          <div key={activity.id} className="flex gap-3 pb-3 border-b border-slate-100 last:border-0">
-                            <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                              <Activity className="w-4 h-4 text-blue-600" />
+                          <div key={activity.id} className="flex gap-3 pb-3 border-b border-slate-100 dark:border-slate-700 last:border-0">
+                            <div className="flex-shrink-0 w-8 h-8 bg-brand-100 dark:bg-brand-500/20 rounded-full flex items-center justify-center">
+                              <Activity className="w-4 h-4 text-brand-600 dark:text-brand-400" />
                             </div>
                             <div className="flex-1">
-                              <p className="text-sm text-slate-900">
+                              <p className="text-sm text-slate-900 dark:text-white">
                                 <span className="font-semibold">{activity.action}</span>
                                 {activity.field_changed && (
                                   <>
                                     {' - '}
-                                    <span className="text-slate-600">
+                                    <span className="text-slate-600 dark:text-slate-400">
                                       {activity.field_changed}: {activity.old_value} → {activity.new_value}
                                     </span>
                                   </>
                                 )}
                               </p>
                               {activity.description && (
-                                <p className="text-sm text-slate-600 mt-1">{activity.description}</p>
+                                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{activity.description}</p>
                               )}
-                              <span className="text-xs text-slate-500 mt-1 block">
+                              <span className="text-xs text-slate-500 dark:text-slate-400 mt-1 block">
                                 {new Date(activity.created_at).toLocaleString()}
                               </span>
                             </div>
@@ -1960,8 +1938,8 @@ export function TicketsModule() {
                 </div>
 
                 <div className="space-y-6">
-                  <div className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-3">Asignado</h3>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Asignado</h3>
                     <div className="relative assignee-dropdown-container">
                       <div className="relative">
                         <input
@@ -1972,14 +1950,14 @@ export function TicketsModule() {
                             setShowAssigneeDropdown(true);
                           }}
                           onFocus={() => setShowAssigneeDropdown(true)}
-                          className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition pr-10"
+                          className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition pr-10"
                           placeholder="Buscar usuario..."
                         />
                         <User className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
                       </div>
 
                       {showAssigneeDropdown && (
-                        <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                        <div className="absolute z-20 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-56 overflow-y-auto">
                           <button
                             type="button"
                             onClick={() => {
@@ -1987,10 +1965,10 @@ export function TicketsModule() {
                               setAssigneeSearchTerm('');
                               setShowAssigneeDropdown(false);
                             }}
-                            className="w-full px-4 py-3 text-left hover:bg-blue-50 transition border-b border-slate-100"
+                            className="w-full px-4 py-3 text-left hover:bg-brand-50 dark:hover:bg-brand-500/10 transition border-b border-slate-100 dark:border-slate-700"
                           >
-                            <div className="font-medium text-slate-900">Sin asignar</div>
-                            <div className="text-xs text-slate-500">Quitar asignación</div>
+                            <div className="font-medium text-slate-900 dark:text-white">Sin asignar</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400">Quitar asignación</div>
                           </button>
                           {users
                             .filter((u) => {
@@ -2007,10 +1985,10 @@ export function TicketsModule() {
                                   setAssigneeSearchTerm(u.name);
                                   setShowAssigneeDropdown(false);
                                 }}
-                                className="w-full px-4 py-3 text-left hover:bg-blue-50 transition border-b border-slate-100 last:border-0"
+                                className="w-full px-4 py-3 text-left hover:bg-brand-50 dark:hover:bg-brand-500/10 transition border-b border-slate-100 dark:border-slate-700 last:border-0"
                               >
-                                <div className="font-medium text-slate-900">{u.name}</div>
-                                <div className="text-xs text-slate-500">{u.email} • {u.role}</div>
+                                <div className="font-medium text-slate-900 dark:text-white">{u.name}</div>
+                                <div className="text-xs text-slate-500 dark:text-slate-400">{u.email} • {u.role}</div>
                               </button>
                             ))}
                         </div>
@@ -2018,47 +1996,42 @@ export function TicketsModule() {
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-3">SLA</h3>
-                    <div className="space-y-2 text-sm text-slate-700">
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">SLA</h3>
+                    <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
                       <p>
-                        <span className="text-slate-500">Vencimiento: </span>
+                        <span className="text-slate-500 dark:text-slate-400">Vencimiento: </span>
                         {selectedTicket.due_date ? new Date(selectedTicket.due_date).toLocaleDateString() : 'Sin fecha'}
                       </p>
                       <p>
-                        <span className="text-slate-500">Estado SLA: </span>
+                        <span className="text-slate-500 dark:text-slate-400">Estado SLA: </span>
                         {selectedTicket.due_date && new Date(selectedTicket.due_date) < new Date() && !isClosedStatus(selectedTicket.status)
-                          ? <span className="text-rose-600 font-semibold">Vencido</span>
-                          : <span className="text-emerald-600 font-semibold">En tiempo</span>}
+                          ? <span className="text-rose-600 dark:text-rose-400 font-semibold">Vencido</span>
+                          : <span className="text-emerald-600 dark:text-emerald-400 font-semibold">En tiempo</span>}
                       </p>
                       <p>
-                        <span className="text-slate-500">Horas estimadas: </span>
+                        <span className="text-slate-500 dark:text-slate-400">Horas estimadas: </span>
                         {selectedTicket.estimated_hours ? `${selectedTicket.estimated_hours}h` : 'Sin definir'}
                       </p>
-                      <div className="pt-2 border-t border-slate-200 space-y-2">
-                        <label className="block text-xs font-semibold text-slate-600">Fecha fin (editable)</label>
+                      <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2">
+                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400">Fecha fin (editable)</label>
                         <div className="flex items-center gap-2">
                           <input
                             type="date"
                             value={detailDueDate}
                             onChange={(e) => setDetailDueDate(e.target.value)}
-                            className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            className="flex-1 px-3 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                           />
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateDueDate(selectedTicket.id, detailDueDate)}
-                            disabled={!detailDueDate}
-                            className="px-3 py-2 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
+                          <Button size="sm" onClick={() => handleUpdateDueDate(selectedTicket.id, detailDueDate)} disabled={!detailDueDate}>
                             Guardar
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-3">Cliente</h3>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Cliente</h3>
                     <div className="relative detail-client-dropdown-container">
                       <input
                         type="text"
@@ -2069,11 +2042,11 @@ export function TicketsModule() {
                           setShowDetailClientDropdown(true);
                         }}
                         onFocus={() => setShowDetailClientDropdown(true)}
-                        className="w-full px-4 py-3 bg-white border-2 border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                        className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-2 border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
                         placeholder="Buscar cliente por nombre, teléfono o correo"
                       />
                       {showDetailClientDropdown && (
-                        <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                        <div className="absolute z-20 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-56 overflow-y-auto">
                           {clients
                             .filter((client) => {
                               const term = detailClientSearchTerm.trim().toLowerCase();
@@ -2095,10 +2068,10 @@ export function TicketsModule() {
                                   setDetailClientSearchTerm(client.company_name || client.contact_name || client.email || '');
                                   setShowDetailClientDropdown(false);
                                 }}
-                                className="w-full px-4 py-3 text-left hover:bg-blue-50 transition border-b border-slate-100 last:border-0"
+                                className="w-full px-4 py-3 text-left hover:bg-brand-50 dark:hover:bg-brand-500/10 transition border-b border-slate-100 dark:border-slate-700 last:border-0"
                               >
-                                <div className="font-medium text-slate-900">{client.company_name || client.contact_name || 'Sin nombre'}</div>
-                                <div className="text-xs text-slate-500">
+                                <div className="font-medium text-slate-900 dark:text-white">{client.company_name || client.contact_name || 'Sin nombre'}</div>
+                                <div className="text-xs text-slate-500 dark:text-slate-400">
                                   {client.contact_name || 'Sin contacto'}
                                   {client.email ? ` • ${client.email}` : ''}
                                   {client.phone ? ` • ${client.phone}` : ''}
@@ -2108,15 +2081,15 @@ export function TicketsModule() {
                         </div>
                       )}
                     </div>
-                    <div className="space-y-1 text-sm text-slate-700 mt-3">
-                      <p className="font-medium text-slate-900">{selectedTicket.clients?.company_name || selectedTicket.clients?.contact_name || 'Sin cliente'}</p>
+                    <div className="space-y-1 text-sm text-slate-700 dark:text-slate-300 mt-3">
+                      <p className="font-medium text-slate-900 dark:text-white">{selectedTicket.clients?.company_name || selectedTicket.clients?.contact_name || 'Sin cliente'}</p>
                       <p>{selectedTicket.clients?.email || 'Sin email'}</p>
                       {selectedTicket.clients?.phone && <p>{selectedTicket.clients.phone}</p>}
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-3">Archivos adjuntos</h3>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Archivos adjuntos</h3>
                     <div className="mb-3">
                       <input
                         type="file"
@@ -2125,27 +2098,27 @@ export function TicketsModule() {
                           handleUploadDetailAttachments(selectedTicket.id, e.target.files);
                           e.currentTarget.value = '';
                         }}
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                         disabled={detailUploadingAttachments}
                       />
                       {detailUploadingAttachments && (
-                        <p className="text-xs text-slate-500 mt-2">Subiendo adjuntos...</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">Subiendo adjuntos...</p>
                       )}
                     </div>
                     {attachments.length === 0 ? (
-                      <p className="text-sm text-slate-500">No hay adjuntos en este ticket.</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">No hay adjuntos en este ticket.</p>
                     ) : (
                       <div className="space-y-2 max-h-52 overflow-y-auto">
                         {attachments.map((file) => (
                           <div
                             key={file.id}
-                            className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"
+                            className="flex items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2"
                           >
                             <a
                               href={file.file_url}
                               target="_blank"
                               rel="noreferrer"
-                              className="block text-sm text-blue-600 hover:underline min-w-0 truncate"
+                              className="block text-sm text-brand-600 dark:text-brand-400 hover:underline min-w-0 truncate"
                             >
                               {file.file_name}
                               {file.file_size ? ` · ${(file.file_size / 1024).toFixed(1)} KB` : ''}
@@ -2153,7 +2126,7 @@ export function TicketsModule() {
                             <button
                               type="button"
                               onClick={() => handleDeleteAttachment(file)}
-                              className="text-xs text-rose-600 hover:text-rose-700 font-semibold"
+                              className="text-xs text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 font-semibold"
                             >
                               Eliminar
                             </button>
@@ -2163,8 +2136,8 @@ export function TicketsModule() {
                     )}
                   </div>
 
-                  <div className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-3">Cambiar estado</h3>
+                  <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Cambiar estado</h3>
                     <div className="flex flex-wrap gap-2">
                       {selectedTicketNextStatuses.map((status) => (
                         <button
