@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { getEnvVar } from '../../lib/envLoader';
 import {
-  Plus, Mail, Users, Send, Edit2, Trash2, BarChart3, Eye, TrendingUp,
-  MousePointerClick, Activity, Clock, CheckCircle, AlertCircle, Zap, UserPlus,
+  Plus, Mail, Users, Send, Edit2, Trash2, BarChart3, TrendingUp,
+  Activity, Clock, CheckCircle, AlertCircle, Zap, UserPlus,
   X, Calendar, FileText, Target, Layers, Hash, List
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -19,6 +19,7 @@ import { StatCard } from '../ui/StatCard';
 import { Card } from '../ui/Card';
 import { Badge, BadgeVariant } from '../ui/Badge';
 import { Button } from '../ui/Button';
+import { DEFAULT_VARIABLE_KEYS } from '../../lib/campaignVariables';
 
 interface Campaign {
   id: string;
@@ -28,18 +29,20 @@ interface Campaign {
   template_id: string;
   group_id: string;
   scheduled_at?: string;
+  sent_count?: number;
+  failed_count?: number;
+  total_recipients?: number;
+  sendcraft_job_id?: string | null;
+  custom_variables?: Record<string, string>;
   email_templates?: { name: string };
   contact_groups?: { name: string };
 }
 
 interface CampaignStats {
-  totalSent: number;
+  totalRecipients: number;
   delivered: number;
-  opened: number;
-  clicked: number;
-  bounced: number;
-  openRate: number;
-  clickRate: number;
+  failed: number;
+  successRate: number;
 }
 
 export function CampaignsModule() {
@@ -50,13 +53,10 @@ export function CampaignsModule() {
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [campaignStats, setCampaignStats] = useState<Record<string, CampaignStats>>({});
   const [overallStats, setOverallStats] = useState<CampaignStats>({
-    totalSent: 0,
+    totalRecipients: 0,
     delivered: 0,
-    opened: 0,
-    clicked: 0,
-    bounced: 0,
-    openRate: 0,
-    clickRate: 0
+    failed: 0,
+    successRate: 0
   });
 
   const [showHTMLEditor, setShowHTMLEditor] = useState(false);
@@ -92,8 +92,11 @@ export function CampaignsModule() {
     template_id: '',
     group_id: '',
     status: 'draft',
-    scheduled_at: ''
+    scheduled_at: '',
+    custom_variables: {} as Record<string, string>
   });
+  const [templateExtraVariables, setTemplateExtraVariables] = useState<string[]>([]);
+  const [loadingTemplateVariables, setLoadingTemplateVariables] = useState(false);
 
   const [groupForm, setGroupForm] = useState({
     name: '',
@@ -128,56 +131,86 @@ export function CampaignsModule() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!showCampaignModal || !campaignForm.template_id) {
+      setTemplateExtraVariables([]);
+      return;
+    }
+    loadTemplateExtraVariables(campaignForm.template_id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCampaignModal, campaignForm.template_id]);
+
+  const loadTemplateExtraVariables = async (templateId: string) => {
+    const localTemplate = templates.find(t => t.id === templateId);
+    const sendcraftName = localTemplate?.sendcraft_template_name;
+
+    if (!sendcraftName) {
+      setTemplateExtraVariables([]);
+      return;
+    }
+
+    setLoadingTemplateVariables(true);
+    try {
+      const apiUrl = `${getEnvVar('VITE_SUPABASE_URL')}/functions/v1/sendcraft-templates?type=email`;
+      const response = await fetch(apiUrl, {
+        headers: { 'Authorization': `Bearer ${getEnvVar('VITE_SUPABASE_ANON_KEY')}` },
+      });
+      const result = await response.json();
+
+      if (response.ok) {
+        const match = (result.templates || []).find((t: any) => t.name === sendcraftName);
+        const extra = (match?.variables || []).filter((v: string) => !DEFAULT_VARIABLE_KEYS.includes(v));
+        setTemplateExtraVariables(extra);
+      } else {
+        setTemplateExtraVariables([]);
+      }
+    } catch {
+      setTemplateExtraVariables([]);
+    } finally {
+      setLoadingTemplateVariables(false);
+    }
+  };
+
   const loadData = async () => {
-    const [campaignsData, templatesData, groupsData, analyticsData] = await Promise.all([
+    const [campaignsData, templatesData, groupsData, logsData] = await Promise.all([
       supabase.from('campaigns').select('*, email_templates(name), contact_groups(name)').order('created_at', { ascending: false }),
       supabase.from('email_templates').select('*').order('created_at', { ascending: false }),
       supabase.from('contact_groups').select('*').order('created_at', { ascending: false }),
-      supabase.from('campaign_analytics').select('*')
+      supabase.from('campaign_email_logs').select('campaign_id, status')
     ]);
 
     if (campaignsData.data) setCampaigns(campaignsData.data);
     if (templatesData.data) setTemplates(templatesData.data);
     if (groupsData.data) setGroups(groupsData.data);
 
-    if (analyticsData.data && campaignsData.data) {
+    if (logsData.data && campaignsData.data) {
       const statsByCampaign: Record<string, CampaignStats> = {};
-      let totalSent = 0, totalDelivered = 0, totalOpened = 0, totalClicked = 0, totalBounced = 0;
+      let totalRecipients = 0, totalDelivered = 0, totalFailed = 0;
 
       campaignsData.data.forEach(campaign => {
-        const campaignAnalytics = analyticsData.data!.filter(a => a.campaign_id === campaign.id);
-        const sent = campaignAnalytics.length;
-        const delivered = campaignAnalytics.filter(a => !a.bounced).length;
-        const opened = campaignAnalytics.filter(a => a.opened_at).length;
-        const clicked = campaignAnalytics.filter(a => a.clicked_at).length;
-        const bounced = campaignAnalytics.filter(a => a.bounced).length;
+        const campaignLogs = logsData.data!.filter(l => l.campaign_id === campaign.id);
+        const recipients = campaignLogs.length;
+        const delivered = campaignLogs.filter(l => l.status === 'sent').length;
+        const failed = campaignLogs.filter(l => l.status === 'failed' || l.status === 'bounced').length;
 
         statsByCampaign[campaign.id] = {
-          totalSent: sent,
+          totalRecipients: recipients,
           delivered,
-          opened,
-          clicked,
-          bounced,
-          openRate: sent > 0 ? (opened / sent) * 100 : 0,
-          clickRate: sent > 0 ? (clicked / sent) * 100 : 0
+          failed,
+          successRate: recipients > 0 ? (delivered / recipients) * 100 : 0
         };
 
-        totalSent += sent;
+        totalRecipients += recipients;
         totalDelivered += delivered;
-        totalOpened += opened;
-        totalClicked += clicked;
-        totalBounced += bounced;
+        totalFailed += failed;
       });
 
       setCampaignStats(statsByCampaign);
       setOverallStats({
-        totalSent,
+        totalRecipients,
         delivered: totalDelivered,
-        opened: totalOpened,
-        clicked: totalClicked,
-        bounced: totalBounced,
-        openRate: totalSent > 0 ? (totalOpened / totalSent) * 100 : 0,
-        clickRate: totalSent > 0 ? (totalClicked / totalSent) * 100 : 0
+        failed: totalFailed,
+        successRate: totalRecipients > 0 ? (totalDelivered / totalRecipients) * 100 : 0
       });
     }
   };
@@ -196,10 +229,17 @@ export function CampaignsModule() {
     if (!validateCampaignForm()) return;
 
     try {
+      const sanitizedForm = {
+        ...campaignForm,
+        scheduled_at: campaignForm.status === 'scheduled' && campaignForm.scheduled_at
+          ? campaignForm.scheduled_at
+          : null
+      };
+
       if (editingCampaign) {
         const { error } = await supabase
           .from('campaigns')
-          .update(campaignForm)
+          .update(sanitizedForm)
           .eq('id', editingCampaign.id);
 
         if (error) {
@@ -209,7 +249,7 @@ export function CampaignsModule() {
 
         toast.success('Campaña actualizada correctamente');
       } else {
-        const campaignData: any = { ...campaignForm };
+        const campaignData: any = { ...sanitizedForm };
         if (user?.id) {
           campaignData.created_by = user.id;
         }
@@ -315,13 +355,15 @@ export function CampaignsModule() {
       template_id: campaign.template_id,
       group_id: campaign.group_id,
       status: campaign.status,
-      scheduled_at: campaign.scheduled_at || ''
+      scheduled_at: campaign.scheduled_at || '',
+      custom_variables: campaign.custom_variables || {}
     });
     setShowCampaignModal(true);
   };
 
   const resetCampaignForm = () => {
-    setCampaignForm({ name: '', template_id: '', group_id: '', status: 'draft', scheduled_at: '' });
+    setCampaignForm({ name: '', template_id: '', group_id: '', status: 'draft', scheduled_at: '', custom_variables: {} });
+    setTemplateExtraVariables([]);
     setEditingCampaign(null);
     setShowCampaignModal(false);
     setErrors({});
@@ -456,9 +498,9 @@ export function CampaignsModule() {
       {activeTab === 'overview' && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <StatCard color="brand" icon={<Send />} label="Total Enviados" value={overallStats.totalSent.toLocaleString()} />
-            <StatCard color="info" icon={<Eye />} label="Tasa de Apertura" value={`${overallStats.openRate.toFixed(1)}%`} />
-            <StatCard color="success" icon={<MousePointerClick />} label="Tasa de Clicks" value={`${overallStats.clickRate.toFixed(1)}%`} />
+            <StatCard color="brand" icon={<Send />} label="Total Destinatarios" value={overallStats.totalRecipients.toLocaleString()} />
+            <StatCard color="success" icon={<CheckCircle />} label="Entregados" value={overallStats.delivered.toLocaleString()} />
+            <StatCard color="danger" icon={<AlertCircle />} label="Fallidos" value={overallStats.failed.toLocaleString()} />
             <StatCard color="warning" icon={<Activity />} label="Campañas Activas" value={campaigns.filter(c => c.status === 'sending' || c.status === 'scheduled').length} />
           </div>
 
@@ -553,16 +595,16 @@ export function CampaignsModule() {
                   {campaignStats[campaign.id] && (
                     <div className="grid grid-cols-3 gap-3 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl mb-4">
                       <div className="text-center">
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Enviados</p>
-                        <p className="text-lg font-bold text-slate-900 dark:text-white">{campaignStats[campaign.id].totalSent}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Destinatarios</p>
+                        <p className="text-lg font-bold text-slate-900 dark:text-white">{campaignStats[campaign.id].totalRecipients}</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Aperturas</p>
-                        <p className="text-lg font-bold text-sky-600 dark:text-sky-400">{campaignStats[campaign.id].openRate.toFixed(1)}%</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Entregados</p>
+                        <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{campaignStats[campaign.id].delivered}</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Clicks</p>
-                        <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{campaignStats[campaign.id].clickRate.toFixed(1)}%</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Éxito</p>
+                        <p className="text-lg font-bold text-sky-600 dark:text-sky-400">{campaignStats[campaign.id].successRate.toFixed(1)}%</p>
                       </div>
                     </div>
                   )}
@@ -593,7 +635,7 @@ export function CampaignsModule() {
                           Ver Logs de Envío
                         </Button>
 
-                        {campaign.failed_count > 0 && (
+                        {(campaign.failed_count ?? 0) > 0 && (
                           <PermissionGate module="campanas" permission="update">
                             <Button
                               onClick={() => handleRetryFailedEmails(campaign.id)}
@@ -672,6 +714,16 @@ export function CampaignsModule() {
                       <p className="text-sm text-slate-500 dark:text-slate-400">{template.subject}</p>
                     </div>
                   </div>
+
+                  {template.sendcraft_template_name ? (
+                    <Badge variant="success" className="mb-4">
+                      SendCraft: {template.sendcraft_template_name}
+                    </Badge>
+                  ) : (
+                    <Badge variant="warning" className="mb-4">
+                      Sin vincular a SendCraft
+                    </Badge>
+                  )}
 
                   <div className="flex space-x-2">
                     <PermissionGate module="campanas" permission="update">
@@ -875,6 +927,41 @@ export function CampaignsModule() {
                   </select>
                   {errors.template_id && <p className="text-rose-600 dark:text-rose-400 text-xs mt-1">{errors.template_id}</p>}
                 </div>
+
+                {campaignForm.template_id && (loadingTemplateVariables || templateExtraVariables.length > 0) && (
+                  <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">
+                      <Hash className="w-4 h-4 inline mr-2 text-brand-600 dark:text-brand-400" />
+                      Parámetros del Template
+                    </label>
+                    {loadingTemplateVariables ? (
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Detectando variables del template en SendCraft...</p>
+                    ) : (
+                      <>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                          Este template pide variables que no dependen del contacto — cargalas acá, se envían igual para todos los destinatarios de esta campaña.
+                        </p>
+                        <div className="space-y-2">
+                          {templateExtraVariables.map(key => (
+                            <div key={key}>
+                              <label className="block text-xs font-mono text-slate-600 dark:text-slate-300 mb-1">{`{{${key}}}`}</label>
+                              <input
+                                type="text"
+                                value={campaignForm.custom_variables[key] || ''}
+                                onChange={(e) => setCampaignForm({
+                                  ...campaignForm,
+                                  custom_variables: { ...campaignForm.custom_variables, [key]: e.target.value }
+                                })}
+                                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
+                                placeholder={`Valor para ${key}`}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">

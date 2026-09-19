@@ -84,12 +84,10 @@ class EnvironmentLoader {
       if (!this.config.VITE_WIDGET_APIKEY) {
         console.warn('⚠️ VITE_WIDGET_APIKEY no está configurado (API y local).');
       }
-      if (!this.config.VITE_EMAIL_URL) {
-        console.warn('⚠️ VITE_EMAIL_URL no está configurado (API y local). El envío de cotizaciones no estará disponible.');
-      }
-      if (!this.config.VITE_EMAIL_KEY) {
-        console.warn('⚠️ VITE_EMAIL_KEY no está configurado (API y local).');
-      }
+      // VITE_EMAIL_URL / VITE_EMAIL_KEY ya no se usan desde el navegador: el envío de
+      // cotizaciones/órdenes pasa por la edge function send-quote-communication, que usa
+      // el secreto de servidor SENDCRAFT_API_KEY. Se mantienen aquí solo por compatibilidad
+      // con configuraciones existentes; no afectan a ningún flujo actual.
 
       this.injectIntoImportMeta();
     } catch (error) {

@@ -7,6 +7,7 @@ import { NavigationProvider, useNavigation } from './contexts/NavigationContext'
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LoginForm } from './components/Auth/LoginForm';
 import { CallbackHandler } from './components/Auth/CallbackHandler';
+import { UnsubscribePage } from './components/Public/UnsubscribePage';
 import { Sidebar } from './components/Layout/Sidebar';
 import { PhoneDialer } from './components/Common/PhoneDialer';
 import { IncomingCallNotification } from './components/Common/IncomingCallNotification';
@@ -140,6 +141,7 @@ function AppRoutes() {
       <Route path="/login" element={<LoginForm />} />
       <Route path="/callback" element={<CallbackHandler />} />
       <Route path="/auth/callback" element={<CallbackHandler />} />
+      <Route path="/desuscribir/:contactId" element={<UnsubscribePage />} />
       <Route
         path="/"
         element={

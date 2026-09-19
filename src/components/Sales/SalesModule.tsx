@@ -1767,14 +1767,6 @@ export function SalesModule() {
 
     await waitForConfig().catch(() => undefined);
 
-    const emailUrl = getEnvVar('VITE_EMAIL_URL').trim();
-    const emailKey = getEnvVar('VITE_EMAIL_KEY').trim();
-
-    if (!emailUrl || !emailKey) {
-      toast.error('Falta configurar VITE_EMAIL_URL o VITE_EMAIL_KEY');
-      return;
-    }
-
     const recipientEmail = (quote.client?.email || selectedQuoteClient?.email || '').trim();
     if (!recipientEmail) {
       toast.error('La cotizacion no tiene un correo de cliente configurado');
@@ -1806,27 +1798,14 @@ export function SalesModule() {
     let serviceResult: QuoteCommunicationResponse = { success: false };
 
     try {
-      const response = await fetch(emailUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': emailKey,
-        },
-        body: JSON.stringify(requestPayload),
+      const { data, error } = await supabase.functions.invoke('send-quote-communication', {
+        body: requestPayload,
       });
 
-      const responseText = await response.text();
-      try {
-        serviceResult = responseText ? JSON.parse(responseText) as QuoteCommunicationResponse : { success: response.ok };
-      } catch {
-        serviceResult = {
-          success: response.ok,
-          message: responseText || 'Respuesta no JSON del servicio de correo',
-        };
-      }
+      serviceResult = (data as QuoteCommunicationResponse) || { success: false };
 
-      if (!response.ok || serviceResult.success === false) {
-        throw new Error(serviceResult.message || `No se pudo enviar la cotizacion (${response.status})`);
+      if (error || serviceResult.success === false) {
+        throw new Error(serviceResult.message || error?.message || 'No se pudo enviar la cotizacion');
       }
     } catch (error) {
       console.error('Error enviando cotizacion:', error);
@@ -1918,14 +1897,6 @@ export function SalesModule() {
 
     await waitForConfig().catch(() => undefined);
 
-    const emailUrl = getEnvVar('VITE_EMAIL_URL').trim();
-    const emailKey = getEnvVar('VITE_EMAIL_KEY').trim();
-
-    if (!emailUrl || !emailKey) {
-      toast.error('Falta configurar VITE_EMAIL_URL o VITE_EMAIL_KEY');
-      return;
-    }
-
     const recipientEmail = (quote.client?.email || selectedQuoteClient?.email || '').trim();
     if (!recipientEmail) {
       toast.error('La orden no tiene un correo de cliente configurado');
@@ -1959,28 +1930,15 @@ export function SalesModule() {
     let serviceResult: QuoteCommunicationResponse = { success: false };
 
     try {
-      const response = await fetch(emailUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': emailKey,
-        },
-        body: JSON.stringify(requestPayload),
+      const { data, error } = await supabase.functions.invoke('send-quote-communication', {
+        body: requestPayload,
       });
 
-      const responseText = await response.text();
-      try {
-        serviceResult = responseText ? JSON.parse(responseText) as QuoteCommunicationResponse : { success: response.ok };
-      } catch {
-        serviceResult = {
-          success: response.ok,
-          message: responseText || 'Respuesta no JSON del servicio de correo',
-        };
-      }
+      serviceResult = (data as QuoteCommunicationResponse) || { success: false };
 
-      if (!response.ok || serviceResult.success === false) {
-        console.error('Respuesta del servicio de correo (enviar orden):', response.status, responseText);
-        throw new Error(serviceResult.message || `No se pudo enviar la orden (${response.status})`);
+      if (error || serviceResult.success === false) {
+        console.error('Respuesta del servicio de correo (enviar orden):', error, serviceResult);
+        throw new Error(serviceResult.message || error?.message || 'No se pudo enviar la orden');
       }
     } catch (error) {
       console.error('Error enviando la orden aprobada:', error);

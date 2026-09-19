@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Code, Eye, Save, X, Plus, Upload, Image as ImageIcon, Link as LinkIcon, Smartphone, QrCode, Sparkles } from 'lucide-react';
+import { Code, Eye, Save, X, Plus, Image as ImageIcon, Link as LinkIcon, Smartphone, QrCode, Sparkles, RefreshCw, UploadCloud } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { getEnvVar } from '../../lib/envLoader';
+import { DEFAULT_VARIABLE_KEYS } from '../../lib/campaignVariables';
 import { useToast } from '../../contexts/ToastContext';
 
 interface Variable {
@@ -9,9 +11,25 @@ interface Variable {
   example: string;
 }
 
+interface SendcraftTemplate {
+  id: string;
+  name: string;
+  type: string;
+  variables: string[];
+  variable_count: number;
+  subject?: string;
+}
+
+const slugifyTemplateName = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
 interface HTMLTemplateEditorProps {
   template?: any;
-  onSave: () => void;
+  onSave?: () => void;
   onClose: () => void;
 }
 
@@ -20,6 +38,10 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
   const [name, setName] = useState(template?.name || '');
   const [subject, setSubject] = useState(template?.subject || '');
   const [htmlBody, setHtmlBody] = useState(template?.html_body || getDefaultTemplate());
+  const [sendcraftTemplateName, setSendcraftTemplateName] = useState(template?.sendcraft_template_name || '');
+  const [sendcraftTemplates, setSendcraftTemplates] = useState<SendcraftTemplate[]>([]);
+  const [loadingSendcraftTemplates, setLoadingSendcraftTemplates] = useState(false);
+  const [creatingSendcraftTemplate, setCreatingSendcraftTemplate] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [availableVariables, setAvailableVariables] = useState<Variable[]>([]);
   const [previewData, setPreviewData] = useState<Record<string, string>>({});
@@ -34,10 +56,77 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
 
   useEffect(() => {
     loadVariables();
+    loadSendcraftTemplates();
     if (template?.preview_data) {
       setPreviewData(template.preview_data);
     }
   }, [template]);
+
+  const loadSendcraftTemplates = async () => {
+    setLoadingSendcraftTemplates(true);
+    try {
+      const apiUrl = `${getEnvVar('VITE_SUPABASE_URL')}/functions/v1/sendcraft-templates?type=email`;
+      const response = await fetch(apiUrl, {
+        headers: { 'Authorization': `Bearer ${getEnvVar('VITE_SUPABASE_ANON_KEY')}` },
+      });
+      const result = await response.json();
+      if (response.ok) {
+        setSendcraftTemplates(result.templates || []);
+      }
+    } catch {
+      // Silencioso: el dropdown queda vacío pero el campo manual sigue funcionando.
+    } finally {
+      setLoadingSendcraftTemplates(false);
+    }
+  };
+
+  const handleCreateInSendcraft = async () => {
+    if (!name.trim() || !subject.trim()) {
+      toast.error('Completa nombre y asunto antes de crear el template en SendCraft');
+      return;
+    }
+
+    const slug = slugifyTemplateName(sendcraftTemplateName || name);
+    if (!slug) {
+      toast.error('No se pudo generar un nombre válido para SendCraft');
+      return;
+    }
+
+    setCreatingSendcraftTemplate(true);
+    try {
+      const apiUrl = `${getEnvVar('VITE_SUPABASE_URL')}/functions/v1/sendcraft-templates`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${getEnvVar('VITE_SUPABASE_ANON_KEY')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: slug,
+          subject,
+          html_content: htmlBody,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 409) {
+          throw new Error(`Ya existe un template "${slug}" en SendCraft. Selecciónalo de la lista en vez de crearlo de nuevo.`);
+        }
+        throw new Error(result.error || 'No se pudo crear el template en SendCraft');
+      }
+
+      const createdName = result.template?.name || slug;
+      setSendcraftTemplateName(createdName);
+      toast.success(`Template "${createdName}" creado en SendCraft`);
+      loadSendcraftTemplates();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo crear el template en SendCraft');
+    } finally {
+      setCreatingSendcraftTemplate(false);
+    }
+  };
 
   const loadVariables = async () => {
     const { data } = await supabase
@@ -146,6 +235,11 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
       return;
     }
 
+    if (!sendcraftTemplateName.trim()) {
+      toast.error('Indica el nombre del template ya creado en el dashboard de SendCraft');
+      return;
+    }
+
     try {
       const userId = (await supabase.auth.getUser()).data.user?.id;
 
@@ -155,7 +249,8 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
         html_body: htmlBody,
         body: htmlBody.replace(/<[^>]*>/g, '').substring(0, 200),
         variables: availableVariables.map(v => v.key),
-        preview_data: previewData
+        preview_data: previewData,
+        sendcraft_template_name: sendcraftTemplateName.trim()
       };
 
       if (userId) {
@@ -187,7 +282,8 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
         toast.success('Plantilla creada correctamente');
       }
 
-      onSave();
+      onSave?.();
+      onClose();
     } catch (err) {
       toast.error('Error inesperado al guardar la plantilla');
     }
@@ -262,6 +358,9 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
               <p style="margin: 0; color: #999999; font-size: 14px;">
                 Gracias por confiar en nosotros<br>
                 {{crm_company}} - {{current_date}}
+              </p>
+              <p style="margin: 10px 0 0; color: #999999; font-size: 12px;">
+                <a href="{{unsubscribe_url}}" style="color: #999999; text-decoration: underline;">Darte de baja de estas comunicaciones</a>
               </p>
             </td>
           </tr>
@@ -408,7 +507,7 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-slate-900 placeholder:text-slate-400"
                     placeholder="Ej: Bienvenida a nuevos clientes"
                   />
                 </div>
@@ -418,10 +517,90 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
                     type="text"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-slate-900 placeholder:text-slate-400"
                     placeholder="Ej: Bienvenido {{client_name}} a {{crm_company}}"
                   />
                 </div>
+              </div>
+
+              <div className="mb-4 bg-slate-50 border border-slate-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-slate-700">
+                    Template en SendCraft (template_name) *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={loadSendcraftTemplates}
+                    disabled={loadingSendcraftTemplates}
+                    className="flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${loadingSendcraftTemplates ? 'animate-spin' : ''}`} />
+                    <span>Actualizar lista</span>
+                  </button>
+                </div>
+
+                <select
+                  value={sendcraftTemplates.some(t => t.name === sendcraftTemplateName) ? sendcraftTemplateName : ''}
+                  onChange={(e) => setSendcraftTemplateName(e.target.value)}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-2 bg-white text-slate-900"
+                >
+                  <option value="">
+                    {loadingSendcraftTemplates ? 'Cargando templates de SendCraft...' : 'Elegir un template existente...'}
+                  </option>
+                  {sendcraftTemplates.map(t => (
+                    <option key={t.id} value={t.name}>
+                      {t.name} ({t.variable_count} variable{t.variable_count === 1 ? '' : 's'})
+                    </option>
+                  ))}
+                </select>
+
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={sendcraftTemplateName}
+                    onChange={(e) => setSendcraftTemplateName(e.target.value)}
+                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm bg-white text-slate-900 placeholder:text-slate-400"
+                    placeholder="Ej: campaign_promo"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCreateInSendcraft}
+                    disabled={creatingSendcraftTemplate}
+                    className="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50 whitespace-nowrap"
+                  >
+                    <UploadCloud className="w-4 h-4" />
+                    <span>{creatingSendcraftTemplate ? 'Creando...' : 'Crear en SendCraft'}</span>
+                  </button>
+                </div>
+
+                {sendcraftTemplates.find(t => t.name === sendcraftTemplateName) && (
+                  <div className="text-xs text-slate-500 mt-2 space-y-1">
+                    {(() => {
+                      const vars = sendcraftTemplates.find(t => t.name === sendcraftTemplateName)!.variables;
+                      const auto = vars.filter(v => DEFAULT_VARIABLE_KEYS.includes(v));
+                      const manual = vars.filter(v => !DEFAULT_VARIABLE_KEYS.includes(v));
+                      return (
+                        <>
+                          {auto.length > 0 && (
+                            <p>
+                              <span className="font-medium text-emerald-600">Automáticas</span> (el CRM las completa solas): {auto.map(v => `{{${v}}}`).join(', ')}
+                            </p>
+                          )}
+                          {manual.length > 0 && (
+                            <p>
+                              <span className="font-medium text-amber-600">A cargar por campaña</span> (aparecen en "Parámetros del Template" al crear la campaña): {manual.map(v => `{{${v}}}`).join(', ')}
+                            </p>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
+                <p className="text-xs text-slate-500 mt-1">
+                  Elige un template ya creado en SendCraft, o escribe un nombre y presiona "Crear en
+                  SendCraft" para darlo de alta ahí mismo con el HTML de abajo. El envío real de la
+                  campaña siempre usa el template de SendCraft, no el HTML local.
+                </p>
               </div>
 
               <div className="flex space-x-2">
@@ -455,7 +634,7 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
                 <textarea
                   value={htmlBody}
                   onChange={(e) => setHtmlBody(e.target.value)}
-                  className="w-full h-full p-4 font-mono text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  className="w-full h-full p-4 font-mono text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none bg-white text-slate-900 placeholder:text-slate-400"
                   placeholder="Escribe tu código HTML aquí..."
                 />
               ) : (
@@ -500,7 +679,7 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
                   type="url"
                   value={imageUrl}
                   onChange={(e) => setImageUrl(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-white text-slate-900 placeholder:text-slate-400"
                   placeholder="https://ejemplo.com/logo.png"
                 />
                 <p className="text-xs text-slate-500 mt-1">Puedes usar servicios como Imgur, Cloudinary o tu servidor</p>
@@ -535,7 +714,7 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
                   type="text"
                   value={qrData}
                   onChange={(e) => setQrData(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-slate-900 placeholder:text-slate-400"
                   placeholder="https://play.google.com/store/apps/details?id=tu.app"
                 />
                 <p className="text-xs text-slate-500 mt-1">El QR se generará automáticamente con este contenido</p>
@@ -570,7 +749,7 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
                   type="url"
                   value={appStoreLink}
                   onChange={(e) => setAppStoreLink(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-slate-900 placeholder:text-slate-400"
                   placeholder="https://apps.apple.com/..."
                 />
               </div>
@@ -580,7 +759,7 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
                   type="url"
                   value={playStoreLink}
                   onChange={(e) => setPlayStoreLink(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-slate-900 placeholder:text-slate-400"
                   placeholder="https://play.google.com/store/apps/..."
                 />
               </div>
@@ -635,6 +814,9 @@ function getDefaultTemplate() {
               <p style="margin: 0; color: #999999; font-size: 14px;">
                 {{crm_company}} - {{current_date}}
               </p>
+              <p style="margin: 10px 0 0; color: #999999; font-size: 12px;">
+                <a href="{{unsubscribe_url}}" style="color: #999999; text-decoration: underline;">Darte de baja de estas comunicaciones</a>
+              </p>
             </td>
           </tr>
         </table>
@@ -675,6 +857,13 @@ function getProductLaunchTemplate() {
               </div>
             </td>
           </tr>
+          <tr>
+            <td style="padding: 20px 30px; text-align: center; border-top: 1px solid #eeeeee;">
+              <p style="margin: 0; color: #999999; font-size: 12px;">
+                <a href="{{unsubscribe_url}}" style="color: #999999; text-decoration: underline;">Darte de baja de estas comunicaciones</a>
+              </p>
+            </td>
+          </tr>
         </table>
       </td>
     </tr>
@@ -692,6 +881,9 @@ function getNewsletterTemplate() {
 <body style="margin: 0; padding: 0; font-family: Arial, sans-serif;">
   <h2>Hola {{client_name}}</h2>
   <p>Este es tu boletín mensual de {{crm_company}}</p>
+  <p style="margin-top: 20px; color: #999999; font-size: 12px;">
+    <a href="{{unsubscribe_url}}" style="color: #999999; text-decoration: underline;">Darte de baja de estas comunicaciones</a>
+  </p>
 </body>
 </html>`;
 }

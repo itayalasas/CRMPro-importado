@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Trash2, Users, Mail, Phone, Building2, Upload, Download } from 'lucide-react';
+import { Plus, Trash2, Edit2, Users, Mail, Phone, Building2, Upload, Download } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { ConfirmDialog } from '../Common/ConfirmDialog';
@@ -24,6 +24,7 @@ interface ContactsManagerProps {
 export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [groupName, setGroupName] = useState('');
   const { user } = useAuth();
   const toast = useToast();
@@ -45,7 +46,8 @@ export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
     first_name: '',
     last_name: '',
     company_name: '',
-    phone: ''
+    phone: '',
+    status: 'active'
   });
 
   useEffect(() => {
@@ -78,6 +80,22 @@ export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (editingContactId) {
+      const { error } = await supabase
+        .from('contacts')
+        .update(formData)
+        .eq('id', editingContactId);
+
+      if (!error) {
+        loadContacts();
+        resetForm();
+        toast.showToast('Contacto actualizado exitosamente', 'success');
+      } else {
+        toast.showToast(`Error al actualizar contacto: ${error.message}`, 'error');
+      }
+      return;
+    }
+
     const contactData: any = {
       ...formData,
       group_id: groupId
@@ -96,6 +114,19 @@ export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
     } else {
       toast.showToast(`Error al guardar contacto: ${error.message}`, 'error');
     }
+  };
+
+  const handleEdit = (contact: Contact) => {
+    setEditingContactId(contact.id);
+    setFormData({
+      email: contact.email,
+      first_name: contact.first_name || '',
+      last_name: contact.last_name || '',
+      company_name: contact.company_name || '',
+      phone: contact.phone || '',
+      status: contact.status || 'active'
+    });
+    setShowAddForm(true);
   };
 
   const handleDelete = async (id: string) => {
@@ -127,9 +158,112 @@ export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
       first_name: '',
       last_name: '',
       company_name: '',
-      phone: ''
+      phone: '',
+      status: 'active'
     });
+    setEditingContactId(null);
     setShowAddForm(false);
+  };
+
+  const parseCsvLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (inQuotes) {
+        if (char === '"') {
+          if (line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          current += char;
+        }
+      } else if (char === '"') {
+        inQuotes = true;
+      } else if (char === ',') {
+        result.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current);
+    return result.map(s => s.trim());
+  };
+
+  const handleImportCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    const text = await file.text();
+    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+
+    if (lines.length < 2) {
+      toast.error('El archivo CSV no tiene filas de datos para importar');
+      return;
+    }
+
+    const headers = parseCsvLine(lines[0]).map(h => h.toLowerCase());
+    const emailIdx = headers.findIndex(h => h.includes('email') || h.includes('correo'));
+
+    if (emailIdx === -1) {
+      toast.error('El CSV debe tener una columna "Email"');
+      return;
+    }
+
+    const firstNameIdx = headers.findIndex(h => h.includes('nombre') && !h.includes('apellido'));
+    const lastNameIdx = headers.findIndex(h => h.includes('apellido'));
+    const companyIdx = headers.findIndex(h => h.includes('empresa') || h.includes('compan'));
+    const phoneIdx = headers.findIndex(h => h.includes('tel') || h.includes('phone'));
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const newContacts: any[] = [];
+    let skipped = 0;
+
+    for (const line of lines.slice(1)) {
+      const row = parseCsvLine(line);
+      const email = (row[emailIdx] || '').trim();
+
+      if (!email || !emailRegex.test(email)) {
+        skipped++;
+        continue;
+      }
+
+      newContacts.push({
+        group_id: groupId,
+        email,
+        first_name: firstNameIdx >= 0 ? row[firstNameIdx] || '' : '',
+        last_name: lastNameIdx >= 0 ? row[lastNameIdx] || '' : '',
+        company_name: companyIdx >= 0 ? row[companyIdx] || '' : '',
+        phone: phoneIdx >= 0 ? row[phoneIdx] || '' : '',
+        status: 'active',
+        ...(user?.id ? { created_by: user.id } : {}),
+      });
+    }
+
+    if (newContacts.length === 0) {
+      toast.error('No se encontraron filas válidas con email en el CSV');
+      return;
+    }
+
+    const { error } = await supabase.from('contacts').insert(newContacts);
+
+    if (error) {
+      toast.error(`Error al importar contactos: ${error.message}`);
+      return;
+    }
+
+    toast.success(
+      `${newContacts.length} contacto(s) importado(s)` +
+        (skipped > 0 ? `, ${skipped} fila(s) omitida(s) por email inválido` : '')
+    );
+    loadContacts();
   };
 
   const exportContacts = () => {
@@ -177,6 +311,11 @@ export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
             </div>
 
             <div className="flex space-x-2">
+              <label className="flex items-center space-x-2 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition cursor-pointer">
+                <Upload className="w-4 h-4" />
+                <span>Importar CSV</span>
+                <input type="file" accept=".csv,text/csv" onChange={handleImportCsv} className="hidden" />
+              </label>
               <button
                 onClick={exportContacts}
                 className="flex items-center space-x-2 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition"
@@ -194,9 +333,16 @@ export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
             </div>
           </div>
 
+          <p className="text-xs text-slate-500 -mt-4 mb-6">
+            El CSV a importar debe tener una columna "Email" (obligatoria) y opcionalmente "Nombre",
+            "Apellido", "Empresa" y "Teléfono" — mismo formato que genera "Exportar CSV".
+          </p>
+
           {showAddForm && (
             <div className="bg-slate-50 rounded-xl p-6 mb-6 border border-slate-200">
-              <h3 className="text-lg font-bold text-slate-900 mb-4">Nuevo Contacto</h3>
+              <h3 className="text-lg font-bold text-slate-900 mb-4">
+                {editingContactId ? 'Editar Contacto' : 'Nuevo Contacto'}
+              </h3>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -205,7 +351,7 @@ export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
                       type="email"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-slate-900 placeholder:text-slate-400"
                       placeholder="contacto@ejemplo.com"
                       required
                     />
@@ -217,7 +363,7 @@ export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
                       type="text"
                       value={formData.first_name}
                       onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-slate-900 placeholder:text-slate-400"
                       placeholder="Juan"
                     />
                   </div>
@@ -228,7 +374,7 @@ export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
                       type="text"
                       value={formData.last_name}
                       onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-slate-900 placeholder:text-slate-400"
                       placeholder="Pérez"
                     />
                   </div>
@@ -239,21 +385,37 @@ export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
                       type="text"
                       value={formData.company_name}
                       onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-slate-900 placeholder:text-slate-400"
                       placeholder="Acme Corp"
                     />
                   </div>
 
-                  <div className="col-span-2">
+                  <div className={editingContactId ? '' : 'col-span-2'}>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Teléfono</label>
                     <input
                       type="tel"
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-slate-900 placeholder:text-slate-400"
                       placeholder="+52 55 1234 5678"
                     />
                   </div>
+
+                  {editingContactId && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Estado</label>
+                      <select
+                        value={formData.status}
+                        onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-slate-900"
+                      >
+                        <option value="active">Activo</option>
+                        <option value="inactive">Inactivo</option>
+                        <option value="bounced">Rebotado</option>
+                        <option value="unsubscribed">Dado de baja</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-end space-x-3">
@@ -268,7 +430,7 @@ export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
                     type="submit"
                     className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition"
                   >
-                    Guardar
+                    {editingContactId ? 'Actualizar' : 'Guardar'}
                   </button>
                 </div>
               </form>
@@ -324,12 +486,20 @@ export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
                       </span>
                     </td>
                     <td className="py-3 px-4">
-                      <button
-                        onClick={() => handleDelete(contact.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center space-x-1">
+                        <button
+                          onClick={() => handleEdit(contact)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(contact.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

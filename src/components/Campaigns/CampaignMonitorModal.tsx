@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import {
   X, CheckCircle, XCircle, Clock, Send, AlertTriangle,
@@ -37,10 +37,22 @@ export function CampaignMonitorModal({ campaignId, campaignName, onClose }: Camp
     status: 'draft'
   });
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const statusRef = useRef(progress.status);
 
   useEffect(() => {
     loadLogs();
     loadProgress();
+
+    // SendCraft has no outbound webhook for per-recipient events, so while the
+    // campaign is in flight we poll it directly. We refresh local state ourselves
+    // right after (don't rely solely on the Realtime subscriptions below — Postgres
+    // changes replication may not be enabled for these tables in this project).
+    const pollInterval = setInterval(async () => {
+      if (statusRef.current !== 'sending') return;
+      await supabase.functions.invoke('campaign-notify-status', { body: { campaign_id: campaignId } });
+      loadProgress();
+      loadLogs();
+    }, 4000);
 
     // Subscribe to real-time updates for logs
     const logsChannel = supabase
@@ -77,6 +89,7 @@ export function CampaignMonitorModal({ campaignId, campaignName, onClose }: Camp
       .subscribe();
 
     return () => {
+      clearInterval(pollInterval);
       supabase.removeChannel(logsChannel);
       supabase.removeChannel(campaignChannel);
     };
@@ -105,6 +118,7 @@ export function CampaignMonitorModal({ campaignId, campaignName, onClose }: Camp
     if (error) {
     } else if (data) {
       setProgress(data);
+      statusRef.current = data.status;
     }
   };
 

@@ -1,6 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import nodemailer from "npm:nodemailer@6.9.7";
+import {
+  applyJobSnapshotToCampaign,
+  sendcraftGetJob,
+  sendcraftNotify,
+  type NotifyRecipient,
+} from "../_shared/sendcraft.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,12 +19,49 @@ interface SendCampaignRequest {
   retry_failed?: boolean;
 }
 
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function buildRecipient(contact: any, appPublicUrl: string): NotifyRecipient {
+  return {
+    email: contact.email,
+    data: {
+      ...(contact.custom_fields || {}),
+      client_name: `${contact.first_name || ""} ${contact.last_name || ""}`.trim() || "Cliente",
+      first_name: contact.first_name || "",
+      last_name: contact.last_name || "",
+      client_email: contact.email,
+      company_name: contact.company_name || "",
+      client_phone: contact.phone || "",
+      unsubscribe_url: appPublicUrl && contact.id ? `${appPublicUrl}/desuscribir/${contact.id}` : "",
+    },
+  };
+}
+
+async function loadSharedData(supabase: any, campaign: any) {
+  const { data: generalSettings } = await supabase
+    .from("system_settings")
+    .select("setting_value")
+    .eq("setting_key", "general_settings")
+    .maybeSingle();
+  const general = (generalSettings?.setting_value as any) || {};
+
+  return {
+    ...(campaign.custom_variables || {}),
+    campaign_name: campaign.name,
+    current_date: new Date().toLocaleDateString("es-MX"),
+    crm_company: general.company_name || "CRM Pro",
+    company_url: general.company_website || "",
+  };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
@@ -30,13 +72,7 @@ Deno.serve(async (req: Request) => {
     const { campaign_id, contact_ids, retry_failed }: SendCampaignRequest = await req.json();
 
     if (!campaign_id) {
-      return new Response(
-        JSON.stringify({ error: "campaign_id es requerido" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return jsonResponse({ error: "campaign_id es requerido" }, 400);
     }
 
     const { data: campaign, error: campaignError } = await supabase
@@ -46,77 +82,83 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (campaignError || !campaign) {
-      return new Response(
-        JSON.stringify({ error: "Campaña no encontrada" }),
+      return jsonResponse({ error: "Campaña no encontrada" }, 404);
+    }
+
+    const templateName = campaign.email_templates?.sendcraft_template_name;
+    if (!templateName) {
+      return jsonResponse(
         {
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+          error:
+            "La plantilla de esta campaña no tiene un 'sendcraft_template_name' configurado. Edítala y vincúlala con el template ya creado en el dashboard de SendCraft.",
+        },
+        400
       );
     }
 
-    const { data: smtpSettings } = await supabase
-      .from("system_settings")
-      .select("setting_value")
-      .eq("setting_key", "smtp_config")
-      .single();
+    const appPublicUrl = (Deno.env.get("APP_PUBLIC_URL") || "").replace(/\/+$/, "");
 
-    if (!smtpSettings || !smtpSettings.setting_value) {
-      return new Response(
-        JSON.stringify({ error: "Configuración SMTP no encontrada" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    const smtp = smtpSettings.setting_value as any;
-
-    if (!smtp.host || !smtp.username || !smtp.password) {
-      return new Response(
-        JSON.stringify({ error: "Configuración SMTP incompleta" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    let contacts;
+    // --- Retry path: re-reads the CURRENT contact data (not what SendCraft stored on the
+    // original job) so an edited email/name/phone actually takes effect, then submits a
+    // fresh /notify job with just the failed recipients.
     if (retry_failed) {
       const { data: failedLogs } = await supabase
         .from("campaign_email_logs")
-        .select("email, contact_id")
+        .select("id, contact_id, email")
         .eq("campaign_id", campaign_id)
         .eq("status", "failed");
 
-      if (failedLogs && failedLogs.length > 0) {
-        const failedContactIds = failedLogs
-          .map(log => log.contact_id)
-          .filter(id => id !== null);
-
-        if (failedContactIds.length > 0) {
-          const { data } = await supabase
-            .from("contacts")
-            .select("*")
-            .in("id", failedContactIds);
-          contacts = data;
-        } else {
-          contacts = failedLogs.map(log => ({
-            id: null,
-            email: log.email,
-            name: log.email.split('@')[0]
-          }));
-        }
-      } else {
-        contacts = [];
+      if (!failedLogs || failedLogs.length === 0) {
+        return jsonResponse({ error: "No hay destinatarios fallidos para reintentar" }, 400);
       }
-    } else if (contact_ids && contact_ids.length > 0) {
-      const { data } = await supabase
-        .from("contacts")
-        .select("*")
-        .in("id", contact_ids);
+
+      const contactIds = failedLogs.map((l: any) => l.contact_id).filter(Boolean);
+      const { data: currentContacts } = contactIds.length
+        ? await supabase.from("contacts").select("*").in("id", contactIds)
+        : { data: [] };
+      const contactsById = new Map((currentContacts || []).map((c: any) => [c.id, c]));
+
+      await supabase.from("campaigns").update({ status: "sending" }).eq("id", campaign_id);
+
+      const retryContacts: any[] = [];
+      for (const log of failedLogs) {
+        const current = log.contact_id ? contactsById.get(log.contact_id) : null;
+        const contact = current || { id: log.contact_id, email: log.email };
+
+        await supabase
+          .from("campaign_email_logs")
+          .update({ status: "pending", error_message: null, email: contact.email })
+          .eq("id", log.id);
+
+        retryContacts.push(contact);
+      }
+
+      const recipients = retryContacts.map((c) => buildRecipient(c, appPublicUrl));
+      const sharedData = await loadSharedData(supabase, campaign);
+
+      const notifyResponse = await sendcraftNotify({
+        type: "email",
+        template_name: templateName,
+        recipients,
+        shared_data: sharedData,
+        options: { concurrency: 5, batch_delay_ms: 2000 },
+      });
+
+      const retryJobId = notifyResponse.job_id || notifyResponse.id;
+      const fullJob = retryJobId ? await sendcraftGetJob(retryJobId) : notifyResponse;
+      await applyJobSnapshotToCampaign(supabase, campaign_id, fullJob);
+
+      return jsonResponse({
+        success: true,
+        job: fullJob,
+        message: `Reintento: ${fullJob.sent} enviados, ${fullJob.failed} fallidos`,
+      });
+    }
+
+    // --- New send: resolve recipients.
+    let contacts;
+    if (contact_ids && contact_ids.length > 0) {
+      const { data } = await supabase.from("contacts").select("*").in("id", contact_ids);
       contacts = data;
     } else if (campaign.group_id) {
       const { data } = await supabase
@@ -130,203 +172,56 @@ Deno.serve(async (req: Request) => {
     }
 
     if (!contacts || contacts.length === 0) {
-      return new Response(
-        JSON.stringify({ error: "No hay contactos para enviar" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    if (retry_failed) {
-      await supabase
-        .from("campaigns")
-        .update({ status: "sending" })
-        .eq("id", campaign_id);
-
-      await supabase
-        .from("campaign_email_logs")
-        .update({ status: "pending", error_message: null })
-        .eq("campaign_id", campaign_id)
-        .eq("status", "failed");
-    } else {
-      await supabase
-        .from("campaigns")
-        .update({
-          status: "sending",
-          total_recipients: contacts.length,
-          sent_count: 0,
-          failed_count: 0,
-        })
-        .eq("id", campaign_id);
-
-      const initialLogs = contacts.map((contact: any) => ({
-        campaign_id,
-        contact_id: contact.id,
-        email: contact.email,
-        status: "pending",
-      }));
-
-      await supabase.from("campaign_email_logs").insert(initialLogs);
-    }
-
-    const transporter = nodemailer.createTransport({
-      host: smtp.host,
-      port: smtp.port,
-      secure: smtp.secure,
-      auth: {
-        user: smtp.username,
-        pass: smtp.password,
-      },
-    });
-
-    const results = {
-      sent: 0,
-      failed: 0,
-      errors: [] as string[],
-    };
-
-    for (const contact of contacts) {
-      try {
-        if (retry_failed) {
-          await supabase
-            .from("campaign_email_logs")
-            .update({ status: "sending" })
-            .eq("campaign_id", campaign_id)
-            .eq("email", contact.email);
-        } else {
-          await supabase
-            .from("campaign_email_logs")
-            .update({ status: "sending" })
-            .eq("campaign_id", campaign_id)
-            .eq("contact_id", contact.id);
-        }
-
-        let htmlContent = campaign.email_templates.html_body;
-        let subjectContent = campaign.email_templates.subject;
-
-        const variables = {
-          client_name: `${contact.first_name || ""} ${contact.last_name || ""}`.trim() || "Cliente",
-          client_email: contact.email,
-          company_name: contact.company_name || "",
-          current_date: new Date().toLocaleDateString("es-MX"),
-          crm_company: smtp.from_name || "CRM Pro",
-        };
-
-        Object.keys(variables).forEach((key) => {
-          const regex = new RegExp(`{{${key}}}`, "g");
-          htmlContent = htmlContent.replace(regex, variables[key as keyof typeof variables]);
-          subjectContent = subjectContent.replace(regex, variables[key as keyof typeof variables]);
-        });
-
-        const info = await transporter.sendMail({
-          from: `"${smtp.from_name}" <${smtp.from_email}>`,
-          to: contact.email,
-          subject: subjectContent,
-          html: htmlContent,
-        });
-
-        if (retry_failed) {
-          await supabase
-            .from("campaign_email_logs")
-            .update({
-              status: "sent",
-              sent_at: new Date().toISOString(),
-              metadata: {
-                messageId: info.messageId,
-                response: info.response,
-              },
-            })
-            .eq("campaign_id", campaign_id)
-            .eq("email", contact.email);
-        } else {
-          await supabase
-            .from("campaign_email_logs")
-            .update({
-              status: "sent",
-              sent_at: new Date().toISOString(),
-              metadata: {
-                messageId: info.messageId,
-                response: info.response,
-              },
-            })
-            .eq("campaign_id", campaign_id)
-            .eq("contact_id", contact.id);
-        }
-
-        results.sent++;
-
-        await supabase
-          .from("campaigns")
-          .update({ sent_count: results.sent })
-          .eq("id", campaign_id);
-
-      } catch (error: any) {
-        console.error(`Error enviando a ${contact.email}:`, error);
-        results.failed++;
-        results.errors.push(`${contact.email}: ${error.message}`);
-
-        if (retry_failed) {
-          await supabase
-            .from("campaign_email_logs")
-            .update({
-              status: "failed",
-              error_message: error.message,
-              metadata: { error: error.toString() },
-            })
-            .eq("campaign_id", campaign_id)
-            .eq("email", contact.email);
-        } else {
-          await supabase
-            .from("campaign_email_logs")
-            .update({
-              status: "failed",
-              error_message: error.message,
-              metadata: { error: error.toString() },
-            })
-            .eq("campaign_id", campaign_id)
-            .eq("contact_id", contact.id);
-        }
-
-        await supabase
-          .from("campaigns")
-          .update({ failed_count: results.failed })
-          .eq("id", campaign_id);
-      }
+      return jsonResponse({ error: "No hay contactos para enviar" }, 400);
     }
 
     await supabase
       .from("campaigns")
       .update({
-        status: "sent",
-        sent_at: new Date().toISOString(),
-        sent_count: results.sent,
-        failed_count: results.failed,
+        status: "sending",
+        total_recipients: contacts.length,
+        sent_count: 0,
+        failed_count: 0,
+        sendcraft_job_id: null,
       })
       .eq("id", campaign_id);
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        results,
-        message: `Enviados: ${results.sent}, Fallidos: ${results.failed}`,
-      }),
-      {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    // Clear any previous logs for this campaign before starting a fresh send.
+    await supabase.from("campaign_email_logs").delete().eq("campaign_id", campaign_id);
+
+    const initialLogs = contacts.map((contact: any) => ({
+      campaign_id,
+      contact_id: contact.id,
+      email: contact.email,
+      status: "pending",
+    }));
+    await supabase.from("campaign_email_logs").insert(initialLogs);
+
+    const recipients: NotifyRecipient[] = contacts.map((contact: any) => buildRecipient(contact, appPublicUrl));
+    const sharedData = await loadSharedData(supabase, campaign);
+
+    const notifyResponse = await sendcraftNotify({
+      type: "email",
+      template_name: templateName,
+      recipients,
+      shared_data: sharedData,
+      options: { concurrency: 5, batch_delay_ms: 2000 },
+    });
+
+    const jobId = notifyResponse.job_id || notifyResponse.id;
+    const fullJob = jobId ? await sendcraftGetJob(jobId) : notifyResponse;
+    await applyJobSnapshotToCampaign(supabase, campaign_id, fullJob);
+
+    return jsonResponse({
+      success: true,
+      job: fullJob,
+      message:
+        fullJob.status === "done" || fullJob.status === "failed"
+          ? `Enviados: ${fullJob.sent}, Fallidos: ${fullJob.failed}`
+          : `Envío en curso (job ${jobId}). Consulta el progreso en tiempo real.`,
+    });
   } catch (error: any) {
     console.error("Error en send-campaign-emails:", error);
-    return new Response(
-      JSON.stringify({ error: error.message || "Error interno del servidor" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return jsonResponse({ error: error.message || "Error interno del servidor" }, 500);
   }
 });
