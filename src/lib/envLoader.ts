@@ -50,7 +50,7 @@ class EnvironmentLoader {
 
   private async fetchConfig(): Promise<void> {
     const API_URL = 'https://apis-pets-app.proudmoss-ff0cfe85.northcentralus.azurecontainerapps.io/api/get-env';
-    const ACCESS_KEY = '93f42359749b3c17d4d315e6a999717f54f94a9164aabf661e7dd21f2f8de79a';
+    const ACCESS_KEY = '05c04864455effee17737adb494eb95db4e30fd7a41fe358eea0fe621b06c67b';
 
     try {
       console.log('🔄 Cargando configuración desde API...');
