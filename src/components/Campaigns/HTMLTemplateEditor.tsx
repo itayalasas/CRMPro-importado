@@ -385,14 +385,14 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-7xl h-[90vh] flex flex-col shadow-2xl">
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-6 rounded-t-2xl">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-7xl h-[90vh] flex flex-col shadow-2xl">
+        <div className="bg-gradient-to-r from-brand-600 to-accent-600 p-6 rounded-t-2xl">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold text-white">
                 {template ? 'Editar Plantilla HTML' : 'Nueva Plantilla HTML'}
               </h2>
-              <p className="text-blue-100 text-sm mt-1">Crea plantillas profesionales con variables dinámicas</p>
+              <p className="text-brand-100 text-sm mt-1">Crea plantillas profesionales con variables dinámicas</p>
             </div>
             <button onClick={onClose} className="text-white hover:bg-white/20 p-2 rounded-lg transition">
               <X className="w-6 h-6" />
@@ -401,34 +401,34 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
         </div>
 
         <div className="flex-1 overflow-hidden flex">
-          <div className="w-80 bg-slate-50 border-r border-slate-200 p-6 overflow-y-auto">
+          <div className="w-80 bg-slate-50 dark:bg-slate-900/50 border-r border-slate-200 dark:border-slate-700 p-6 overflow-y-auto">
             <div className="mb-6">
-              <h3 className="text-lg font-bold text-slate-900 mb-3 flex items-center">
-                <Sparkles className="w-5 h-5 mr-2 text-purple-600" />
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-3 flex items-center">
+                <Sparkles className="w-5 h-5 mr-2 text-accent-600 dark:text-accent-400" />
                 Plantillas Rápidas
               </h3>
               <div className="space-y-2">
                 <button
                   onClick={() => loadTemplatePreset('app-launch')}
-                  className="w-full text-left p-3 bg-white rounded-lg hover:bg-purple-50 border border-slate-200 transition"
+                  className="w-full text-left p-3 bg-white dark:bg-slate-800 rounded-lg hover:bg-accent-50 dark:hover:bg-accent-500/10 border border-slate-200 dark:border-slate-700 transition"
                 >
                   <div className="flex items-center space-x-2">
-                    <Smartphone className="w-5 h-5 text-purple-600" />
+                    <Smartphone className="w-5 h-5 text-accent-600 dark:text-accent-400" />
                     <div>
-                      <p className="font-medium text-slate-900">Lanzamiento App</p>
-                      <p className="text-xs text-slate-500">Con QR y botones store</p>
+                      <p className="font-medium text-slate-900 dark:text-white">Lanzamiento App</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Con QR y botones store</p>
                     </div>
                   </div>
                 </button>
                 <button
                   onClick={() => loadTemplatePreset('product-launch')}
-                  className="w-full text-left p-3 bg-white rounded-lg hover:bg-blue-50 border border-slate-200 transition"
+                  className="w-full text-left p-3 bg-white dark:bg-slate-800 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-500/10 border border-slate-200 dark:border-slate-700 transition"
                 >
                   <div className="flex items-center space-x-2">
-                    <Sparkles className="w-5 h-5 text-blue-600" />
+                    <Sparkles className="w-5 h-5 text-brand-600 dark:text-brand-400" />
                     <div>
-                      <p className="font-medium text-slate-900">Producto Nuevo</p>
-                      <p className="text-xs text-slate-500">Anuncia lanzamientos</p>
+                      <p className="font-medium text-slate-900 dark:text-white">Producto Nuevo</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Anuncia lanzamientos</p>
                     </div>
                   </div>
                 </button>
@@ -436,23 +436,23 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
             </div>
 
             <div className="mb-6">
-              <h3 className="text-sm font-bold text-slate-700 mb-3">Variables Disponibles</h3>
-              <p className="text-xs text-slate-500 mb-3">Click para insertar en la plantilla</p>
+              <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">Variables Disponibles</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Click para insertar en la plantilla</p>
               <div className="space-y-2">
                 {availableVariables.map((variable) => (
                   <button
                     key={variable.key}
                     onClick={() => insertVariable(variable.key)}
-                    className="w-full text-left p-3 bg-white rounded-lg hover:bg-blue-50 border border-slate-200 transition group"
+                    className="w-full text-left p-3 bg-white dark:bg-slate-800 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-500/10 border border-slate-200 dark:border-slate-700 transition group"
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-mono text-sm text-blue-600">{`{{${variable.key}}}`}</p>
-                        <p className="text-xs text-slate-500 mt-1">{variable.name}</p>
+                        <p className="font-mono text-sm text-brand-600 dark:text-brand-400">{`{{${variable.key}}}`}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{variable.name}</p>
                       </div>
-                      <Plus className="w-4 h-4 text-slate-400 group-hover:text-blue-600" />
+                      <Plus className="w-4 h-4 text-slate-400 dark:text-slate-500 group-hover:text-brand-600 dark:group-hover:text-brand-400" />
                     </div>
-                    <div className="mt-2 p-2 bg-slate-50 rounded text-xs text-slate-600">
+                    <div className="mt-2 p-2 bg-slate-50 dark:bg-slate-900/50 rounded text-xs text-slate-600 dark:text-slate-400">
                       Ej: {variable.example}
                     </div>
                   </button>
@@ -461,11 +461,11 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
             </div>
 
             <div>
-              <h3 className="text-sm font-bold text-slate-700 mb-3">Elementos Especiales</h3>
+              <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">Elementos Especiales</h3>
               <div className="space-y-2">
                 <button
                   onClick={() => setShowImageUpload(true)}
-                  className="w-full flex items-center space-x-2 p-3 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition border border-green-200"
+                  className="w-full flex items-center space-x-2 p-3 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-500/15 transition border border-emerald-200 dark:border-emerald-500/20"
                 >
                   <ImageIcon className="w-4 h-4" />
                   <span className="text-sm font-medium">Insertar Logo/Imagen</span>
@@ -473,7 +473,7 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
 
                 <button
                   onClick={() => setShowQRGenerator(true)}
-                  className="w-full flex items-center space-x-2 p-3 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition border border-purple-200"
+                  className="w-full flex items-center space-x-2 p-3 bg-accent-50 dark:bg-accent-500/10 text-accent-700 dark:text-accent-300 rounded-lg hover:bg-accent-100 dark:hover:bg-accent-500/15 transition border border-accent-200 dark:border-accent-500/20"
                 >
                   <QrCode className="w-4 h-4" />
                   <span className="text-sm font-medium">Generar Código QR</span>
@@ -481,7 +481,7 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
 
                 <button
                   onClick={() => setShowAppStoreButtons(true)}
-                  className="w-full flex items-center space-x-2 p-3 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition border border-blue-200"
+                  className="w-full flex items-center space-x-2 p-3 bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-300 rounded-lg hover:bg-brand-100 dark:hover:bg-brand-500/15 transition border border-brand-200 dark:border-brand-500/20"
                 >
                   <Smartphone className="w-4 h-4" />
                   <span className="text-sm font-medium">Botones App Store</span>
@@ -489,7 +489,7 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
 
                 <button
                   onClick={insertCustomLink}
-                  className="w-full flex items-center space-x-2 p-3 bg-orange-50 text-orange-700 rounded-lg hover:bg-orange-100 transition border border-orange-200"
+                  className="w-full flex items-center space-x-2 p-3 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-500/15 transition border border-amber-200 dark:border-amber-500/20"
                 >
                   <LinkIcon className="w-4 h-4" />
                   <span className="text-sm font-medium">Botón Personalizado</span>
@@ -499,40 +499,40 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
           </div>
 
           <div className="flex-1 flex flex-col">
-            <div className="p-6 border-b border-slate-200 bg-white">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Nombre de la Plantilla</label>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Nombre de la Plantilla</label>
                   <input
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-slate-900 placeholder:text-slate-400"
+                    className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                     placeholder="Ej: Bienvenida a nuevos clientes"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Asunto del Email</label>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Asunto del Email</label>
                   <input
                     type="text"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-slate-900 placeholder:text-slate-400"
+                    className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                     placeholder="Ej: Bienvenido {{client_name}} a {{crm_company}}"
                   />
                 </div>
               </div>
 
-              <div className="mb-4 bg-slate-50 border border-slate-200 rounded-lg p-4">
+              <div className="mb-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium text-slate-700">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                     Template en SendCraft (template_name) *
                   </label>
                   <button
                     type="button"
                     onClick={loadSendcraftTemplates}
                     disabled={loadingSendcraftTemplates}
-                    className="flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                    className="flex items-center space-x-1 text-xs text-brand-600 dark:text-brand-400 hover:text-brand-800 dark:hover:text-brand-300 disabled:opacity-50"
                   >
                     <RefreshCw className={`w-3 h-3 ${loadingSendcraftTemplates ? 'animate-spin' : ''}`} />
                     <span>Actualizar lista</span>
@@ -542,7 +542,7 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
                 <select
                   value={sendcraftTemplates.some(t => t.name === sendcraftTemplateName) ? sendcraftTemplateName : ''}
                   onChange={(e) => setSendcraftTemplateName(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-2 bg-white text-slate-900"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent mb-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                 >
                   <option value="">
                     {loadingSendcraftTemplates ? 'Cargando templates de SendCraft...' : 'Elegir un template existente...'}
@@ -559,7 +559,7 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
                     type="text"
                     value={sendcraftTemplateName}
                     onChange={(e) => setSendcraftTemplateName(e.target.value)}
-                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm bg-white text-slate-900 placeholder:text-slate-400"
+                    className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent font-mono text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                     placeholder="Ej: campaign_promo"
                   />
                   <button
@@ -574,7 +574,7 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
                 </div>
 
                 {sendcraftTemplates.find(t => t.name === sendcraftTemplateName) && (
-                  <div className="text-xs text-slate-500 mt-2 space-y-1">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-2 space-y-1">
                     {(() => {
                       const vars = sendcraftTemplates.find(t => t.name === sendcraftTemplateName)!.variables;
                       const auto = vars.filter(v => DEFAULT_VARIABLE_KEYS.includes(v));
@@ -583,12 +583,12 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
                         <>
                           {auto.length > 0 && (
                             <p>
-                              <span className="font-medium text-emerald-600">Automáticas</span> (el CRM las completa solas): {auto.map(v => `{{${v}}}`).join(', ')}
+                              <span className="font-medium text-emerald-600 dark:text-emerald-400">Automáticas</span> (el CRM las completa solas): {auto.map(v => `{{${v}}}`).join(', ')}
                             </p>
                           )}
                           {manual.length > 0 && (
                             <p>
-                              <span className="font-medium text-amber-600">A cargar por campaña</span> (aparecen en "Parámetros del Template" al crear la campaña): {manual.map(v => `{{${v}}}`).join(', ')}
+                              <span className="font-medium text-amber-600 dark:text-amber-400">A cargar por campaña</span> (aparecen en "Parámetros del Template" al crear la campaña): {manual.map(v => `{{${v}}}`).join(', ')}
                             </p>
                           )}
                         </>
@@ -596,7 +596,7 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
                     })()}
                   </div>
                 )}
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                   Elige un template ya creado en SendCraft, o escribe un nombre y presiona "Crear en
                   SendCraft" para darlo de alta ahí mismo con el HTML de abajo. El envío real de la
                   campaña siempre usa el template de SendCraft, no el HTML local.
@@ -608,8 +608,8 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
                   onClick={() => setShowPreview(false)}
                   className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition ${
                     !showPreview
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      ? 'bg-brand-600 text-white'
+                      : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                   }`}
                 >
                   <Code className="w-4 h-4" />
@@ -619,8 +619,8 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
                   onClick={() => setShowPreview(true)}
                   className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition ${
                     showPreview
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      ? 'bg-accent-600 text-white'
+                      : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                   }`}
                 >
                   <Eye className="w-4 h-4" />
@@ -629,16 +629,16 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
               </div>
             </div>
 
-            <div className="flex-1 overflow-hidden bg-slate-50 p-6">
+            <div className="flex-1 overflow-hidden bg-slate-50 dark:bg-slate-900/50 p-6">
               {!showPreview ? (
                 <textarea
                   value={htmlBody}
                   onChange={(e) => setHtmlBody(e.target.value)}
-                  className="w-full h-full p-4 font-mono text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none bg-white text-slate-900 placeholder:text-slate-400"
+                  className="w-full h-full p-4 font-mono text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent resize-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   placeholder="Escribe tu código HTML aquí..."
                 />
               ) : (
-                <div className="w-full h-full overflow-auto bg-white border border-slate-300 rounded-lg">
+                <div className="w-full h-full overflow-auto bg-white border border-slate-300 dark:border-slate-600 rounded-lg">
                   <iframe
                     srcDoc={renderPreview()}
                     className="w-full h-full"
@@ -649,16 +649,16 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
               )}
             </div>
 
-            <div className="p-6 border-t border-slate-200 bg-white flex justify-end space-x-3">
+            <div className="p-6 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex justify-end space-x-3">
               <button
                 onClick={onClose}
-                className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition"
+                className="px-6 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSave}
-                className="flex items-center space-x-2 px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition shadow-lg"
+                className="flex items-center space-x-2 px-6 py-2 bg-gradient-to-r from-brand-600 to-accent-600 text-white rounded-lg hover:from-brand-700 hover:to-accent-700 transition shadow-lg"
               >
                 <Save className="w-5 h-5" />
                 <span>Guardar Plantilla</span>
@@ -670,30 +670,30 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
 
       {showImageUpload && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold text-slate-900 mb-4">Insertar Imagen/Logo</h3>
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Insertar Imagen/Logo</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">URL de la Imagen</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">URL de la Imagen</label>
                 <input
                   type="url"
                   value={imageUrl}
                   onChange={(e) => setImageUrl(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-white text-slate-900 placeholder:text-slate-400"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   placeholder="https://ejemplo.com/logo.png"
                 />
-                <p className="text-xs text-slate-500 mt-1">Puedes usar servicios como Imgur, Cloudinary o tu servidor</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Puedes usar servicios como Imgur, Cloudinary o tu servidor</p>
               </div>
               <div className="flex justify-end space-x-3">
                 <button
                   onClick={() => { setShowImageUpload(false); setImageUrl(''); }}
-                  className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50"
+                  className="px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={insertImage}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
                 >
                   Insertar
                 </button>
@@ -705,30 +705,30 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
 
       {showQRGenerator && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold text-slate-900 mb-4">Generar Código QR</h3>
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Generar Código QR</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">URL o Texto</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">URL o Texto</label>
                 <input
                   type="text"
                   value={qrData}
                   onChange={(e) => setQrData(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-slate-900 placeholder:text-slate-400"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-accent-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   placeholder="https://play.google.com/store/apps/details?id=tu.app"
                 />
-                <p className="text-xs text-slate-500 mt-1">El QR se generará automáticamente con este contenido</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">El QR se generará automáticamente con este contenido</p>
               </div>
               <div className="flex justify-end space-x-3">
                 <button
                   onClick={() => { setShowQRGenerator(false); setQrData(''); }}
-                  className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50"
+                  className="px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={insertQRCode}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                  className="px-4 py-2 bg-accent-600 text-white rounded-lg hover:bg-accent-700"
                 >
                   Insertar QR
                 </button>
@@ -740,40 +740,40 @@ export function HTMLTemplateEditor({ template, onSave, onClose }: HTMLTemplateEd
 
       {showAppStoreButtons && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold text-slate-900 mb-4">Botones de Descarga</h3>
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Botones de Descarga</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Link App Store (iOS)</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Link App Store (iOS)</label>
                 <input
                   type="url"
                   value={appStoreLink}
                   onChange={(e) => setAppStoreLink(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-slate-900 placeholder:text-slate-400"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-brand-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   placeholder="https://apps.apple.com/..."
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Link Play Store (Android)</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Link Play Store (Android)</label>
                 <input
                   type="url"
                   value={playStoreLink}
                   onChange={(e) => setPlayStoreLink(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-slate-900 placeholder:text-slate-400"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-brand-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   placeholder="https://play.google.com/store/apps/..."
                 />
               </div>
-              <p className="text-xs text-slate-500">Puedes agregar uno o ambos links</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Puedes agregar uno o ambos links</p>
               <div className="flex justify-end space-x-3">
                 <button
                   onClick={() => { setShowAppStoreButtons(false); setAppStoreLink(''); setPlayStoreLink(''); }}
-                  className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50"
+                  className="px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={insertAppStoreButtons}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700"
                 >
                   Insertar Botones
                 </button>

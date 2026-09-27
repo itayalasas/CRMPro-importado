@@ -41,7 +41,6 @@ import {
   type QuoteCommunicationCompanySettings,
   type QuoteCommunicationResponse,
 } from '../../lib/quoteCommunication';
-import { resolveDefaultSalesOpportunityStageId } from '../../lib/salesOpportunityStage';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -534,6 +533,7 @@ const getQuoteJourneyEvents = (quote: SalesQuote | null, timeline: QuoteTimeline
 };
 
 const getOpportunitySyncForQuoteStatus = (status: QuoteStatus) => {
+  if (status === 'draft') return { stage: 'quote', status: 'open', probability: 55 };
   if (status === 'sent') return { stage: 'quote', status: 'open', probability: 65 };
   if (status === 'accepted') return { stage: 'negotiation', status: 'open', probability: 80 };
   if (status === 'rejected' || status === 'expired') return { stage: 'lost', status: 'lost', probability: 0 };
@@ -892,8 +892,12 @@ export function SalesModule() {
         const quotesData = quotesResult.data as SalesQuote[];
         setQuotes(quotesData);
 
-        if (!currentSelectedQuoteId || !quotesData.some((quote) => quote.id === currentSelectedQuoteId)) {
-          setSelectedQuoteId(quotesData[0]?.id || null);
+        const ownQuotesData = canViewAllUsers
+          ? quotesData
+          : quotesData.filter((quote) => quote.created_by === user?.id);
+
+        if (!currentSelectedQuoteId || !ownQuotesData.some((quote) => quote.id === currentSelectedQuoteId)) {
+          setSelectedQuoteId(ownQuotesData[0]?.id || null);
         }
       }
 
@@ -1023,9 +1027,14 @@ export function SalesModule() {
     }
   }, []);
 
+  const visibleQuotes = useMemo(
+    () => (canViewAllUsers ? quotes : quotes.filter((quote) => quote.created_by === user?.id)),
+    [quotes, canViewAllUsers, user?.id]
+  );
+
   const selectedQuote = useMemo(
-    () => quotes.find((quote) => quote.id === selectedQuoteId) || null,
-    [quotes, selectedQuoteId]
+    () => visibleQuotes.find((quote) => quote.id === selectedQuoteId) || null,
+    [visibleQuotes, selectedQuoteId]
   );
 
   const selectedQuoteClient = useMemo(() => {
@@ -1093,7 +1102,7 @@ export function SalesModule() {
     const toDate = customDateTo ? new Date(customDateTo) : null;
     if (toDate) toDate.setHours(23, 59, 59, 999);
 
-    return quotes.filter((quote) => {
+    return visibleQuotes.filter((quote) => {
       if (term) {
         const haystack = [
           quote.quote_number,
@@ -1109,9 +1118,7 @@ export function SalesModule() {
         if (!haystack.includes(term)) return false;
       }
 
-      if (!canViewAllUsers) {
-        if (quote.created_by !== user?.id) return false;
-      } else if (assignedFilter && quote.created_by !== assignedFilter) {
+      if (canViewAllUsers && assignedFilter && quote.created_by !== assignedFilter) {
         return false;
       }
 
@@ -1134,7 +1141,7 @@ export function SalesModule() {
 
       return true;
     });
-  }, [quotes, searchTerm, canViewAllUsers, assignedFilter, currentMonthOnly, customDateFrom, customDateTo, user?.id]);
+  }, [visibleQuotes, searchTerm, canViewAllUsers, assignedFilter, currentMonthOnly, customDateFrom, customDateTo]);
 
   useEffect(() => {
     setQuotesPage(1);
@@ -1386,9 +1393,6 @@ export function SalesModule() {
     const discountAmount = parseDecimal(quoteForm.discount_amount);
     const taxRate = parseDecimal(quoteForm.tax_rate);
     const totals = calculateDraftTotals(validItems, discountAmount, taxRate);
-    const opportunity = quoteForm.opportunity_id
-      ? opportunities.find((entry) => entry.id === quoteForm.opportunity_id) || null
-      : null;
     const quoteCurrency = normalizeCurrency(quoteForm.currency);
 
     if (isEditingQuote) {
@@ -1577,23 +1581,61 @@ export function SalesModule() {
       return;
     }
 
-    if (opportunity) {
-      const stageUpdate = getOpportunitySyncForQuoteStatus('sent');
-      await supabase
-        .from('sales_opportunities')
-        .update({
-          stage: stageUpdate?.stage || 'quote',
-          status: stageUpdate?.status || 'open',
-          probability: stageUpdate?.probability || 65,
-          last_activity_at: now,
+    let opportunityId = quoteForm.opportunity_id || null;
+    try {
+      opportunityId = await resolveQuoteOpportunityForStatus(
+        {
+          id: quoteId,
+          quote_number: quoteData.quote_number,
+          client_id: quoteForm.client_id,
+          opportunity_id: quoteForm.opportunity_id || null,
+          order_id: null,
+          status: 'draft',
+          quote_date: quoteForm.quote_date || todayDate(),
+          expiry_date: quoteForm.expiry_date || null,
+          currency: quoteCurrency,
+          subtotal: totals.subtotal,
+          discount_amount: discountAmount,
+          tax_rate: taxRate,
+          tax_amount: totals.taxAmount,
+          total_amount: totals.total,
+          notes: quoteForm.notes.trim() || null,
+          terms: quoteForm.terms.trim() || null,
+          metadata: { source: 'sales_module', item_count: validItems.length },
+          sent_at: null,
+          accepted_at: null,
+          converted_at: null,
+          created_by: user?.id || null,
+          created_at: now,
           updated_at: now,
-        })
-        .eq('id', opportunity.id);
+          client: clients.find((entry) => entry.id === quoteForm.client_id) || null,
+        },
+        'draft',
+        now
+      );
+    } catch (error) {
+      console.error('Error sincronizando la oportunidad de la cotizacion:', error);
+      toast.error(
+        error instanceof Error
+          ? `La cotizacion se creo, pero no se pudo sincronizar el pipeline: ${error.message}`
+          : 'La cotizacion se creo, pero no se pudo sincronizar el pipeline'
+      );
+    }
+
+    if (opportunityId !== (quoteForm.opportunity_id || null)) {
+      const { error: linkOpportunityError } = await supabase
+        .from('sales_quotes')
+        .update({ opportunity_id: opportunityId })
+        .eq('id', quoteId);
+
+      if (linkOpportunityError) {
+        console.error('Error vinculando la oportunidad a la cotizacion:', linkOpportunityError);
+      }
     }
 
     const { error: interactionError } = await insertClientInteractionSafely({
       client_id: quoteForm.client_id,
-      opportunity_id: quoteForm.opportunity_id || null,
+      opportunity_id: opportunityId,
       quote_id: quoteId,
       type: 'quote_created',
       description: `Cotizacion ${quoteData.quote_number} creada desde ventas`,
@@ -1644,11 +1686,7 @@ export function SalesModule() {
       return quote.opportunity_id || null;
     }
 
-    const stageId = await resolveDefaultSalesOpportunityStageId();
     let opportunityId = quote.opportunity_id || null;
-    const contactName = quote.client?.contact_name?.trim() || quote.client?.company_name?.trim() || 'Cliente';
-    const contactEmail = quote.client?.email?.trim() || null;
-    const contactPhone = quote.client?.phone?.trim() || null;
     const quoteAmount = parseDecimal(quote.total_amount);
 
     if (!opportunityId) {
@@ -1673,14 +1711,9 @@ export function SalesModule() {
     if (!opportunityId) {
       const createPayload: Record<string, unknown> = {
         client_id: quote.client_id,
-        stage_id: stageId,
-        contact_name: contactName,
-        contact_email: contactEmail,
-        contact_phone: contactPhone,
         title: getQuoteOpportunityTitle(quote),
         stage: opportunitySync.stage,
         status: opportunitySync.status,
-        amount: quoteAmount,
         expected_amount: quoteAmount,
         currency: normalizeCurrency(quote.currency),
         probability: opportunitySync.probability,
@@ -1724,14 +1757,9 @@ export function SalesModule() {
     }
 
     const opportunityUpdates: Record<string, unknown> = {
-      stage_id: stageId,
-      contact_name: contactName,
-      contact_email: contactEmail,
-      contact_phone: contactPhone,
       stage: opportunitySync.stage,
       status: opportunitySync.status,
       probability: opportunitySync.probability,
-      amount: quoteAmount,
       expected_amount: quoteAmount,
       currency: normalizeCurrency(quote.currency),
       last_activity_at: timestamp,

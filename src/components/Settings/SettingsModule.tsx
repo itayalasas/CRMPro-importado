@@ -149,7 +149,8 @@ export function SettingsModule() {
     get_integration_key: '',
     max_message_length: 2000,
     max_attachments: 5,
-    max_attachment_mb: 10
+    max_attachment_mb: 10,
+    chat_invite_sendcraft_template_name: ''
   });
 
   const [showPasswords, setShowPasswords] = useState({
@@ -1661,6 +1662,22 @@ export function SettingsModule() {
                   />
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Estos límites se aplican en el endpoint y el widget.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Template SendCraft: invitación a chat iniciado por agente
+                </label>
+                <input
+                  type="text"
+                  value={webchatSettings.chat_invite_sendcraft_template_name}
+                  onChange={(e) => setWebchatSettings({ ...webchatSettings, chat_invite_sendcraft_template_name: e.target.value })}
+                  placeholder="ej: chat_agent_invite"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent font-mono text-sm"
+                />
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Nombre exacto del template ya creado en SendCraft (Campañas → Nueva Plantilla HTML → "Crear en SendCraft"). Se usa para avisarle por email a un cliente cuando un agente le inicia un chat desde el CRM.
+                </p>
               </div>
             </div>
 

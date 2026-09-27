@@ -42,6 +42,95 @@ function buildRecipient(contact: any, appPublicUrl: string): NotifyRecipient {
   };
 }
 
+// Same convention as webchat-contact-form's insertClientInteractionSafely: if the
+// timeline's type CHECK doesn't yet know about this type, degrade to 'note' instead
+// of failing the whole request.
+function isClientInteractionTypeConstraintError(error: any): boolean {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes("client_interactions_type_check") || message.includes("check constraint");
+}
+
+async function insertClientInteractionSafely(supabase: any, payload: Record<string, unknown>) {
+  const { error } = await supabase.from("client_interactions").insert(payload);
+  if (!error) return;
+
+  if (!isClientInteractionTypeConstraintError(error)) {
+    console.error("Error insertando client_interactions:", error);
+    return;
+  }
+
+  await supabase.from("client_interactions").insert({
+    ...payload,
+    type: "note",
+    metadata: {
+      ...((payload.metadata as Record<string, unknown>) || {}),
+      original_type: payload.type,
+      fallback_reason: "client_interactions_type_check",
+    },
+  });
+}
+
+// Links each campaign contact to a Client card (creates one if none exists yet, matching
+// by email — same convention as webchat-contact-form's upsertLeadClient), so campaign
+// recipients can be followed up like any other commercial contact. Existing clients are
+// only linked, never overwritten, so a real client's data isn't clobbered by lower-quality
+// campaign contact data.
+async function ensureClientsForContacts(supabase: any, contacts: any[], campaign: any) {
+  const toResolve = contacts.filter((c) => !c.client_id && c.email);
+  if (toResolve.length === 0) return;
+
+  const emails = [...new Set(toResolve.map((c) => String(c.email).toLowerCase()))];
+  const { data: existingClients } = await supabase.from("clients").select("id, email").in("email", emails);
+
+  const clientIdByEmail = new Map<string, string>();
+  for (const c of existingClients || []) {
+    if (c.email) clientIdByEmail.set(String(c.email).toLowerCase(), c.id);
+  }
+
+  const toCreate = toResolve.filter((c) => !clientIdByEmail.has(String(c.email).toLowerCase()));
+  if (toCreate.length > 0) {
+    const newClientRows = toCreate.map((c) => ({
+      company_name: c.company_name || null,
+      contact_name: `${c.first_name || ""} ${c.last_name || ""}`.trim() || c.email,
+      email: c.email,
+      phone: c.phone || null,
+      status: "prospect",
+      source: "campaign",
+      created_by: null,
+    }));
+
+    const { data: createdClients, error: createError } = await supabase
+      .from("clients")
+      .insert(newClientRows)
+      .select("id, email");
+
+    if (createError) {
+      console.error("Error creando clientes desde campaña:", createError);
+    }
+    for (const c of createdClients || []) {
+      if (c.email) clientIdByEmail.set(String(c.email).toLowerCase(), c.id);
+    }
+  }
+
+  const now = new Date().toISOString();
+  for (const contact of toResolve) {
+    const clientId = clientIdByEmail.get(String(contact.email).toLowerCase());
+    if (!clientId) continue;
+
+    await supabase.from("contacts").update({ client_id: clientId }).eq("id", contact.id);
+    contact.client_id = clientId;
+
+    await insertClientInteractionSafely(supabase, {
+      client_id: clientId,
+      type: "campaign_sent",
+      description: `Campaña "${campaign.name}" enviada`,
+      metadata: { campaign_id: campaign.id, campaign_name: campaign.name, contact_id: contact.id },
+      created_by: null,
+      created_at: now,
+    });
+  }
+}
+
 async function loadSharedData(supabase: any, campaign: any) {
   const { data: generalSettings } = await supabase
     .from("system_settings")
@@ -174,6 +263,8 @@ Deno.serve(async (req: Request) => {
     if (!contacts || contacts.length === 0) {
       return jsonResponse({ error: "No hay contactos para enviar" }, 400);
     }
+
+    await ensureClientsForContacts(supabase, contacts, campaign);
 
     await supabase
       .from("campaigns")

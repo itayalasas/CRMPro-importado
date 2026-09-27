@@ -69,10 +69,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_update_twilio_config_updated_at
+ON twilio_config;
+
 CREATE TRIGGER trigger_update_twilio_config_updated_at
-  BEFORE UPDATE ON twilio_config
-  FOR EACH ROW
-  EXECUTE FUNCTION update_twilio_config_updated_at();
+BEFORE UPDATE ON twilio_config
+FOR EACH ROW
+EXECUTE FUNCTION update_twilio_config_updated_at();
 
 -- Create function to ensure only one active configuration
 CREATE OR REPLACE FUNCTION ensure_single_active_twilio_config()
@@ -86,6 +89,9 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_ensure_single_active_twilio_config
+ON twilio_config;
 
 CREATE TRIGGER trigger_ensure_single_active_twilio_config
   BEFORE INSERT OR UPDATE ON twilio_config

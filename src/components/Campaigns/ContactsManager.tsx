@@ -282,12 +282,12 @@ export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-6 text-white">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="bg-gradient-to-r from-brand-600 to-accent-600 p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold">Contactos del Grupo</h2>
-              <p className="text-blue-100 mt-1">{groupName}</p>
+              <p className="text-brand-100 mt-1">{groupName}</p>
             </div>
             <button
               onClick={onClose}
@@ -301,31 +301,31 @@ export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
         <div className="p-6 flex-1 overflow-y-auto">
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center space-x-2">
-              <div className="bg-blue-100 p-2 rounded-lg">
-                <Users className="w-5 h-5 text-blue-600" />
+              <div className="bg-brand-100 dark:bg-brand-500/15 p-2 rounded-lg">
+                <Users className="w-5 h-5 text-brand-600 dark:text-brand-400" />
               </div>
               <div>
-                <p className="text-sm text-slate-600">Total Contactos</p>
-                <p className="text-2xl font-bold text-slate-900">{contacts.length}</p>
+                <p className="text-sm text-slate-600 dark:text-slate-400">Total Contactos</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-white">{contacts.length}</p>
               </div>
             </div>
 
             <div className="flex space-x-2">
-              <label className="flex items-center space-x-2 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition cursor-pointer">
+              <label className="flex items-center space-x-2 px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer">
                 <Upload className="w-4 h-4" />
                 <span>Importar CSV</span>
                 <input type="file" accept=".csv,text/csv" onChange={handleImportCsv} className="hidden" />
               </label>
               <button
                 onClick={exportContacts}
-                className="flex items-center space-x-2 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition"
+                className="flex items-center space-x-2 px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition"
               >
                 <Download className="w-4 h-4" />
                 <span>Exportar CSV</span>
               </button>
               <button
                 onClick={() => setShowAddForm(true)}
-                className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-purple-700 transition"
+                className="flex items-center space-x-2 bg-gradient-to-r from-brand-600 to-accent-600 text-white px-4 py-2 rounded-lg hover:from-brand-700 hover:to-accent-700 transition"
               >
                 <Plus className="w-4 h-4" />
                 <span>Agregar Contacto</span>
@@ -333,81 +333,81 @@ export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
             </div>
           </div>
 
-          <p className="text-xs text-slate-500 -mt-4 mb-6">
+          <p className="text-xs text-slate-500 dark:text-slate-400 -mt-4 mb-6">
             El CSV a importar debe tener una columna "Email" (obligatoria) y opcionalmente "Nombre",
             "Apellido", "Empresa" y "Teléfono" — mismo formato que genera "Exportar CSV".
           </p>
 
           {showAddForm && (
-            <div className="bg-slate-50 rounded-xl p-6 mb-6 border border-slate-200">
-              <h3 className="text-lg font-bold text-slate-900 mb-4">
+            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-6 mb-6 border border-slate-200 dark:border-slate-700">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">
                 {editingContactId ? 'Editar Contacto' : 'Nuevo Contacto'}
               </h3>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Email *</label>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Email *</label>
                     <input
                       type="email"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-slate-900 placeholder:text-slate-400"
+                      className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                       placeholder="contacto@ejemplo.com"
                       required
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Nombre</label>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Nombre</label>
                     <input
                       type="text"
                       value={formData.first_name}
                       onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-slate-900 placeholder:text-slate-400"
+                      className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                       placeholder="Juan"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Apellido</label>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Apellido</label>
                     <input
                       type="text"
                       value={formData.last_name}
                       onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-slate-900 placeholder:text-slate-400"
+                      className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                       placeholder="Pérez"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Empresa</label>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Empresa</label>
                     <input
                       type="text"
                       value={formData.company_name}
                       onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-slate-900 placeholder:text-slate-400"
+                      className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                       placeholder="Acme Corp"
                     />
                   </div>
 
                   <div className={editingContactId ? '' : 'col-span-2'}>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Teléfono</label>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Teléfono</label>
                     <input
                       type="tel"
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-slate-900 placeholder:text-slate-400"
+                      className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                       placeholder="+52 55 1234 5678"
                     />
                   </div>
 
                   {editingContactId && (
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Estado</label>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Estado</label>
                       <select
                         value={formData.status}
                         onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                        className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-slate-900"
+                        className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                       >
                         <option value="active">Activo</option>
                         <option value="inactive">Inactivo</option>
@@ -422,13 +422,13 @@ export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
                   <button
                     type="button"
                     onClick={resetForm}
-                    className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition"
+                    className="px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition"
+                    className="px-4 py-2 bg-gradient-to-r from-brand-600 to-accent-600 text-white rounded-lg hover:from-brand-700 hover:to-accent-700 transition"
                   >
                     {editingContactId ? 'Actualizar' : 'Guardar'}
                   </button>
@@ -437,50 +437,50 @@ export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
             </div>
           )}
 
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
             <table className="w-full">
-              <thead className="bg-slate-50">
+              <thead className="bg-slate-50 dark:bg-slate-900/50">
                 <tr>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Email</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Nombre</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Empresa</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Teléfono</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Estado</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">Acciones</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Email</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Nombre</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Empresa</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Teléfono</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Estado</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {contacts.map((contact) => (
-                  <tr key={contact.id} className="border-t border-slate-100 hover:bg-slate-50 transition">
+                  <tr key={contact.id} className="border-t border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
                     <td className="py-3 px-4">
                       <div className="flex items-center space-x-2">
-                        <Mail className="w-4 h-4 text-slate-400" />
-                        <span className="text-sm text-slate-700">{contact.email}</span>
+                        <Mail className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                        <span className="text-sm text-slate-700 dark:text-slate-300">{contact.email}</span>
                       </div>
                     </td>
                     <td className="py-3 px-4">
-                      <span className="text-sm text-slate-900 font-medium">
+                      <span className="text-sm text-slate-900 dark:text-white font-medium">
                         {contact.first_name} {contact.last_name}
                       </span>
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center space-x-2">
-                        <Building2 className="w-4 h-4 text-slate-400" />
-                        <span className="text-sm text-slate-700">{contact.company_name || '-'}</span>
+                        <Building2 className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                        <span className="text-sm text-slate-700 dark:text-slate-300">{contact.company_name || '-'}</span>
                       </div>
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center space-x-2">
-                        <Phone className="w-4 h-4 text-slate-400" />
-                        <span className="text-sm text-slate-700">{contact.phone || '-'}</span>
+                        <Phone className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                        <span className="text-sm text-slate-700 dark:text-slate-300">{contact.phone || '-'}</span>
                       </div>
                     </td>
                     <td className="py-3 px-4">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        contact.status === 'active' ? 'bg-green-100 text-green-800' :
-                        contact.status === 'bounced' ? 'bg-red-100 text-red-800' :
-                        contact.status === 'unsubscribed' ? 'bg-gray-100 text-gray-800' :
-                        'bg-yellow-100 text-yellow-800'
+                        contact.status === 'active' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300' :
+                        contact.status === 'bounced' ? 'bg-rose-100 text-rose-800 dark:bg-rose-500/15 dark:text-rose-300' :
+                        contact.status === 'unsubscribed' ? 'bg-slate-100 text-slate-800 dark:bg-slate-700/50 dark:text-slate-300' :
+                        'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300'
                       }`}>
                         {contact.status}
                       </span>
@@ -489,13 +489,13 @@ export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
                       <div className="flex items-center space-x-1">
                         <button
                           onClick={() => handleEdit(contact)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                          className="p-2 text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded-lg transition"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDelete(contact.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                          className="p-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -508,22 +508,22 @@ export function ContactsManager({ groupId, onClose }: ContactsManagerProps) {
 
             {contacts.length === 0 && (
               <div className="text-center py-12">
-                <Users className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                <p className="text-slate-500">No hay contactos en este grupo</p>
-                <p className="text-slate-400 text-sm mt-1">Agrega contactos para comenzar</p>
+                <Users className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+                <p className="text-slate-500 dark:text-slate-400">No hay contactos en este grupo</p>
+                <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">Agrega contactos para comenzar</p>
               </div>
             )}
           </div>
         </div>
 
-        <div className="p-6 border-t border-slate-200 bg-slate-50">
+        <div className="p-6 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
               Las variables de la plantilla se reemplazarán con los datos de cada contacto
             </p>
             <button
               onClick={onClose}
-              className="px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition"
+              className="px-6 py-2 bg-slate-900 dark:bg-slate-700 text-white rounded-lg hover:bg-slate-800 dark:hover:bg-slate-600 transition"
             >
               Cerrar
             </button>

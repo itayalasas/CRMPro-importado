@@ -22,11 +22,11 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { ensureCurrentUserInSystemUsers } from '../../lib/userSync';
-import { resolveDefaultSalesOpportunityStageId } from '../../lib/salesOpportunityStage';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useNavigation } from '../../contexts/NavigationContext';
 import { usePermissions } from '../../hooks/usePermissions';
+import { advanceOpportunityOnLinkedTask } from '../../lib/opportunityStageSync';
 import { PageHeader } from '../ui/PageHeader';
 import { StatCard } from '../ui/StatCard';
 import { Card } from '../ui/Card';
@@ -34,6 +34,17 @@ import { Badge, BadgeVariant } from '../ui/Badge';
 import { Button } from '../ui/Button';
 
 type StageKey = 'prospect' | 'contacted' | 'meeting' | 'quote' | 'negotiation' | 'won' | 'lost';
+type TaskType = 'call' | 'email' | 'meeting' | 'follow_up' | 'payment' | 'delivery' | 'other';
+
+const taskTypeLabels: Record<TaskType, string> = {
+  call: 'Llamada',
+  email: 'Email',
+  meeting: 'Reunión',
+  follow_up: 'Seguimiento',
+  payment: 'Cobro',
+  delivery: 'Entrega',
+  other: 'Otro',
+};
 type OpportunityStatus = 'open' | 'won' | 'lost' | 'archived';
 
 interface OpportunityClient {
@@ -129,49 +140,49 @@ const pipelineStages: StageConfig[] = [
     key: 'contacted',
     label: 'Contactado',
     shortLabel: 'Contactado',
-    badgeClass: 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/30',
+    badgeClass: 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:border-sky-500/20',
     badgeVariant: 'info',
-    columnClass: 'bg-sky-50/70 border-sky-200 dark:bg-sky-500/10 dark:border-sky-500/30',
+    columnClass: 'bg-sky-50/70 border-sky-200 dark:bg-sky-500/10 dark:border-sky-500/20',
   },
   {
     key: 'meeting',
     label: 'Reunión',
     shortLabel: 'Reunión',
-    badgeClass: 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/30',
+    badgeClass: 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-500/15 dark:text-indigo-300 dark:border-indigo-500/20',
     badgeVariant: 'brand',
-    columnClass: 'bg-indigo-50/70 border-indigo-200 dark:bg-indigo-500/10 dark:border-indigo-500/30',
+    columnClass: 'bg-indigo-50/70 border-indigo-200 dark:bg-indigo-500/10 dark:border-indigo-500/20',
   },
   {
     key: 'quote',
     label: 'Cotización',
     shortLabel: 'Cotización',
-    badgeClass: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30',
+    badgeClass: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/20',
     badgeVariant: 'warning',
-    columnClass: 'bg-amber-50/70 border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/30',
+    columnClass: 'bg-amber-50/70 border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/20',
   },
   {
     key: 'negotiation',
     label: 'Negociación',
     shortLabel: 'Negociación',
-    badgeClass: 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-400 dark:border-violet-500/30',
+    badgeClass: 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-500/15 dark:text-violet-300 dark:border-violet-500/20',
     badgeVariant: 'brand',
-    columnClass: 'bg-violet-50/70 border-violet-200 dark:bg-violet-500/10 dark:border-violet-500/30',
+    columnClass: 'bg-violet-50/70 border-violet-200 dark:bg-violet-500/10 dark:border-violet-500/20',
   },
   {
     key: 'won',
     label: 'Ganado',
     shortLabel: 'Ganado',
-    badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30',
+    badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/20',
     badgeVariant: 'success',
-    columnClass: 'bg-emerald-50/70 border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/30',
+    columnClass: 'bg-emerald-50/70 border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20',
   },
   {
     key: 'lost',
     label: 'Perdido',
     shortLabel: 'Perdido',
-    badgeClass: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/30',
+    badgeClass: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/20',
     badgeVariant: 'danger',
-    columnClass: 'bg-rose-50/70 border-rose-200 dark:bg-rose-500/10 dark:border-rose-500/30',
+    columnClass: 'bg-rose-50/70 border-rose-200 dark:bg-rose-500/10 dark:border-rose-500/20',
   },
 ];
 
@@ -344,6 +355,9 @@ export function SalesPipelineModule() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createForm, setCreateForm] = useState(defaultCreateForm);
   const [noteText, setNoteText] = useState('');
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskType, setTaskType] = useState<TaskType>('meeting');
+  const [taskDueDate, setTaskDueDate] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [createClientSearch, setCreateClientSearch] = useState('');
   const [assignedFilter, setAssignedFilter] = useState('');
@@ -356,9 +370,14 @@ export function SalesPipelineModule() {
 
   const canViewAllUsers = user?.role === 'admin' || user?.role === 'manager';
 
+  const visibleOpportunities = useMemo(
+    () => (canViewAllUsers ? opportunities : opportunities.filter((item) => item.assigned_to === user?.id)),
+    [opportunities, canViewAllUsers, user?.id]
+  );
+
   const selectedOpportunity = useMemo(
-    () => opportunities.find((item) => item.id === selectedOpportunityId) || null,
-    [opportunities, selectedOpportunityId]
+    () => visibleOpportunities.find((item) => item.id === selectedOpportunityId) || null,
+    [visibleOpportunities, selectedOpportunityId]
   );
 
   const usersById = useMemo(() => {
@@ -388,7 +407,7 @@ export function SalesPipelineModule() {
     const query = searchTerm.trim().toLowerCase();
     const now = new Date();
 
-    return opportunities.filter((item) => {
+    return visibleOpportunities.filter((item) => {
       if (query) {
         const haystack = [
           item.opportunity_number,
@@ -404,9 +423,7 @@ export function SalesPipelineModule() {
         if (!haystack.includes(query)) return false;
       }
 
-      if (!canViewAllUsers) {
-        if (item.assigned_to !== user?.id) return false;
-      } else if (assignedFilter && item.assigned_to !== assignedFilter) {
+      if (canViewAllUsers && assignedFilter && item.assigned_to !== assignedFilter) {
         return false;
       }
 
@@ -423,7 +440,7 @@ export function SalesPipelineModule() {
 
       return true;
     });
-  }, [opportunities, searchTerm, assignedFilter, currentMonthOnly, canViewAllUsers, user?.id]);
+  }, [visibleOpportunities, searchTerm, assignedFilter, currentMonthOnly, canViewAllUsers]);
 
   const selectedStageOrder = useMemo(() => pipelineStages.map((item) => item.key), []);
 
@@ -532,11 +549,15 @@ export function SalesPipelineModule() {
       const nextOpportunities = opportunitiesData as Opportunity[];
       setOpportunities(nextOpportunities);
 
+      const nextOwnOpportunities = canViewAllUsers
+        ? nextOpportunities
+        : nextOpportunities.filter((item) => item.assigned_to === user?.id);
+
       const currentSelectedId = selectedOpportunityIdRef.current;
-      if (!currentSelectedId && nextOpportunities.length > 0) {
-        setSelectedOpportunityId(nextOpportunities[0].id);
-      } else if (currentSelectedId && !nextOpportunities.some((item) => item.id === currentSelectedId)) {
-        setSelectedOpportunityId(nextOpportunities[0]?.id || null);
+      if (!currentSelectedId && nextOwnOpportunities.length > 0) {
+        setSelectedOpportunityId(nextOwnOpportunities[0].id);
+      } else if (currentSelectedId && !nextOwnOpportunities.some((item) => item.id === currentSelectedId)) {
+        setSelectedOpportunityId(nextOwnOpportunities[0]?.id || null);
       }
     }
 
@@ -561,7 +582,7 @@ export function SalesPipelineModule() {
     }
 
     setLoading(false);
-  }, [toast]);
+  }, [toast, canViewAllUsers, user?.id]);
 
   const loadTimeline = useCallback(async (opportunityId: string) => {
     setTimelineLoading(true);
@@ -662,11 +683,11 @@ export function SalesPipelineModule() {
 
   useEffect(() => {
     if (!selectedOpportunityId) return;
-    const current = opportunities.find((item) => item.id === selectedOpportunityId);
-    if (!current && opportunities.length > 0) {
-      setSelectedOpportunityId(opportunities[0].id);
+    const current = visibleOpportunities.find((item) => item.id === selectedOpportunityId);
+    if (!current && visibleOpportunities.length > 0) {
+      setSelectedOpportunityId(visibleOpportunities[0].id);
     }
-  }, [opportunities, selectedOpportunityId]);
+  }, [visibleOpportunities, selectedOpportunityId]);
 
   const currentOpportunity = selectedOpportunity;
   const currentStageIndex = currentOpportunity ? selectedStageOrder.indexOf(currentOpportunity.stage) : -1;
@@ -795,20 +816,14 @@ export function SalesPipelineModule() {
 
     const now = new Date().toISOString();
     const selectedClient = clients.find((item) => item.id === createForm.client_id) || null;
-    const stageId = await resolveDefaultSalesOpportunityStageId();
 
     const { data, error } = await supabase
       .from('sales_opportunities')
       .insert({
         client_id: createForm.client_id,
-        stage_id: stageId,
-        contact_name: selectedClient?.contact_name || selectedClient?.company_name || 'Cliente',
-        contact_email: selectedClient?.email || null,
-        contact_phone: selectedClient?.phone || null,
         title: createForm.title.trim(),
         stage: createForm.stage,
         status: stageStatus[createForm.stage],
-        amount: Number(createForm.expected_amount || 0),
         expected_amount: Number(createForm.expected_amount || 0),
         currency: 'USD',
         probability: Number(createForm.probability || stageProbability[createForm.stage]),
@@ -935,6 +950,65 @@ export function SalesPipelineModule() {
 
     toast.success('Nota guardada');
     setNoteText('');
+    await loadTimeline(currentOpportunity.id);
+    await loadPipelineData();
+  };
+
+  const handleAddTask = async () => {
+    if (!currentOpportunity) return;
+    if (!taskTitle.trim()) {
+      toast.error('Escribe un título para la tarea');
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const dueAt = taskDueDate ? new Date(`${taskDueDate}T00:00:00`).toISOString() : null;
+
+    const { data: createdTask, error: taskError } = await supabase
+      .from('crm_tasks')
+      .insert({
+        client_id: currentOpportunity.client_id,
+        opportunity_id: currentOpportunity.id,
+        title: taskTitle.trim(),
+        task_type: taskType,
+        priority: 'medium',
+        status: 'open',
+        assigned_to: user?.id || null,
+        due_at: dueAt,
+        created_by: user?.id || null,
+        created_at: now,
+        updated_at: now,
+      })
+      .select('id, task_number')
+      .single();
+
+    if (taskError || !createdTask) {
+      toast.error(`No se pudo crear la tarea: ${taskError?.message || 'error desconocido'}`);
+      return;
+    }
+
+    await insertClientInteractionSafely({
+      client_id: currentOpportunity.client_id,
+      opportunity_id: currentOpportunity.id,
+      conversation_id: currentOpportunity.conversation_id,
+      type: 'task_created',
+      description: `Tarea ${createdTask.task_number} (${taskTypeLabels[taskType]}) creada`,
+      metadata: {
+        source: 'pipeline_kanban',
+        task_id: createdTask.id,
+        task_type: taskType,
+        due_at: dueAt,
+      },
+      created_by: user?.id || null,
+      created_at: now,
+    });
+
+    await advanceOpportunityOnLinkedTask(currentOpportunity.id, now);
+
+    toast.success('Tarea creada');
+    setTaskTitle('');
+    setTaskType('meeting');
+    setTaskDueDate('');
     await loadTimeline(currentOpportunity.id);
     await loadPipelineData();
   };
@@ -1388,6 +1462,48 @@ export function SalesPipelineModule() {
                       icon={<MessageSquare className="h-4 w-4" />}
                     >
                       Guardar nota
+                    </Button>
+                  </div>
+
+                  <div className="mt-5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-4">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
+                      <Calendar className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                      Nueva tarea
+                    </div>
+                    <input
+                      type="text"
+                      value={taskTitle}
+                      onChange={(e) => setTaskTitle(e.target.value)}
+                      placeholder="Ej: Reunión de seguimiento"
+                      className="mt-3 w-full rounded-2xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-white outline-none transition focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                    />
+                    <div className="mt-3 grid grid-cols-2 gap-3">
+                      <select
+                        value={taskType}
+                        onChange={(e) => setTaskType(e.target.value as TaskType)}
+                        className="w-full rounded-2xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-white outline-none transition focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                      >
+                        {(Object.keys(taskTypeLabels) as TaskType[]).map((type) => (
+                          <option key={type} value={type}>
+                            {taskTypeLabels[type]}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="date"
+                        value={taskDueDate}
+                        onChange={(e) => setTaskDueDate(e.target.value)}
+                        className="w-full rounded-2xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-white outline-none transition focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => void handleAddTask()}
+                      disabled={!canUpdate('clientes')}
+                      className="mt-3 w-full"
+                      icon={<Calendar className="h-4 w-4" />}
+                    >
+                      Crear tarea
                     </Button>
                   </div>
                 </>

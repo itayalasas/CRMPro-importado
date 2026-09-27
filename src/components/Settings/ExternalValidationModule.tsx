@@ -279,21 +279,21 @@ export function ExternalValidationModule() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'success': return 'text-green-600 bg-green-50';
-      case 'error': return 'text-red-600 bg-red-50';
-      case 'timeout': return 'text-orange-600 bg-orange-50';
-      case 'pending': return 'text-yellow-600 bg-yellow-50';
-      default: return 'text-slate-600 bg-slate-50';
+      case 'success': return 'text-emerald-600 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-500/15';
+      case 'error': return 'text-rose-600 bg-rose-50 dark:text-rose-300 dark:bg-rose-500/15';
+      case 'timeout': return 'text-orange-600 bg-orange-50 dark:text-orange-300 dark:bg-orange-500/15';
+      case 'pending': return 'text-amber-600 bg-amber-50 dark:text-amber-300 dark:bg-amber-500/15';
+      default: return 'text-slate-600 bg-slate-50 dark:text-slate-300 dark:bg-slate-700/50';
     }
   };
 
   const getValidationResultColor = (result: string) => {
     switch (result) {
-      case 'approved': return 'text-green-600 bg-green-50';
-      case 'rejected': return 'text-red-600 bg-red-50';
-      case 'pending': return 'text-yellow-600 bg-yellow-50';
-      case 'error': return 'text-red-600 bg-red-50';
-      default: return 'text-slate-600 bg-slate-50';
+      case 'approved': return 'text-emerald-600 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-500/15';
+      case 'rejected': return 'text-rose-600 bg-rose-50 dark:text-rose-300 dark:bg-rose-500/15';
+      case 'pending': return 'text-amber-600 bg-amber-50 dark:text-amber-300 dark:bg-amber-500/15';
+      case 'error': return 'text-rose-600 bg-rose-50 dark:text-rose-300 dark:bg-rose-500/15';
+      default: return 'text-slate-600 bg-slate-50 dark:text-slate-300 dark:bg-slate-700/50';
     }
   };
 
@@ -301,11 +301,11 @@ export function ExternalValidationModule() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center">
-            <Shield className="mr-3 text-teal-600" size={32} />
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center">
+            <Shield className="mr-3 text-teal-600 dark:text-teal-400" size={32} />
             Validación y Envío de Facturas
           </h1>
-          <p className="text-slate-600 mt-1">Configure la integración con DGI y sistemas de generación de PDFs</p>
+          <p className="text-slate-600 dark:text-slate-400 mt-1">Configure la integración con DGI y sistemas de generación de PDFs</p>
         </div>
         <button
           onClick={() => {
@@ -333,14 +333,14 @@ export function ExternalValidationModule() {
       </div>
 
       <div className="mb-6">
-        <div className="border-b border-slate-200">
+        <div className="border-b border-slate-200 dark:border-slate-700">
           <nav className="flex space-x-8">
             <button
               onClick={() => setActiveTab('config')}
               className={`pb-4 px-1 border-b-2 font-medium text-sm transition ${
                 activeTab === 'config'
-                  ? 'border-teal-600 text-teal-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  ? 'border-teal-600 text-teal-600 dark:text-teal-400'
+                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600'
               }`}
             >
               <Settings className="inline mr-2" size={18} />
@@ -350,8 +350,8 @@ export function ExternalValidationModule() {
               onClick={() => setActiveTab('logs')}
               className={`pb-4 px-1 border-b-2 font-medium text-sm transition ${
                 activeTab === 'logs'
-                  ? 'border-teal-600 text-teal-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  ? 'border-teal-600 text-teal-600 dark:text-teal-400'
+                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600'
               }`}
             >
               <FileText className="inline mr-2" size={18} />
@@ -364,22 +364,22 @@ export function ExternalValidationModule() {
       {activeTab === 'config' && (
         <div className="grid grid-cols-1 gap-6">
           {configs.map((config) => (
-            <div key={config.id} className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+            <div key={config.id} className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center space-x-3">
-                    <h3 className="text-lg font-semibold text-slate-900">{config.name}</h3>
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{config.name}</h3>
                     <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
                       config.config_type === 'pdf_generation'
-                        ? 'bg-purple-100 text-purple-700'
+                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300'
                         : config.config_type === 'email_communication'
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-blue-100 text-blue-700'
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+                        : 'bg-brand-100 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300'
                     }`}>
                       {config.config_type === 'pdf_generation' ? 'Generación PDF' : config.config_type === 'email_communication' ? 'Comunicación Email' : 'Validación DGI'}
                     </span>
                     <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                      config.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'
+                      config.is_active ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
                     }`}>
                       {config.is_active ? 'Activa' : 'Inactiva'}
                     </span>
@@ -387,33 +387,33 @@ export function ExternalValidationModule() {
 
                   <div className="mt-4 grid grid-cols-2 gap-4">
                     <div>
-                      <p className="text-sm text-slate-500">URL de API</p>
-                      <p className="text-sm font-medium text-slate-900 flex items-center">
+                      <p className="text-sm text-slate-500 dark:text-slate-400">URL de API</p>
+                      <p className="text-sm font-medium text-slate-900 dark:text-white flex items-center">
                         <Globe size={14} className="mr-1" />
                         {config.api_url}
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm text-slate-500">Tipo de Autenticación</p>
-                      <p className="text-sm font-medium text-slate-900 flex items-center">
+                      <p className="text-sm text-slate-500 dark:text-slate-400">Tipo de Autenticación</p>
+                      <p className="text-sm font-medium text-slate-900 dark:text-white flex items-center">
                         <Key size={14} className="mr-1" />
                         {config.auth_type.toUpperCase()}
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm text-slate-500">Timeout</p>
-                      <p className="text-sm font-medium text-slate-900">{config.timeout}ms</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">Timeout</p>
+                      <p className="text-sm font-medium text-slate-900 dark:text-white">{config.timeout}ms</p>
                     </div>
                     <div>
-                      <p className="text-sm text-slate-500">Reintentos</p>
-                      <p className="text-sm font-medium text-slate-900">{config.retry_attempts}</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">Reintentos</p>
+                      <p className="text-sm font-medium text-slate-900 dark:text-white">{config.retry_attempts}</p>
                     </div>
                   </div>
                 </div>
 
                 <button
                   onClick={() => handleEdit(config)}
-                  className="ml-4 text-teal-600 hover:text-teal-700 transition"
+                  className="ml-4 text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 transition"
                 >
                   <Settings size={20} />
                 </button>
@@ -422,60 +422,60 @@ export function ExternalValidationModule() {
           ))}
 
           {configs.length === 0 && (
-            <div className="text-center py-12 bg-white rounded-lg border border-slate-200">
-              <Shield size={48} className="mx-auto text-slate-300 mb-4" />
-              <p className="text-slate-600">No hay configuraciones de API externa</p>
-              <p className="text-sm text-slate-500 mt-1">Cree una nueva configuración para comenzar</p>
+            <div className="text-center py-12 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+              <Shield size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-4" />
+              <p className="text-slate-600 dark:text-slate-400">No hay configuraciones de API externa</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Cree una nueva configuración para comenzar</p>
             </div>
           )}
         </div>
       )}
 
       {activeTab === 'logs' && (
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-slate-50 border-b border-slate-200">
+              <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                     Fecha/Hora
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                     Tipo
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                     Estado
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                     Resultado
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                     Ref. Externa
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                     Duración
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                     Reintentos
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                     Acciones
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-slate-200">
+              <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
                 {logs.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50 transition">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
+                  <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900 dark:text-white">
                       {new Date(log.created_at).toLocaleString('es-UY')}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
                         log.config?.config_type === 'pdf_generation'
-                          ? 'bg-purple-100 text-purple-700'
+                          ? 'bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300'
                           : log.config?.config_type === 'email_communication'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-blue-100 text-blue-700'
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+                          : 'bg-brand-100 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300'
                       }`}>
                         {log.config?.config_type === 'pdf_generation' ? 'PDF' : log.config?.config_type === 'email_communication' ? 'EMAIL' : 'DGI'}
                       </span>
@@ -490,13 +490,13 @@ export function ExternalValidationModule() {
                         {log.validation_result}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
                       {log.external_reference || '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
                       {log.duration_ms}ms
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
                       {log.retry_count}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -505,7 +505,7 @@ export function ExternalValidationModule() {
                           setSelectedLog(log);
                           setShowLogModal(true);
                         }}
-                        className="text-teal-600 hover:text-teal-700"
+                        className="text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300"
                       >
                         Ver detalles
                       </button>
@@ -518,21 +518,21 @@ export function ExternalValidationModule() {
 
           {logs.length === 0 && (
             <div className="text-center py-12">
-              <FileText size={48} className="mx-auto text-slate-300 mb-4" />
-              <p className="text-slate-600">No hay registros de validación</p>
+              <FileText size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-4" />
+              <p className="text-slate-600 dark:text-slate-400">No hay registros de validación</p>
             </div>
           )}
 
           {totalLogs > logsPerPage && (
-            <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
-              <div className="text-sm text-slate-600">
+            <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <div className="text-sm text-slate-600 dark:text-slate-400">
                 Mostrando {((currentPage - 1) * logsPerPage) + 1} a {Math.min(currentPage * logsPerPage, totalLogs)} de {totalLogs} registros
               </div>
               <div className="flex space-x-2">
                 <button
                   onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                   disabled={currentPage === 1}
-                  className="px-3 py-1 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Anterior
                 </button>
@@ -549,7 +549,7 @@ export function ExternalValidationModule() {
                     .map((page, idx, arr) => {
                       if (page === '...' && arr[idx - 1] !== '...') {
                         return (
-                          <span key={`ellipsis-${idx}`} className="px-2 text-slate-400">
+                          <span key={`ellipsis-${idx}`} className="px-2 text-slate-400 dark:text-slate-500">
                             ...
                           </span>
                         );
@@ -562,7 +562,7 @@ export function ExternalValidationModule() {
                           className={`px-3 py-1 border rounded-lg text-sm font-medium transition ${
                             currentPage === page
                               ? 'bg-teal-600 text-white border-teal-600'
-                              : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                              : 'border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
                           }`}
                         >
                           {page}
@@ -573,7 +573,7 @@ export function ExternalValidationModule() {
                 <button
                   onClick={() => setCurrentPage(prev => Math.min(Math.ceil(totalLogs / logsPerPage), prev + 1))}
                   disabled={currentPage === Math.ceil(totalLogs / logsPerPage)}
-                  className="px-3 py-1 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Siguiente
                 </button>
@@ -585,15 +585,15 @@ export function ExternalValidationModule() {
 
       {showConfigModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-200">
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-700">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-slate-900">
+                <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
                   {selectedConfig ? 'Editar Configuración' : 'Nueva Configuración'}
                 </h2>
                 <button
                   onClick={() => setShowConfigModal(false)}
-                  className="text-slate-400 hover:text-slate-600"
+                  className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
                 >
                   <X size={24} />
                 </button>
@@ -603,40 +603,40 @@ export function ExternalValidationModule() {
             <form onSubmit={handleSubmit} className="p-6 space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Nombre de la Configuración
                   </label>
                   <input
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full border border-slate-300 rounded-lg px-4 py-2"
+                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                     required
                   />
                 </div>
 
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     URL de API
                   </label>
                   <input
                     type="url"
                     value={formData.api_url}
                     onChange={(e) => setFormData({ ...formData, api_url: e.target.value })}
-                    className="w-full border border-slate-300 rounded-lg px-4 py-2"
+                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                     placeholder="https://api.example.com/validate"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Tipo de Configuración
                   </label>
                   <select
                     value={formData.config_type}
                     onChange={(e) => setFormData({ ...formData, config_type: e.target.value as any })}
-                    className="w-full border border-slate-300 rounded-lg px-4 py-2"
+                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                   >
                     <option value="validation">Validación DGI</option>
                     <option value="pdf_generation">Generación de PDF</option>
@@ -645,13 +645,13 @@ export function ExternalValidationModule() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Tipo de Autenticación
                   </label>
                   <select
                     value={formData.auth_type}
                     onChange={(e) => setFormData({ ...formData, auth_type: e.target.value as any, auth_credentials: {} })}
-                    className="w-full border border-slate-300 rounded-lg px-4 py-2"
+                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                   >
                     <option value="none">Sin Autenticación</option>
                     <option value="basic">Basic Auth</option>
@@ -661,13 +661,13 @@ export function ExternalValidationModule() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Estado
                   </label>
                   <select
                     value={formData.is_active ? 'true' : 'false'}
                     onChange={(e) => setFormData({ ...formData, is_active: e.target.value === 'true' })}
-                    className="w-full border border-slate-300 rounded-lg px-4 py-2"
+                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                   >
                     <option value="true">Activa</option>
                     <option value="false">Inactiva</option>
@@ -677,7 +677,7 @@ export function ExternalValidationModule() {
                 {formData.auth_type === 'basic' && (
                   <>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Usuario
                       </label>
                       <input
@@ -687,11 +687,11 @@ export function ExternalValidationModule() {
                           ...formData,
                           auth_credentials: { ...formData.auth_credentials, username: e.target.value }
                         })}
-                        className="w-full border border-slate-300 rounded-lg px-4 py-2"
+                        className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Contraseña
                       </label>
                       <div className="relative">
@@ -702,12 +702,12 @@ export function ExternalValidationModule() {
                             ...formData,
                             auth_credentials: { ...formData.auth_credentials, password: e.target.value }
                           })}
-                          className="w-full border border-slate-300 rounded-lg px-4 py-2 pr-10"
+                          className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 pr-10 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                         />
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
                         >
                           {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                         </button>
@@ -718,7 +718,7 @@ export function ExternalValidationModule() {
 
                 {formData.auth_type === 'bearer' && (
                   <div className="col-span-2">
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                       Bearer Token
                     </label>
                     <input
@@ -728,7 +728,7 @@ export function ExternalValidationModule() {
                         ...formData,
                         auth_credentials: { token: e.target.value }
                       })}
-                      className="w-full border border-slate-300 rounded-lg px-4 py-2"
+                      className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                     />
                   </div>
                 )}
@@ -736,7 +736,7 @@ export function ExternalValidationModule() {
                 {formData.auth_type === 'api_key' && (
                   <>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Nombre del Header
                       </label>
                       <input
@@ -747,11 +747,11 @@ export function ExternalValidationModule() {
                           auth_credentials: { ...formData.auth_credentials, key: e.target.value }
                         })}
                         placeholder="X-API-Key"
-                        className="w-full border border-slate-300 rounded-lg px-4 py-2"
+                        className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Valor del API Key
                       </label>
                       <input
@@ -761,53 +761,53 @@ export function ExternalValidationModule() {
                           ...formData,
                           auth_credentials: { ...formData.auth_credentials, value: e.target.value }
                         })}
-                        className="w-full border border-slate-300 rounded-lg px-4 py-2"
+                        className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                       />
                     </div>
                   </>
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Timeout (ms)
                   </label>
                   <input
                     type="number"
                     value={formData.timeout}
                     onChange={(e) => setFormData({ ...formData, timeout: parseInt(e.target.value) })}
-                    className="w-full border border-slate-300 rounded-lg px-4 py-2"
+                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                     min="1000"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Reintentos
                   </label>
                   <input
                     type="number"
                     value={formData.retry_attempts}
                     onChange={(e) => setFormData({ ...formData, retry_attempts: parseInt(e.target.value) })}
-                    className="w-full border border-slate-300 rounded-lg px-4 py-2"
+                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                     min="0"
                     max="10"
                   />
                 </div>
 
-                <div className="col-span-2 border-t border-slate-200 pt-6">
-                  <h3 className="text-base font-semibold text-slate-900 mb-4">Configuración de Request y Response</h3>
+                <div className="col-span-2 border-t border-slate-200 dark:border-slate-700 pt-6">
+                  <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-4">Configuración de Request y Response</h3>
                 </div>
 
                 {formData.config_type === 'validation' ? (
-                  <div className="col-span-2 bg-blue-50 rounded-lg p-6 border border-blue-200">
-                    <h3 className="text-sm font-semibold text-blue-900 mb-2 flex items-center space-x-2">
+                  <div className="col-span-2 bg-brand-50 dark:bg-brand-500/10 rounded-lg p-6 border border-brand-200 dark:border-brand-500/20">
+                    <h3 className="text-sm font-semibold text-brand-900 dark:text-brand-300 mb-2 flex items-center space-x-2">
                       <FileText size={16} />
                       <span>Formato Request - Validación DGI (e-Ticket)</span>
                     </h3>
-                    <p className="text-xs text-blue-800 mb-3">
+                    <p className="text-xs text-brand-800 dark:text-brand-400 mb-3">
                       El formato de envío está configurado automáticamente para e-Tickets (ventas al público).
                     </p>
-                    <div className="bg-white rounded p-3 text-xs font-mono text-slate-700 overflow-x-auto">
+                    <div className="bg-white dark:bg-slate-900 rounded p-3 text-xs font-mono text-slate-700 dark:text-slate-300 overflow-x-auto">
                       <pre className="whitespace-pre-wrap">{`{
   "numero_cfe": "[Número de factura]",
   "serie": "A",
@@ -827,15 +827,15 @@ export function ExternalValidationModule() {
                     </div>
                   </div>
                 ) : formData.config_type === 'pdf_generation' ? (
-                  <div className="col-span-2 bg-purple-50 rounded-lg p-6 border border-purple-200">
-                    <h3 className="text-sm font-semibold text-purple-900 mb-2 flex items-center space-x-2">
+                  <div className="col-span-2 bg-purple-50 dark:bg-purple-500/10 rounded-lg p-6 border border-purple-200 dark:border-purple-500/20">
+                    <h3 className="text-sm font-semibold text-purple-900 dark:text-purple-300 mb-2 flex items-center space-x-2">
                       <FileText size={16} />
                       <span>Formato Request - Generación de PDF</span>
                     </h3>
-                    <p className="text-xs text-purple-800 mb-3">
+                    <p className="text-xs text-purple-800 dark:text-purple-400 mb-3">
                       El formato de envío está configurado automáticamente para generar PDFs con los datos de DGI.
                     </p>
-                    <div className="bg-white rounded p-3 text-xs font-mono text-slate-700 overflow-x-auto max-h-96 overflow-y-auto">
+                    <div className="bg-white dark:bg-slate-900 rounded p-3 text-xs font-mono text-slate-700 dark:text-slate-300 overflow-x-auto max-h-96 overflow-y-auto">
                       <pre className="whitespace-pre-wrap">{`{
   "order_id": "ORDER-80000",
   "pdf_template_name": "invoice_email_service",
@@ -895,7 +895,7 @@ export function ExternalValidationModule() {
                 ) : null}
 
                 {formData.config_type === 'validation' ? (
-                  <div className="col-span-2 bg-slate-50 rounded-lg p-6 border border-slate-200">
+                  <div className="col-span-2 bg-slate-50 dark:bg-slate-900/50 rounded-lg p-6 border border-slate-200 dark:border-slate-700">
                     <FieldMapper
                       title="Mapeo de Response (Captura de Respuesta DGI)"
                       mappings={formData.response_mapping || {}}
@@ -904,9 +904,9 @@ export function ExternalValidationModule() {
                       placeholder="Seleccione campo a guardar"
                       isResponse={true}
                     />
-                    <div className="mt-4 bg-blue-50 rounded-lg p-4 border border-blue-200">
-                      <h4 className="text-sm font-semibold text-blue-900 mb-2">Ejemplo de Response DGI</h4>
-                      <div className="bg-white rounded p-3 text-xs font-mono text-slate-700 overflow-x-auto">
+                    <div className="mt-4 bg-brand-50 dark:bg-brand-500/10 rounded-lg p-4 border border-brand-200 dark:border-brand-500/20">
+                      <h4 className="text-sm font-semibold text-brand-900 dark:text-brand-300 mb-2">Ejemplo de Response DGI</h4>
+                      <div className="bg-white dark:bg-slate-900 rounded p-3 text-xs font-mono text-slate-700 dark:text-slate-300 overflow-x-auto">
                         <pre className="whitespace-pre-wrap">{`{
   "success": true,
   "approved": true,
@@ -927,17 +927,17 @@ export function ExternalValidationModule() {
                     </div>
                   </div>
                 ) : formData.config_type === 'pdf_generation' ? (
-                  <div className="col-span-2 bg-slate-50 rounded-lg p-6 border border-slate-200">
+                  <div className="col-span-2 bg-slate-50 dark:bg-slate-900/50 rounded-lg p-6 border border-slate-200 dark:border-slate-700">
                     <div className="mb-4">
-                      <h3 className="text-sm font-semibold text-slate-900 mb-2">Response de Generación de PDF</h3>
-                      <p className="text-xs text-slate-600 mb-3">
-                        El sistema solo valida que <code className="bg-slate-200 px-1 py-0.5 rounded">success: true</code> en la respuesta.
+                      <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Response de Generación de PDF</h3>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
+                        El sistema solo valida que <code className="bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded">success: true</code> en la respuesta.
                         El PDF se genera y envía desde el sistema externo, no necesitas guardarlo aquí.
                       </p>
                     </div>
-                    <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-                      <h4 className="text-sm font-semibold text-purple-900 mb-2">Ejemplo de Response - Generación de PDF</h4>
-                      <div className="bg-white rounded p-3 text-xs font-mono text-slate-700 overflow-x-auto">
+                    <div className="bg-purple-50 dark:bg-purple-500/10 rounded-lg p-4 border border-purple-200 dark:border-purple-500/20">
+                      <h4 className="text-sm font-semibold text-purple-900 dark:text-purple-300 mb-2">Ejemplo de Response - Generación de PDF</h4>
+                      <div className="bg-white dark:bg-slate-900 rounded p-3 text-xs font-mono text-slate-700 dark:text-slate-300 overflow-x-auto">
                         <pre className="whitespace-pre-wrap">{`{
   "success": true,
   "message": "PDF generated successfully",
@@ -949,24 +949,24 @@ export function ExternalValidationModule() {
   }
 }`}</pre>
                       </div>
-                      <div className="mt-3 p-3 bg-purple-100 rounded text-xs text-purple-800">
-                        <strong>Nota:</strong> Solo se verifica que <code className="bg-purple-200 px-1 py-0.5 rounded">success === true</code>.
+                      <div className="mt-3 p-3 bg-purple-100 dark:bg-purple-500/15 rounded text-xs text-purple-800 dark:text-purple-300">
+                        <strong>Nota:</strong> Solo se verifica que <code className="bg-purple-200 dark:bg-purple-500/25 px-1 py-0.5 rounded">success === true</code>.
                         El PDF no se guarda en este sistema, el envío por email lo gestiona el sistema externo.
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="col-span-2 bg-slate-50 rounded-lg p-6 border border-slate-200">
+                  <div className="col-span-2 bg-slate-50 dark:bg-slate-900/50 rounded-lg p-6 border border-slate-200 dark:border-slate-700">
                     <div className="mb-4">
-                      <h3 className="text-sm font-semibold text-slate-900 mb-2">Comunicación por Email</h3>
-                      <p className="text-xs text-slate-600 mb-3">
-                        El sistema envía comunicaciones automáticas cuando una orden cambia a <code className="bg-slate-200 px-1 py-0.5 rounded">confirmed</code>.
-                        Si <code className="bg-slate-200 px-1 py-0.5 rounded">success: false</code>, la orden se marca como <code className="bg-red-100 text-red-700 px-1 py-0.5 rounded">sent-error-email</code>.
+                      <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Comunicación por Email</h3>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
+                        El sistema envía comunicaciones automáticas cuando una orden cambia a <code className="bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded">confirmed</code>.
+                        Si <code className="bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded">success: false</code>, la orden se marca como <code className="bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300 px-1 py-0.5 rounded">sent-error-email</code>.
                       </p>
                     </div>
-                    <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                      <h4 className="text-sm font-semibold text-green-900 mb-2">Ejemplo de Request - Comunicación Email</h4>
-                      <div className="bg-white rounded p-3 text-xs font-mono text-slate-700 overflow-x-auto">
+                    <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-lg p-4 border border-emerald-200 dark:border-emerald-500/20">
+                      <h4 className="text-sm font-semibold text-emerald-900 dark:text-emerald-300 mb-2">Ejemplo de Request - Comunicación Email</h4>
+                      <div className="bg-white dark:bg-slate-900 rounded p-3 text-xs font-mono text-slate-700 dark:text-slate-300 overflow-x-auto">
                         <pre className="whitespace-pre-wrap">{`{
   "template_name": "agenda_confirmation",
   "recipient_email": "cliente@ejemplo.com",
@@ -983,9 +983,9 @@ export function ExternalValidationModule() {
 }`}</pre>
                       </div>
                     </div>
-                    <div className="bg-green-50 rounded-lg p-4 border border-green-200 mt-4">
-                      <h4 className="text-sm font-semibold text-green-900 mb-2">Ejemplo de Response - Comunicación Email</h4>
-                      <div className="bg-white rounded p-3 text-xs font-mono text-slate-700 overflow-x-auto">
+                    <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-lg p-4 border border-emerald-200 dark:border-emerald-500/20 mt-4">
+                      <h4 className="text-sm font-semibold text-emerald-900 dark:text-emerald-300 mb-2">Ejemplo de Response - Comunicación Email</h4>
+                      <div className="bg-white dark:bg-slate-900 rounded p-3 text-xs font-mono text-slate-700 dark:text-slate-300 overflow-x-auto">
                         <pre className="whitespace-pre-wrap">{`{
   "success": true,
   "message": "Email sent successfully with existing PDF",
@@ -995,9 +995,9 @@ export function ExternalValidationModule() {
   "pdf_was_ready": true
 }`}</pre>
                       </div>
-                      <div className="mt-3 p-3 bg-green-100 rounded text-xs text-green-800">
-                        <strong>Importante:</strong> Si <code className="bg-green-200 px-1 py-0.5 rounded">success: false</code>,
-                        la orden se actualiza automáticamente al estado <code className="bg-red-100 text-red-700 px-1 py-0.5 rounded">sent-error-email</code>.
+                      <div className="mt-3 p-3 bg-emerald-100 dark:bg-emerald-500/15 rounded text-xs text-emerald-800 dark:text-emerald-300">
+                        <strong>Importante:</strong> Si <code className="bg-emerald-200 dark:bg-emerald-500/25 px-1 py-0.5 rounded">success: false</code>,
+                        la orden se actualiza automáticamente al estado <code className="bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300 px-1 py-0.5 rounded">sent-error-email</code>.
                       </div>
                     </div>
                   </div>
@@ -1005,9 +1005,9 @@ export function ExternalValidationModule() {
               </div>
 
               {selectedConfig && (
-                <div className="border-t border-slate-200 pt-6">
-                  <h3 className="text-sm font-medium text-slate-700 mb-3">Probar Configuración</h3>
-                  <p className="text-xs text-slate-500 mb-3">
+                <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
+                  <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">Probar Configuración</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
                     {selectedConfig.config_type === 'pdf_generation'
                       ? 'Selecciona una factura aprobada para probar el envío de PDF'
                       : 'Selecciona una factura existente para probar la validación con DGI'}
@@ -1016,7 +1016,7 @@ export function ExternalValidationModule() {
                     <select
                       value={testInvoiceId}
                       onChange={(e) => setTestInvoiceId(e.target.value)}
-                      className="flex-1 border border-slate-300 rounded-lg px-4 py-2 bg-white"
+                      className="flex-1 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                     >
                       <option value="">Seleccionar factura...</option>
                       {invoices.map((invoice) => (
@@ -1030,7 +1030,7 @@ export function ExternalValidationModule() {
                       type="button"
                       onClick={handleTest}
                       disabled={testing || !testInvoiceId}
-                      className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                      className="bg-brand-600 text-white px-6 py-2 rounded-lg hover:bg-brand-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                     >
                       <TestTube size={18} />
                       <span>{testing ? 'Probando...' : 'Probar'}</span>
@@ -1038,12 +1038,12 @@ export function ExternalValidationModule() {
                   </div>
                   {testInvoiceId && (
                     <div className="mt-2 space-y-1">
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-slate-400 dark:text-slate-500">
                         ℹ️ {selectedConfig.config_type === 'pdf_generation'
                           ? 'La factura seleccionada será enviada a la API de generación de PDF'
                           : 'La factura seleccionada será validada con la API de DGI configurada'}
                       </p>
-                      <p className="text-xs text-green-600 font-medium">
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
                         🖥️ El JSON enviado y recibido se mostrará en la consola del navegador (F12)
                       </p>
                     </div>
@@ -1051,16 +1051,16 @@ export function ExternalValidationModule() {
 
                   <div className={`mt-4 p-4 rounded-lg border ${
                     selectedConfig.config_type === 'pdf_generation'
-                      ? 'bg-purple-50 border-purple-200'
-                      : 'bg-blue-50 border-blue-200'
+                      ? 'bg-purple-50 dark:bg-purple-500/10 border-purple-200 dark:border-purple-500/20'
+                      : 'bg-brand-50 dark:bg-brand-500/10 border-brand-200 dark:border-brand-500/20'
                   }`}>
                     <h4 className={`text-sm font-semibold mb-2 ${
-                      selectedConfig.config_type === 'pdf_generation' ? 'text-purple-900' : 'text-blue-900'
+                      selectedConfig.config_type === 'pdf_generation' ? 'text-purple-900 dark:text-purple-300' : 'text-brand-900 dark:text-brand-300'
                     }`}>
                       💡 Solución de Problemas
                     </h4>
                     <ul className={`text-xs space-y-1 ${
-                      selectedConfig.config_type === 'pdf_generation' ? 'text-purple-800' : 'text-blue-800'
+                      selectedConfig.config_type === 'pdf_generation' ? 'text-purple-800 dark:text-purple-400' : 'text-brand-800 dark:text-brand-400'
                     }`}>
                       <li><strong>HTTP 500:</strong> La API externa tiene problemas internos. Verifica la URL y contacta soporte.</li>
                       <li><strong>HTTP 401/403:</strong> Error de autenticación. Verifica las credenciales en la configuración.</li>
@@ -1070,8 +1070,8 @@ export function ExternalValidationModule() {
                     </ul>
                     <p className={`text-xs mt-3 pt-2 border-t ${
                       selectedConfig.config_type === 'pdf_generation'
-                        ? 'text-purple-700 border-purple-200'
-                        : 'text-blue-700 border-blue-200'
+                        ? 'text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-500/20'
+                        : 'text-brand-700 dark:text-brand-400 border-brand-200 dark:border-brand-500/20'
                     }`}>
                       📋 <strong>Tip:</strong> Abre la pestaña "Logs" para ver el request enviado y la response recibida.
                     </p>
@@ -1079,11 +1079,11 @@ export function ExternalValidationModule() {
                 </div>
               )}
 
-              <div className="flex justify-end space-x-3 pt-6 border-t border-slate-200">
+              <div className="flex justify-end space-x-3 pt-6 border-t border-slate-200 dark:border-slate-700">
                 <button
                   type="button"
                   onClick={() => setShowConfigModal(false)}
-                  className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition"
+                  className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
                 >
                   Cancelar
                 </button>
@@ -1102,13 +1102,13 @@ export function ExternalValidationModule() {
 
       {showLogModal && selectedLog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-200">
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-700">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-slate-900">Detalles de Validación</h2>
+                <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Detalles de Validación</h2>
                 <button
                   onClick={() => setShowLogModal(false)}
-                  className="text-slate-400 hover:text-slate-600"
+                  className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
                 >
                   <X size={24} />
                 </button>
@@ -1118,54 +1118,54 @@ export function ExternalValidationModule() {
             <div className="p-6 space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-slate-500">Estado</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Estado</p>
                   <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${getStatusColor(selectedLog.status)}`}>
                     {selectedLog.status}
                   </span>
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500">Resultado</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Resultado</p>
                   <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${getValidationResultColor(selectedLog.validation_result)}`}>
                     {selectedLog.validation_result}
                   </span>
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500">Duración</p>
-                  <p className="text-sm font-medium text-slate-900">{selectedLog.duration_ms}ms</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Duración</p>
+                  <p className="text-sm font-medium text-slate-900 dark:text-white">{selectedLog.duration_ms}ms</p>
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500">Reintentos</p>
-                  <p className="text-sm font-medium text-slate-900">{selectedLog.retry_count}</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Reintentos</p>
+                  <p className="text-sm font-medium text-slate-900 dark:text-white">{selectedLog.retry_count}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500">Código HTTP</p>
-                  <p className="text-sm font-medium text-slate-900">{selectedLog.status_code || 'N/A'}</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Código HTTP</p>
+                  <p className="text-sm font-medium text-slate-900 dark:text-white">{selectedLog.status_code || 'N/A'}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500">Referencia Externa</p>
-                  <p className="text-sm font-medium text-slate-900">{selectedLog.external_reference || 'N/A'}</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Referencia Externa</p>
+                  <p className="text-sm font-medium text-slate-900 dark:text-white">{selectedLog.external_reference || 'N/A'}</p>
                 </div>
               </div>
 
               {selectedLog.error_message && (
                 <div>
-                  <p className="text-sm font-medium text-slate-700 mb-2">Mensaje de Error</p>
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Mensaje de Error</p>
+                  <div className="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-lg p-3 text-sm text-rose-700 dark:text-rose-300">
                     {selectedLog.error_message}
                   </div>
                 </div>
               )}
 
               <div>
-                <p className="text-sm font-medium text-slate-700 mb-2">Request Payload</p>
-                <pre className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-xs overflow-x-auto">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Request Payload</p>
+                <pre className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-4 text-xs text-slate-700 dark:text-slate-300 overflow-x-auto">
                   {JSON.stringify(selectedLog.request_payload, null, 2)}
                 </pre>
               </div>
 
               <div>
-                <p className="text-sm font-medium text-slate-700 mb-2">Response Payload</p>
-                <pre className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-xs overflow-x-auto">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Response Payload</p>
+                <pre className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-4 text-xs text-slate-700 dark:text-slate-300 overflow-x-auto">
                   {JSON.stringify(selectedLog.response_payload, null, 2)}
                 </pre>
               </div>

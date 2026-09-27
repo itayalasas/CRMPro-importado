@@ -260,28 +260,28 @@ const ParametersModule: React.FC = () => {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
             Código <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
             value={formData.code || ''}
             onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             placeholder="ej: UYU, pending"
             disabled={!!editingId}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
             Nombre <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
             value={formData.name || ''}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             placeholder="ej: Peso Uruguayo"
           />
         </div>
@@ -289,26 +289,26 @@ const ParametersModule: React.FC = () => {
         {hasSymbol && (
           <>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Símbolo
               </label>
               <input
                 type="text"
                 value={formData.symbol || ''}
                 onChange={(e) => setFormData({ ...formData, symbol: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 placeholder="ej: $, US$"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Código ISO (DGI)
               </label>
               <input
                 type="text"
                 value={formData.iso_code || ''}
                 onChange={(e) => setFormData({ ...formData, iso_code: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 placeholder="ej: 858, 840"
               />
             </div>
@@ -317,28 +317,28 @@ const ParametersModule: React.FC = () => {
 
         {hasColor && (
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
               Color
             </label>
             <input
               type="color"
               value={formData.color || '#64748b'}
               onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-              className="w-full h-10 px-1 py-1 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              className="w-full h-10 px-1 py-1 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             />
           </div>
         )}
 
         {hasSortOrder && (
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
               Orden
             </label>
             <input
               type="number"
               value={formData.sort_order || 0}
               onChange={(e) => setFormData({ ...formData, sort_order: parseInt(e.target.value) || 0 })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             />
           </div>
         )}
@@ -349,9 +349,9 @@ const ParametersModule: React.FC = () => {
               type="checkbox"
               checked={formData.is_active || false}
               onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-              className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
+              className="w-4 h-4 text-emerald-600 border-slate-300 dark:border-slate-600 rounded focus:ring-emerald-500"
             />
-            <span className="text-sm text-slate-700">Activo</span>
+            <span className="text-sm text-slate-700 dark:text-slate-300">Activo</span>
           </label>
 
           {hasDefault && (
@@ -360,9 +360,9 @@ const ParametersModule: React.FC = () => {
                 type="checkbox"
                 checked={formData.is_default || false}
                 onChange={(e) => setFormData({ ...formData, is_default: e.target.checked })}
-                className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
+                className="w-4 h-4 text-emerald-600 border-slate-300 dark:border-slate-600 rounded focus:ring-emerald-500"
               />
-              <span className="text-sm text-slate-700">Por Defecto</span>
+              <span className="text-sm text-slate-700 dark:text-slate-300">Por Defecto</span>
             </label>
           )}
         </div>
@@ -374,13 +374,13 @@ const ParametersModule: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <Settings className="w-8 h-8 text-emerald-600" />
-          <h2 className="text-2xl font-bold text-slate-800">Parámetros del Sistema</h2>
+          <Settings className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+          <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Parámetros del Sistema</h2>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-        <div className="border-b border-slate-200">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+        <div className="border-b border-slate-200 dark:border-slate-700">
           <div className="flex overflow-x-auto">
             {tabs.map((tab) => {
               const Icon = tab.icon;
@@ -393,8 +393,8 @@ const ParametersModule: React.FC = () => {
                   }}
                   className={`flex items-center space-x-2 px-6 py-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
                     activeTab === tab.id
-                      ? 'border-emerald-600 text-emerald-600'
-                      : 'border-transparent text-slate-600 hover:text-slate-800 hover:border-slate-300'
+                      ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+                      : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -407,7 +407,7 @@ const ParametersModule: React.FC = () => {
 
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-semibold text-slate-800">
+            <h3 className="text-lg font-semibold text-slate-800 dark:text-white">
               {tabs.find(t => t.id === activeTab)?.label}
             </h3>
             <button
@@ -420,15 +420,15 @@ const ParametersModule: React.FC = () => {
           </div>
 
           {showAddForm && (
-            <div className="bg-slate-50 rounded-lg p-6 mb-6 border border-slate-200">
-              <h4 className="text-md font-semibold text-slate-800 mb-4">
+            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-6 mb-6 border border-slate-200 dark:border-slate-700">
+              <h4 className="text-md font-semibold text-slate-800 dark:text-white mb-4">
                 {editingId ? 'Editar Parámetro' : 'Nuevo Parámetro'}
               </h4>
               {renderFormFields()}
               <div className="flex justify-end space-x-3 mt-6">
                 <button
                   onClick={resetForm}
-                  className="px-4 py-2 text-slate-600 hover:text-slate-800 transition"
+                  className="px-4 py-2 text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white transition"
                 >
                   Cancelar
                 </button>
@@ -444,7 +444,7 @@ const ParametersModule: React.FC = () => {
           )}
 
           {tableUnavailableMessage && (
-            <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <div className="mb-6 rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
               {tableUnavailableMessage}
             </div>
           )}
@@ -457,34 +457,34 @@ const ParametersModule: React.FC = () => {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Código</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Nombre</th>
+                  <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Código</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Nombre</th>
                     {activeTab === 'currencies' && (
                       <>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Símbolo</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">ISO (DGI)</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Símbolo</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">ISO (DGI)</th>
                       </>
                     )}
                     {['order_statuses', 'payment_statuses', 'invoice_statuses', 'ticket_statuses', 'ticket_categories'].includes(activeTab) && (
                       <>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Color</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase">Orden</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Color</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Orden</th>
                       </>
                     )}
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase">Estado</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase">Acciones</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Estado</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">Acciones</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200">
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
                   {parameters.map((param) => (
-                    <tr key={param.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 text-sm text-slate-900 font-mono">{param.code}</td>
-                      <td className="px-4 py-3 text-sm text-slate-900">{param.name}</td>
+                    <tr key={param.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                      <td className="px-4 py-3 text-sm text-slate-900 dark:text-white font-mono">{param.code}</td>
+                      <td className="px-4 py-3 text-sm text-slate-900 dark:text-white">{param.name}</td>
                       {activeTab === 'currencies' && (
                         <>
-                          <td className="px-4 py-3 text-sm text-slate-900">{param.symbol}</td>
-                          <td className="px-4 py-3 text-sm text-slate-900 font-mono">{param.iso_code}</td>
+                          <td className="px-4 py-3 text-sm text-slate-900 dark:text-white">{param.symbol}</td>
+                          <td className="px-4 py-3 text-sm text-slate-900 dark:text-white font-mono">{param.iso_code}</td>
                         </>
                       )}
                       {['order_statuses', 'payment_statuses', 'invoice_statuses', 'ticket_statuses', 'ticket_categories'].includes(activeTab) && (
@@ -492,13 +492,13 @@ const ParametersModule: React.FC = () => {
                           <td className="px-4 py-3">
                             <div className="flex items-center space-x-2">
                               <div
-                                className="w-6 h-6 rounded border border-slate-200"
+                                className="w-6 h-6 rounded border border-slate-200 dark:border-slate-600"
                                 style={{ backgroundColor: param.color }}
                               />
-                              <span className="text-xs text-slate-600">{param.color}</span>
+                              <span className="text-xs text-slate-600 dark:text-slate-400">{param.color}</span>
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-center text-sm text-slate-900">{param.sort_order}</td>
+                          <td className="px-4 py-3 text-center text-sm text-slate-900 dark:text-white">{param.sort_order}</td>
                         </>
                       )}
                       <td className="px-4 py-3 text-center">
@@ -506,8 +506,8 @@ const ParametersModule: React.FC = () => {
                           onClick={() => handleToggleActive(param)}
                           className={`px-3 py-1 rounded-full text-xs font-medium ${
                             param.is_active
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-slate-100 text-slate-600'
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300'
+                              : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
                           }`}
                         >
                           {param.is_active ? 'Activo' : 'Inactivo'}
@@ -517,13 +517,13 @@ const ParametersModule: React.FC = () => {
                         <div className="flex items-center justify-center space-x-2">
                           <button
                             onClick={() => handleEdit(param)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                            className="p-2 text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-500/10 rounded-lg transition"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDelete(param.id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                            className="p-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -535,7 +535,7 @@ const ParametersModule: React.FC = () => {
               </table>
 
               {parameters.length === 0 && (
-                <div className="text-center py-12 text-slate-500">
+                <div className="text-center py-12 text-slate-500 dark:text-slate-400">
                   No hay parámetros configurados
                 </div>
               )}

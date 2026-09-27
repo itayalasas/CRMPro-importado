@@ -11,8 +11,8 @@ CREATE TABLE IF NOT EXISTS ticket_comments (
 -- Tabla de historial de ticket
 CREATE TABLE IF NOT EXISTS ticket_history (
     id BIGSERIAL PRIMARY KEY,
-    ticket_id BIGINT REFERENCES tickets(id) ON DELETE CASCADE,
-    user_id BIGINT REFERENCES users(id),
+    ticket_id UUID REFERENCES tickets(id) ON DELETE CASCADE,
+    user_id UUID,
     old_status VARCHAR(32),
     new_status VARCHAR(32),
     change_reason TEXT,

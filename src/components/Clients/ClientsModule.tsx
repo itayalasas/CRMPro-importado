@@ -478,15 +478,15 @@ export function ClientsModule() {
   const getTaskStatusTone = (status: string) => {
     switch (status) {
       case 'done':
-        return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+        return 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/20';
       case 'cancelled':
-        return 'bg-slate-100 text-slate-700 border-slate-200';
+        return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-700/50 dark:text-slate-300 dark:border-slate-600';
       case 'waiting':
-        return 'bg-amber-100 text-amber-700 border-amber-200';
+        return 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/20';
       case 'in_progress':
-        return 'bg-blue-100 text-blue-700 border-blue-200';
+        return 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/20';
       default:
-        return 'bg-indigo-100 text-indigo-700 border-indigo-200';
+        return 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-500/15 dark:text-indigo-300 dark:border-indigo-500/20';
     }
   };
 
@@ -856,8 +856,8 @@ export function ClientsModule() {
             className="absolute inset-0 h-full w-full bg-slate-950/50 backdrop-blur-sm"
           />
 
-          <aside className="absolute right-0 top-0 flex h-full w-full max-w-4xl flex-col overflow-hidden bg-white shadow-2xl">
-            <div className="border-b border-slate-200 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800 px-6 py-5 text-white">
+          <aside className="absolute right-0 top-0 flex h-full w-full max-w-4xl flex-col overflow-hidden bg-white dark:bg-slate-900 shadow-2xl">
+            <div className="border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800 px-6 py-5 text-white">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.28em] text-slate-300">Detalle de cliente</p>
@@ -926,7 +926,7 @@ export function ClientsModule() {
 
             <div className="flex-1 overflow-y-auto px-6 py-6">
               {clientDetailLoading && (
-                <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-slate-500">
+                <div className="rounded-3xl border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 p-6 text-center text-slate-500 dark:text-slate-400">
                   Cargando detalle del cliente...
                 </div>
               )}
@@ -934,11 +934,11 @@ export function ClientsModule() {
               {!clientDetailLoading && selectedClientTab === 'summary' && (
                 <div className="space-y-6">
                   <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-                    <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <section className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 shadow-sm">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <h3 className="text-lg font-bold text-slate-900">Información general</h3>
-                          <p className="text-sm text-slate-500">Datos de contacto y accesos rápidos.</p>
+                          <h3 className="text-lg font-bold text-slate-900 dark:text-white">Información general</h3>
+                          <p className="text-sm text-slate-500 dark:text-slate-400">Datos de contacto y accesos rápidos.</p>
                         </div>
                         <Badge variant={statusBadgeVariant(selectedClient?.status || 'prospect')}>
                           {selectedClient ? (selectedClient.status === 'active' ? 'Activo' : selectedClient.status === 'prospect' ? 'Prospecto' : 'Inactivo') : 'Sin cargar'}
@@ -946,42 +946,42 @@ export function ClientsModule() {
                       </div>
 
                       <div className="mt-5 space-y-3">
-                        <div className="rounded-2xl bg-slate-50 p-4">
-                          <p className="text-xs uppercase tracking-wide text-slate-400">Contacto</p>
-                          <p className="mt-1 text-sm font-semibold text-slate-900">{selectedClient?.contact_name || 'Sin contacto'}</p>
-                          <p className="text-sm text-slate-500">{selectedClient?.company_name || 'Sin empresa'}</p>
+                        <div className="rounded-2xl bg-slate-50 dark:bg-slate-900/50 p-4">
+                          <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">Contacto</p>
+                          <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{selectedClient?.contact_name || 'Sin contacto'}</p>
+                          <p className="text-sm text-slate-500 dark:text-slate-400">{selectedClient?.company_name || 'Sin empresa'}</p>
                         </div>
 
                         <div className="grid gap-3 md:grid-cols-2">
-                          <div className="rounded-2xl bg-slate-50 p-4">
-                            <p className="text-xs uppercase tracking-wide text-slate-400">Email</p>
-                            <p className="mt-1 text-sm font-semibold text-slate-900">{selectedClient?.email || 'Sin email'}</p>
+                          <div className="rounded-2xl bg-slate-50 dark:bg-slate-900/50 p-4">
+                            <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">Email</p>
+                            <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{selectedClient?.email || 'Sin email'}</p>
                           </div>
-                          <div className="rounded-2xl bg-slate-50 p-4">
-                            <p className="text-xs uppercase tracking-wide text-slate-400">Teléfono</p>
-                            <p className="mt-1 text-sm font-semibold text-slate-900">{selectedClient?.phone || 'Sin teléfono'}</p>
+                          <div className="rounded-2xl bg-slate-50 dark:bg-slate-900/50 p-4">
+                            <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">Teléfono</p>
+                            <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{selectedClient?.phone || 'Sin teléfono'}</p>
                           </div>
-                          <div className="rounded-2xl bg-slate-50 p-4">
-                            <p className="text-xs uppercase tracking-wide text-slate-400">Ubicación</p>
-                            <p className="mt-1 text-sm font-semibold text-slate-900">
+                          <div className="rounded-2xl bg-slate-50 dark:bg-slate-900/50 p-4">
+                            <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">Ubicación</p>
+                            <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">
                               {[selectedClient?.city, selectedClient?.country].filter(Boolean).join(', ') || 'Sin ubicación'}
                             </p>
                           </div>
-                          <div className="rounded-2xl bg-slate-50 p-4">
-                            <p className="text-xs uppercase tracking-wide text-slate-400">Creado</p>
-                            <p className="mt-1 text-sm font-semibold text-slate-900">
+                          <div className="rounded-2xl bg-slate-50 dark:bg-slate-900/50 p-4">
+                            <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">Creado</p>
+                            <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">
                               {selectedClient?.created_at ? new Date(selectedClient.created_at).toLocaleDateString('es-UY') : 'Sin fecha'}
                             </p>
                           </div>
                         </div>
 
-                        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                          <p className="text-sm font-semibold text-slate-900">Acciones rápidas</p>
+                        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
+                          <p className="text-sm font-semibold text-slate-900 dark:text-white">Acciones rápidas</p>
                           <div className="mt-3 grid gap-2 sm:grid-cols-2">
                             <button
                               onClick={() => selectedClient && openAgendaForClient(selectedClient)}
                               disabled={!selectedClient}
-                              className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 transition hover:bg-slate-100 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <Calendar className="h-4 w-4" />
                               Crear tarea
@@ -992,7 +992,7 @@ export function ClientsModule() {
                                 emailSubject: `Seguimiento de ${selectedClient.company_name || selectedClient.contact_name}`,
                               })}
                               disabled={!selectedClient?.email}
-                              className="flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="flex items-center justify-center gap-2 rounded-xl border border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10 px-4 py-3 text-sm font-semibold text-blue-700 dark:text-blue-400 transition hover:bg-blue-100 dark:hover:bg-blue-500/15 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <Mail className="h-4 w-4" />
                               Enviar email
@@ -1006,14 +1006,14 @@ export function ClientsModule() {
                                 phone: selectedClient.phone,
                               })}
                               disabled={!selectedClient?.phone}
-                              className="flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="flex items-center justify-center gap-2 rounded-xl border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-700 dark:text-emerald-400 transition hover:bg-emerald-100 dark:hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <Phone className="h-4 w-4" />
                               Llamar
                             </button>
                             <button
                               onClick={closeClientDetail}
-                              className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                              className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 transition hover:bg-slate-50 dark:hover:bg-slate-700"
                             >
                               <ArrowRight className="h-4 w-4" />
                               Cerrar panel
@@ -1023,15 +1023,15 @@ export function ClientsModule() {
                       </div>
                     </section>
 
-                    <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <section className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 shadow-sm">
                       <div className="flex items-center justify-between">
                         <div>
-                          <h3 className="text-lg font-bold text-slate-900">Actividad reciente</h3>
-                          <p className="text-sm text-slate-500">Últimos movimientos del cliente.</p>
+                          <h3 className="text-lg font-bold text-slate-900 dark:text-white">Actividad reciente</h3>
+                          <p className="text-sm text-slate-500 dark:text-slate-400">Últimos movimientos del cliente.</p>
                         </div>
                         <button
                           onClick={() => setSelectedClientTab('timeline')}
-                          className="text-sm font-semibold text-blue-700 hover:text-blue-800"
+                          className="text-sm font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                         >
                           Ver todo
                         </button>
@@ -1039,7 +1039,7 @@ export function ClientsModule() {
 
                       <div className="mt-5 space-y-3">
                         {clientTimeline.slice(0, 4).length === 0 ? (
-                          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                          <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 p-6 text-center text-sm text-slate-500 dark:text-slate-400">
                             Sin actividad todavía.
                           </div>
                         ) : (
@@ -1048,7 +1048,7 @@ export function ClientsModule() {
                             const ActivityIcon = activityMeta.icon;
 
                             return (
-                              <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                              <div key={item.id} className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-4">
                                 <div className="flex items-start gap-3">
                                   <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${activityMeta.className}`}>
                                     <ActivityIcon className="h-4 w-4" />
@@ -1058,9 +1058,9 @@ export function ClientsModule() {
                                       <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${activityMeta.className}`}>
                                         {activityMeta.label}
                                       </span>
-                                      <span className="text-xs text-slate-500">{formatClientActivityDate(item.created_at)}</span>
+                                      <span className="text-xs text-slate-500 dark:text-slate-400">{formatClientActivityDate(item.created_at)}</span>
                                     </div>
-                                    <p className="mt-2 text-sm font-medium text-slate-900">
+                                    <p className="mt-2 text-sm font-medium text-slate-900 dark:text-white">
                                       {item.description || activityMeta.detail}
                                     </p>
                                   </div>
@@ -1074,34 +1074,34 @@ export function ClientsModule() {
                   </div>
 
                   <div className="grid gap-6 xl:grid-cols-3">
-                    <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <section className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 shadow-sm">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-base font-bold text-slate-900">Tareas recientes</h3>
-                        <button onClick={() => setSelectedClientTab('tasks')} className="text-sm font-semibold text-blue-700 hover:text-blue-800">
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white">Tareas recientes</h3>
+                        <button onClick={() => setSelectedClientTab('tasks')} className="text-sm font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
                           Ver todas
                         </button>
                       </div>
                       <div className="mt-4 space-y-3">
                         {clientTasks.slice(0, 3).length === 0 ? (
-                          <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                          <p className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 p-4 text-sm text-slate-500 dark:text-slate-400">
                             No hay tareas vinculadas.
                           </p>
                         ) : (
                           clientTasks.slice(0, 3).map((task) => (
-                            <div key={task.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <div key={task.id} className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-4">
                               <div className="flex items-start justify-between gap-3">
                                 <div>
-                                  <p className="text-sm font-semibold text-slate-900">{task.title}</p>
-                                  <p className="text-xs text-slate-500">{task.task_number}</p>
+                                  <p className="text-sm font-semibold text-slate-900 dark:text-white">{task.title}</p>
+                                  <p className="text-xs text-slate-500 dark:text-slate-400">{task.task_number}</p>
                                 </div>
                                 <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getTaskStatusTone(task.status)}`}>
                                   {taskStatusLabels[task.status] || task.status}
                                 </span>
                               </div>
-                              <p className="mt-2 text-xs text-slate-500">
+                              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                                 {formatClientActivityDate(task.created_at)}
                               </p>
-                              <p className="mt-1 text-sm text-slate-700">
+                              <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">
                                 {task.due_at ? `Vence ${new Date(task.due_at).toLocaleDateString('es-UY')}` : task.scheduled_at ? `Programada ${new Date(task.scheduled_at).toLocaleDateString('es-UY')}` : 'Sin fecha definida'}
                               </p>
                             </div>
@@ -1110,41 +1110,41 @@ export function ClientsModule() {
                       </div>
                     </section>
 
-                    <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <section className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 shadow-sm">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-base font-bold text-slate-900">Cotizaciones recientes</h3>
-                        <button onClick={() => setSelectedClientTab('quotes')} className="text-sm font-semibold text-blue-700 hover:text-blue-800">
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white">Cotizaciones recientes</h3>
+                        <button onClick={() => setSelectedClientTab('quotes')} className="text-sm font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
                           Ver todas
                         </button>
                       </div>
                       <div className="mt-4 space-y-3">
                         {clientQuotes.slice(0, 3).length === 0 ? (
-                          <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                          <p className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 p-4 text-sm text-slate-500 dark:text-slate-400">
                             No hay cotizaciones vinculadas.
                           </p>
                         ) : (
                           clientQuotes.slice(0, 3).map((quote) => {
                             const pdfUrl = getQuotePdfUrl(quote);
                             return (
-                              <div key={quote.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                              <div key={quote.id} className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-4">
                                 <div className="flex items-start justify-between gap-3">
                                   <div>
-                                    <p className="text-sm font-semibold text-slate-900">{quote.quote_number}</p>
-                                    <p className="text-xs text-slate-500">{formatClientActivityDate(quote.created_at)}</p>
+                                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{quote.quote_number}</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">{formatClientActivityDate(quote.created_at)}</p>
                                   </div>
-                                  <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                                  <span className="rounded-full border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                                     {quoteStatusLabels[quote.status] || quote.status}
                                   </span>
                                 </div>
                                 <div className="mt-3 flex items-center justify-between gap-3">
                                   <div>
-                                    <p className="text-xs uppercase tracking-wide text-slate-400">Total</p>
-                                    <p className="text-sm font-bold text-slate-900">{formatMoney(quote.total_amount, quote.currency)}</p>
+                                    <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">Total</p>
+                                    <p className="text-sm font-bold text-slate-900 dark:text-white">{formatMoney(quote.total_amount, quote.currency)}</p>
                                   </div>
                                   {pdfUrl && (
                                     <button
                                       onClick={() => window.open(pdfUrl, '_blank', 'noopener,noreferrer')}
-                                      className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                                      className="rounded-xl border border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/15"
                                     >
                                       Ver PDF
                                     </button>
@@ -1157,33 +1157,33 @@ export function ClientsModule() {
                       </div>
                     </section>
 
-                    <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <section className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 shadow-sm">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-base font-bold text-slate-900">Órdenes recientes</h3>
-                        <button onClick={() => setSelectedClientTab('orders')} className="text-sm font-semibold text-blue-700 hover:text-blue-800">
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white">Órdenes recientes</h3>
+                        <button onClick={() => setSelectedClientTab('orders')} className="text-sm font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
                           Ver todas
                         </button>
                       </div>
                       <div className="mt-4 space-y-3">
                         {clientOrders.slice(0, 3).length === 0 ? (
-                          <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                          <p className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 p-4 text-sm text-slate-500 dark:text-slate-400">
                             No hay órdenes vinculadas.
                           </p>
                         ) : (
                           clientOrders.slice(0, 3).map((order) => (
-                            <div key={order.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <div key={order.id} className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-4">
                               <div className="flex items-start justify-between gap-3">
                                 <div>
-                                  <p className="text-sm font-semibold text-slate-900">{order.order_number}</p>
-                                  <p className="text-xs text-slate-500">{formatClientActivityDate(order.created_at)}</p>
+                                  <p className="text-sm font-semibold text-slate-900 dark:text-white">{order.order_number}</p>
+                                  <p className="text-xs text-slate-500 dark:text-slate-400">{formatClientActivityDate(order.created_at)}</p>
                                 </div>
-                                <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                                <span className="rounded-full border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                                   {orderStatusLabels[order.status] || order.status}
                                 </span>
                               </div>
                               <div className="mt-3">
-                                <p className="text-xs uppercase tracking-wide text-slate-400">Total</p>
-                                <p className="text-sm font-bold text-slate-900">{formatMoney(order.total_amount, order.currency)}</p>
+                                <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">Total</p>
+                                <p className="text-sm font-bold text-slate-900 dark:text-white">{formatMoney(order.total_amount, order.currency)}</p>
                               </div>
                             </div>
                           ))
@@ -1197,7 +1197,7 @@ export function ClientsModule() {
               {!clientDetailLoading && selectedClientTab === 'timeline' && (
                 <div className="space-y-3">
                   {clientTimeline.length === 0 ? (
-                    <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                    <div className="rounded-3xl border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 p-6 text-center text-sm text-slate-500 dark:text-slate-400">
                       Sin eventos en el timeline.
                     </div>
                   ) : (
@@ -1206,7 +1206,7 @@ export function ClientsModule() {
                       const ActivityIcon = activityMeta.icon;
 
                       return (
-                        <div key={item.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <div key={item.id} className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 shadow-sm">
                           <div className="flex items-start gap-4">
                             <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${activityMeta.className}`}>
                               <ActivityIcon className="h-5 w-5" />
@@ -1216,9 +1216,9 @@ export function ClientsModule() {
                                 <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${activityMeta.className}`}>
                                   {activityMeta.label}
                                 </span>
-                                <span className="text-xs text-slate-500">{formatClientActivityDate(item.created_at)}</span>
+                                <span className="text-xs text-slate-500 dark:text-slate-400">{formatClientActivityDate(item.created_at)}</span>
                               </div>
-                              <p className="mt-2 text-sm font-medium text-slate-900">
+                              <p className="mt-2 text-sm font-medium text-slate-900 dark:text-white">
                                 {item.description || activityMeta.detail}
                               </p>
                             </div>
@@ -1233,45 +1233,45 @@ export function ClientsModule() {
               {!clientDetailLoading && selectedClientTab === 'tasks' && (
                 <div className="space-y-3">
                   {clientTasks.length === 0 ? (
-                    <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                    <div className="rounded-3xl border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 p-6 text-center text-sm text-slate-500 dark:text-slate-400">
                       Sin tareas vinculadas.
                     </div>
                   ) : (
                     clientTasks.map((task) => (
-                      <div key={task.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                      <div key={task.id} className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 shadow-sm">
                         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                              <span className="rounded-full border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                                 {task.task_number}
                               </span>
-                              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                              <span className="rounded-full border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                                 {taskStatusLabels[task.status] || task.status}
                               </span>
                             </div>
-                            <h3 className="mt-3 text-lg font-bold text-slate-900">{task.title}</h3>
-                            {task.description && <p className="mt-2 text-sm text-slate-600 whitespace-pre-line">{task.description}</p>}
+                            <h3 className="mt-3 text-lg font-bold text-slate-900 dark:text-white">{task.title}</h3>
+                            {task.description && <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 whitespace-pre-line">{task.description}</p>}
                           </div>
                           <button
                             onClick={() => selectedClient && openAgendaForClient(selectedClient)}
-                            className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+                            className="rounded-xl border border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10 px-4 py-2.5 text-sm font-semibold text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/15"
                           >
                             Crear seguimiento
                           </button>
                         </div>
 
                         <div className="mt-4 grid gap-3 md:grid-cols-3">
-                          <div className="rounded-2xl bg-slate-50 p-4">
-                            <p className="text-xs uppercase tracking-wide text-slate-400">Tipo</p>
-                            <p className="mt-1 text-sm font-semibold text-slate-900">{task.task_type}</p>
+                          <div className="rounded-2xl bg-slate-50 dark:bg-slate-900/50 p-4">
+                            <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">Tipo</p>
+                            <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{task.task_type}</p>
                           </div>
-                          <div className="rounded-2xl bg-slate-50 p-4">
-                            <p className="text-xs uppercase tracking-wide text-slate-400">Prioridad</p>
-                            <p className="mt-1 text-sm font-semibold text-slate-900">{task.priority}</p>
+                          <div className="rounded-2xl bg-slate-50 dark:bg-slate-900/50 p-4">
+                            <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">Prioridad</p>
+                            <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{task.priority}</p>
                           </div>
-                          <div className="rounded-2xl bg-slate-50 p-4">
-                            <p className="text-xs uppercase tracking-wide text-slate-400">Vence</p>
-                            <p className="mt-1 text-sm font-semibold text-slate-900">
+                          <div className="rounded-2xl bg-slate-50 dark:bg-slate-900/50 p-4">
+                            <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">Vence</p>
+                            <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">
                               {task.due_at ? new Date(task.due_at).toLocaleString('es-UY') : task.scheduled_at ? new Date(task.scheduled_at).toLocaleString('es-UY') : 'Sin fecha'}
                             </p>
                           </div>
@@ -1285,7 +1285,7 @@ export function ClientsModule() {
               {!clientDetailLoading && selectedClientTab === 'quotes' && (
                 <div className="space-y-3">
                   {clientQuotes.length === 0 ? (
-                    <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                    <div className="rounded-3xl border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 p-6 text-center text-sm text-slate-500 dark:text-slate-400">
                       Sin cotizaciones vinculadas.
                     </div>
                   ) : (
@@ -1293,32 +1293,32 @@ export function ClientsModule() {
                       const pdfUrl = getQuotePdfUrl(quote);
 
                       return (
-                        <div key={quote.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <div key={quote.id} className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 shadow-sm">
                           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                             <div>
                               <div className="flex flex-wrap items-center gap-2">
-                                <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                                <span className="rounded-full border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                                   {quote.quote_number}
                                 </span>
-                                <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                                <span className="rounded-full border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                                   {quoteStatusLabels[quote.status] || quote.status}
                                 </span>
                               </div>
-                              <p className="mt-3 text-sm text-slate-500">{formatClientActivityDate(quote.created_at)}</p>
-                              <p className="mt-2 text-lg font-bold text-slate-900">{formatMoney(quote.total_amount, quote.currency)}</p>
+                              <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">{formatClientActivityDate(quote.created_at)}</p>
+                              <p className="mt-2 text-lg font-bold text-slate-900 dark:text-white">{formatMoney(quote.total_amount, quote.currency)}</p>
                             </div>
                             <div className="flex flex-wrap gap-2">
                               {pdfUrl && (
                                 <button
                                   onClick={() => window.open(pdfUrl, '_blank', 'noopener,noreferrer')}
-                                  className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+                                  className="rounded-xl border border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10 px-4 py-2.5 text-sm font-semibold text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/15"
                                 >
                                   Ver PDF
                                 </button>
                               )}
                               <button
                                 onClick={() => setSelectedClientTab('summary')}
-                                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
                               >
                                 Volver al resumen
                               </button>
@@ -1334,24 +1334,24 @@ export function ClientsModule() {
               {!clientDetailLoading && selectedClientTab === 'orders' && (
                 <div className="space-y-3">
                   {clientOrders.length === 0 ? (
-                    <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                    <div className="rounded-3xl border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 p-6 text-center text-sm text-slate-500 dark:text-slate-400">
                       Sin órdenes vinculadas.
                     </div>
                   ) : (
                     clientOrders.map((order) => (
-                      <div key={order.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                      <div key={order.id} className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 shadow-sm">
                         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                              <span className="rounded-full border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                                 {order.order_number}
                               </span>
-                              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                              <span className="rounded-full border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                                 {orderStatusLabels[order.status] || order.status}
                               </span>
                             </div>
-                            <p className="mt-3 text-sm text-slate-500">{formatClientActivityDate(order.created_at)}</p>
-                            <p className="mt-2 text-lg font-bold text-slate-900">{formatMoney(order.total_amount, order.currency)}</p>
+                            <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">{formatClientActivityDate(order.created_at)}</p>
+                            <p className="mt-2 text-lg font-bold text-slate-900 dark:text-white">{formatMoney(order.total_amount, order.currency)}</p>
                           </div>
                         </div>
                       </div>
@@ -1366,14 +1366,14 @@ export function ClientsModule() {
 
       {showModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 p-6 rounded-t-3xl">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-3xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-brand-600 to-accent-600 p-6 rounded-t-3xl">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-2xl font-bold text-white">
                     {editingClient ? 'Editar Cliente' : 'Nuevo Cliente'}
                   </h2>
-                  <p className="text-blue-100 text-sm mt-1">
+                  <p className="text-brand-100 text-sm mt-1">
                     {editingClient ? 'Actualiza la información del cliente' : 'Completa los datos del nuevo cliente'}
                   </p>
                 </div>
@@ -1389,49 +1389,49 @@ export function ClientsModule() {
             <form onSubmit={handleSubmit} className="p-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    <User className="w-4 h-4 inline mr-2 text-emerald-600" />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <User className="w-4 h-4 inline mr-2 text-emerald-600 dark:text-emerald-400" />
                     Nombre del Contacto *
                   </label>
                   <input
                     type="text"
                     value={formData.contact_name}
                     onChange={(e) => setFormData({ ...formData, contact_name: e.target.value })}
-                    className={`w-full px-4 py-3 border ${errors.contact_name ? 'border-red-300' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition`}
+                    className={`w-full px-4 py-3 border ${errors.contact_name ? 'border-red-300 dark:border-red-500/50' : 'border-slate-300 dark:border-slate-600'} rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent transition`}
                     placeholder="Ej: Juan Pérez"
                   />
                   {errors.contact_name && (
-                    <p className="text-red-600 text-xs mt-1">{errors.contact_name}</p>
+                    <p className="text-red-600 dark:text-red-400 text-xs mt-1">{errors.contact_name}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    <Building2 className="w-4 h-4 inline mr-2 text-blue-600" />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <Building2 className="w-4 h-4 inline mr-2 text-brand-600 dark:text-brand-400" />
                     Nombre de la Empresa
-                    <span className="text-slate-400 text-xs ml-1">(Opcional para personas físicas)</span>
+                    <span className="text-slate-400 dark:text-slate-500 text-xs ml-1">(Opcional para personas físicas)</span>
                   </label>
                   <input
                     type="text"
                     value={formData.company_name}
                     onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
-                    className={`w-full px-4 py-3 border ${errors.company_name ? 'border-red-300' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition`}
+                    className={`w-full px-4 py-3 border ${errors.company_name ? 'border-red-300 dark:border-red-500/50' : 'border-slate-300 dark:border-slate-600'} rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent transition`}
                     placeholder="Ej: Acme Corporation (dejar vacío si es persona física)"
                   />
                   {errors.company_name && (
-                    <p className="text-red-600 text-xs mt-1">{errors.company_name}</p>
+                    <p className="text-red-600 dark:text-red-400 text-xs mt-1">{errors.company_name}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    <Tag className="w-4 h-4 inline mr-2 text-purple-600" />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <Tag className="w-4 h-4 inline mr-2 text-accent-600 dark:text-accent-400" />
                     Estado *
                   </label>
                   <select
                     value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
                   >
                     <option value="prospect">Prospecto</option>
                     <option value="active">Activo</option>
@@ -1440,87 +1440,87 @@ export function ClientsModule() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    <Mail className="w-4 h-4 inline mr-2 text-blue-600" />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <Mail className="w-4 h-4 inline mr-2 text-brand-600 dark:text-brand-400" />
                     Email *
                   </label>
                   <input
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className={`w-full px-4 py-3 border ${errors.email ? 'border-red-300' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition`}
+                    className={`w-full px-4 py-3 border ${errors.email ? 'border-red-300 dark:border-red-500/50' : 'border-slate-300 dark:border-slate-600'} rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent transition`}
                     placeholder="contacto@empresa.com"
                   />
                   {errors.email && (
-                    <p className="text-red-600 text-xs mt-1">{errors.email}</p>
+                    <p className="text-red-600 dark:text-red-400 text-xs mt-1">{errors.email}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    <Phone className="w-4 h-4 inline mr-2 text-emerald-600" />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <Phone className="w-4 h-4 inline mr-2 text-emerald-600 dark:text-emerald-400" />
                     Teléfono
                   </label>
                   <input
                     type="tel"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className={`w-full px-4 py-3 border ${errors.phone ? 'border-red-300' : 'border-slate-300'} rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition`}
+                    className={`w-full px-4 py-3 border ${errors.phone ? 'border-red-300 dark:border-red-500/50' : 'border-slate-300 dark:border-slate-600'} rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent transition`}
                     placeholder="+1 234 567 8900"
                   />
                   {errors.phone && (
-                    <p className="text-red-600 text-xs mt-1">{errors.phone}</p>
+                    <p className="text-red-600 dark:text-red-400 text-xs mt-1">{errors.phone}</p>
                   )}
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    <MapPin className="w-4 h-4 inline mr-2 text-orange-600" />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <MapPin className="w-4 h-4 inline mr-2 text-amber-600 dark:text-amber-400" />
                     Dirección
                   </label>
                   <input
                     type="text"
                     value={formData.address}
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
                     placeholder="Calle Principal 123"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    <MapPin className="w-4 h-4 inline mr-2 text-blue-600" />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <MapPin className="w-4 h-4 inline mr-2 text-brand-600 dark:text-brand-400" />
                     Ciudad
                   </label>
                   <input
                     type="text"
                     value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
                     placeholder="Nueva York"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    <Globe className="w-4 h-4 inline mr-2 text-indigo-600" />
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <Globe className="w-4 h-4 inline mr-2 text-indigo-600 dark:text-indigo-400" />
                     País
                   </label>
                   <input
                     type="text"
                     value={formData.country}
                     onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
                     placeholder="Estados Unidos"
                   />
                 </div>
               </div>
 
-              <div className="flex space-x-4 mt-8 pt-6 border-t border-slate-200">
+              <div className="flex space-x-4 mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="flex-1 px-6 py-3 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors font-medium"
+                  className="flex-1 px-6 py-3 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors font-medium"
                 >
                   Cancelar
                 </button>
@@ -1530,7 +1530,7 @@ export function ClientsModule() {
                 >
                   <button
                     type="submit"
-                    className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl font-medium"
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-brand-600 to-accent-600 text-white rounded-xl hover:from-brand-700 hover:to-accent-700 transition-all shadow-lg hover:shadow-xl font-medium"
                   >
                     {editingClient ? 'Actualizar Cliente' : 'Crear Cliente'}
                   </button>

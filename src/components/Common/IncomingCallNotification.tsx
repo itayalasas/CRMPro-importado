@@ -145,19 +145,19 @@ export function IncomingCallNotification({ onAccept }: IncomingCallNotificationP
 
   return (
     <div className="fixed top-4 right-4 z-[200] animate-in slide-in-from-top">
-      <div className="bg-white rounded-2xl shadow-2xl border-2 border-green-500 p-6 max-w-sm">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border-2 border-emerald-500 p-6 max-w-sm">
         <div className="flex items-center gap-4 mb-4">
           <div className="relative">
-            <div className="absolute inset-0 bg-green-500 rounded-full animate-ping opacity-75"></div>
-            <div className="relative bg-green-500 p-4 rounded-full">
+            <div className="absolute inset-0 bg-emerald-500 rounded-full animate-ping opacity-75"></div>
+            <div className="relative bg-emerald-500 p-4 rounded-full">
               <Phone className="w-8 h-8 text-white animate-bounce" />
             </div>
           </div>
           <div className="flex-1">
-            <h3 className="text-lg font-bold text-slate-900">Llamada Entrante</h3>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Llamada Entrante</h3>
             <div className="flex items-center gap-2 mt-1">
-              <User className="w-4 h-4 text-slate-500" />
-              <p className="text-slate-700 font-mono">{incomingCall.from_number}</p>
+              <User className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+              <p className="text-slate-700 dark:text-slate-300 font-mono">{incomingCall.from_number}</p>
             </div>
           </div>
         </div>

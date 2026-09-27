@@ -9,7 +9,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        brand: colors.violet,
+        brand: colors.blue,
         accent: colors.cyan,
       },
       fontFamily: {

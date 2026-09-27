@@ -32,6 +32,7 @@ import { useNavigation } from '../../contexts/NavigationContext';
 import { useDialer } from '../../contexts/DialerContext';
 import { saveTicketCreateDraft } from '../../lib/ticketDraft';
 import { recordClientInteractionSafely } from '../../lib/clientInteractionLogger';
+import { advanceOpportunityOnLinkedTask, resolveOpenOpportunityForClient } from '../../lib/opportunityStageSync';
 import { usePermissions } from '../../hooks/usePermissions';
 import { PageHeader } from '../ui/PageHeader';
 import { StatCard } from '../ui/StatCard';
@@ -49,6 +50,14 @@ interface AgendaClient {
   contact_name: string;
   email: string;
   phone: string | null;
+}
+
+interface AgendaOpportunity {
+  id: string;
+  opportunity_number: string;
+  title: string;
+  client_id: string | null;
+  stage: string;
 }
 
 interface AgendaUser {
@@ -83,6 +92,7 @@ interface AgendaTask {
 
 interface TaskFormState {
   client_id: string;
+  opportunity_id: string;
   title: string;
   description: string;
   task_type: TaskType;
@@ -124,6 +134,7 @@ const priorityMeta: Record<TaskPriority, { label: string; variant: BadgeVariant 
 
 const defaultTaskForm: TaskFormState = {
   client_id: '',
+  opportunity_id: '',
   title: '',
   description: '',
   task_type: 'follow_up',
@@ -196,6 +207,7 @@ export function AgendaModule() {
   const { canCreate, canUpdate, canDelete } = usePermissions();
 
   const [clients, setClients] = useState<AgendaClient[]>([]);
+  const [opportunities, setOpportunities] = useState<AgendaOpportunity[]>([]);
   const [users, setUsers] = useState<AgendaUser[]>([]);
   const [tasks, setTasks] = useState<AgendaTask[]>([]);
   const [loading, setLoading] = useState(false);
@@ -206,6 +218,11 @@ export function AgendaModule() {
   const [saveLoading, setSaveLoading] = useState(false);
   const [formData, setFormData] = useState<TaskFormState>(defaultTaskForm);
 
+  const taskOpportunityOptions = useMemo(
+    () => opportunities.filter((item) => !formData.client_id || item.client_id === formData.client_id),
+    [opportunities, formData.client_id]
+  );
+
   const canManageTasks = canCreate('clientes') || canCreate('ventas') || canCreate('tickets');
   const canEditTasks = canUpdate('clientes') || canUpdate('ventas') || canUpdate('tickets');
   const canRemoveTasks = canDelete('clientes') || canDelete('ventas') || canDelete('tickets');
@@ -213,7 +230,7 @@ export function AgendaModule() {
   const loadAgenda = useCallback(async () => {
     setLoading(true);
 
-    const [tasksResult, clientsResult, usersResult] = await Promise.all([
+    const [tasksResult, clientsResult, usersResult, opportunitiesResult] = await Promise.all([
       supabase
         .from('crm_tasks')
         .select(`
@@ -255,6 +272,11 @@ export function AgendaModule() {
         .select('id, full_name, email, role, is_active')
         .eq('is_active', true)
         .order('full_name', { ascending: true }),
+      supabase
+        .from('sales_opportunities')
+        .select('id, opportunity_number, title, client_id, stage')
+        .eq('status', 'open')
+        .order('created_at', { ascending: false }),
     ]);
 
     if (tasksResult.error) {
@@ -273,6 +295,12 @@ export function AgendaModule() {
       toast.error(`No se pudieron cargar los usuarios: ${usersResult.error.message}`);
     } else if (usersResult.data) {
       setUsers(usersResult.data as AgendaUser[]);
+    }
+
+    if (opportunitiesResult.error) {
+      toast.error(`No se pudieron cargar las oportunidades: ${opportunitiesResult.error.message}`);
+    } else if (opportunitiesResult.data) {
+      setOpportunities(opportunitiesResult.data as AgendaOpportunity[]);
     }
 
     setLoading(false);
@@ -338,6 +366,7 @@ export function AgendaModule() {
       setEditingTask(task);
       setFormData({
         client_id: task.client_id || '',
+        opportunity_id: task.opportunity_id || '',
         title: task.title,
         description: task.description || '',
         task_type: task.task_type,
@@ -486,8 +515,14 @@ export function AgendaModule() {
     const scheduledAt = combineDateTime(formData.scheduled_date, formData.scheduled_time);
     const reminderAt = combineDateTime(formData.reminder_date, formData.reminder_time);
 
+    let effectiveOpportunityId = formData.opportunity_id || null;
+    if (!effectiveOpportunityId && formData.client_id) {
+      effectiveOpportunityId = await resolveOpenOpportunityForClient(formData.client_id);
+    }
+
     const basePayload = {
       client_id: formData.client_id || null,
+      opportunity_id: effectiveOpportunityId,
       title: formData.title.trim(),
       description: formData.description.trim() || null,
       task_type: formData.task_type,
@@ -551,6 +586,10 @@ export function AgendaModule() {
 
         await createTaskInteraction(data as AgendaTask, 'task_created');
         toast.success('Tarea creada');
+      }
+
+      if (effectiveOpportunityId) {
+        await advanceOpportunityOnLinkedTask(effectiveOpportunityId, now);
       }
 
       resetForm();
@@ -798,6 +837,19 @@ export function AgendaModule() {
                             <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">Fecha límite</p>
                             <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{formatDateTime(task.due_at || task.scheduled_at)}</p>
                           </div>
+                          {task.opportunity_id && (
+                            <div className="rounded-2xl bg-slate-50 dark:bg-slate-900/50 p-3 md:col-span-2">
+                              <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">Oportunidad</p>
+                              <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">
+                                {(() => {
+                                  const linkedOpportunity = opportunities.find((item) => item.id === task.opportunity_id);
+                                  return linkedOpportunity
+                                    ? `${linkedOpportunity.opportunity_number} · ${linkedOpportunity.title}`
+                                    : 'Vinculada';
+                                })()}
+                              </p>
+                            </div>
+                          )}
                         </div>
 
                         <div className="mt-4 flex flex-wrap gap-2">
@@ -978,6 +1030,22 @@ export function AgendaModule() {
                   {clients.map((client) => (
                     <option key={client.id} value={client.id}>
                       {client.company_name || client.contact_name} - {client.email}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Oportunidad</span>
+                <select
+                  value={formData.opportunity_id}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, opportunity_id: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                >
+                  <option value="">Sin oportunidad</option>
+                  {taskOpportunityOptions.map((opportunity) => (
+                    <option key={opportunity.id} value={opportunity.id}>
+                      {opportunity.opportunity_number} · {opportunity.title}
                     </option>
                   ))}
                 </select>

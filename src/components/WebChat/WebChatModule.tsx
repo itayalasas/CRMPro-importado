@@ -540,8 +540,8 @@ export function WebChatModule() {
           sidePanelMode ? 'grid-cols-[360px_1fr_360px]' : 'grid-cols-[360px_1fr]'
         }`}
       >
-        <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50">
-          <div className="border-b border-slate-200/80 bg-slate-50/80 p-4 space-y-3">
+        <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none">
+          <div className="border-b border-slate-200/80 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/50 p-4 space-y-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
@@ -549,7 +549,7 @@ export function WebChatModule() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Buscar por nombre, correo, teléfono o fecha..."
-                className="w-full rounded-xl border border-slate-200 bg-white/80 py-2.5 pl-9 pr-3 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-900/80 text-slate-900 dark:text-white py-2.5 pl-9 pr-3 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
               />
             </div>
             <select
@@ -559,7 +559,7 @@ export function WebChatModule() {
                         <p className="font-semibold text-slate-800 underline decoration-teal-200 decoration-2 underline-offset-4">
                           {conv.visitor_name || 'Visitante anónimo'}
                         </p>
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
                           {conv.visitor_email || conv.visitor_phone || conv.source_domain || 'sin contacto'}
                         </p>
                         <p className="mt-1 text-[11px] text-slate-400">
@@ -573,7 +573,7 @@ export function WebChatModule() {
                             ? 'bg-green-100 text-green-700'
                             : conv.status === 'resolved'
                               ? 'bg-teal-100 text-teal-700'
-                              : 'bg-slate-100 text-slate-600'
+                              : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
                       }`}>
                         {conv.status === 'open'
                           ? 'Abierto'
@@ -597,16 +597,16 @@ export function WebChatModule() {
           </div>
         </div>
 
-        <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50">
+        <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none">
           {selectedConversation ? (
             <>
-              <div className="border-b border-slate-200/80 bg-slate-50/80 px-5 py-4">
+              <div className="border-b border-slate-200/80 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/50 px-5 py-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h3 className="text-lg font-semibold text-slate-900">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
                       {selectedConversation.visitor_name || selectedConversation.visitor_email || selectedConversation.visitor_phone || 'Visitante anónimo'}
                     </h3>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
                       {selectedConversation.visitor_email || selectedConversation.visitor_phone || selectedConversation.source_domain || 'sin contacto'}
                     </p>
                     <p className="mt-1 text-[11px] text-slate-400">
@@ -626,7 +626,7 @@ export function WebChatModule() {
                   </div>
                   <div className="flex items-center gap-2">
                     {selectedConversation.assigned_user_id ? (
-                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                      <span className="rounded-full bg-slate-100 dark:bg-slate-700 px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-300">
                         Asignado a {selectedConversation.assigned_user_name || 'Agente'}
                       </span>
                     ) : (
@@ -650,7 +650,7 @@ export function WebChatModule() {
                     )}
                     <button
                       onClick={() => setShowTransfer(true)}
-                      className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2 text-slate-700 dark:text-slate-200 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                       disabled={isConversationLocked}
                     >
                       <Users className="h-4 w-4" />
@@ -660,10 +660,10 @@ export function WebChatModule() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 border-b border-slate-200/80 bg-white px-5 py-4">
+              <div className="flex items-center gap-3 border-b border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4">
                 <button
                   onClick={openEmailComposer}
-                  className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-700 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={isConversationLocked || isClosed}
                 >
                   <Mail className="h-4 w-4" />
@@ -671,7 +671,7 @@ export function WebChatModule() {
                 </button>
                 <button
                   onClick={openDialer}
-                  className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-700 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={isConversationLocked || isClosed}
                 >
                   <Phone className="h-4 w-4" />
@@ -682,7 +682,7 @@ export function WebChatModule() {
                   className={
                     linkedTicketNumber && linkedTicketStatus
                       ? `flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 ${getTicketStatusClasses(linkedTicketStatus)}`
-                      : 'flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60'
+                      : 'flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-700 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60'
                   }
                   disabled={isConversationLocked || (!linkedTicketNumber && isClosed)}
                 >
@@ -690,13 +690,13 @@ export function WebChatModule() {
                   <span className="flex flex-col leading-tight">
                     <span>{linkedTicketNumber ? 'Ver Ticket' : 'Crear Ticket'}</span>
                     {linkedTicketNumber && (
-                      <span className="text-[10px] font-normal text-slate-500">{linkedTicketNumber}</span>
+                      <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400">{linkedTicketNumber}</span>
                     )}
                   </span>
                 </button>
                 <button
                   onClick={() => openClientPanel()}
-                  className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-700 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={isConversationLocked || isClosed}
                 >
                   <UserPlus className="h-4 w-4" />
@@ -751,14 +751,14 @@ export function WebChatModule() {
                   autoScrollRef.current =
                     container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
                 }}
-                className="flex-1 overflow-y-auto bg-slate-50/80 p-6"
+                className="flex-1 overflow-y-auto bg-slate-50/80 dark:bg-slate-900/40 p-6"
               >
                 {isConversationLocked || isClosed ? (
-                  <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                  <div className="flex h-full items-center justify-center text-sm text-slate-500 dark:text-slate-400">
                     {isClosed ? 'Conversación cerrada. Reabre para ver mensajes.' : 'No tienes acceso a los mensajes de esta conversación.'}
                   </div>
                 ) : loadingMessages ? (
-                  <div className="text-center text-slate-500">Cargando mensajes...</div>
+                  <div className="text-center text-slate-500 dark:text-slate-400">Cargando mensajes...</div>
                 ) : (
                   <div className="space-y-4">
                     {messages.map((msg) => (
@@ -767,7 +767,7 @@ export function WebChatModule() {
                         className={`max-w-2xl rounded-2xl px-4 py-3 shadow-sm ${
                           (msg.sender_type === 'agent' || msg.sender_type === 'bot')
                             ? 'ml-auto bg-gradient-to-r from-blue-600 to-indigo-600 text-white'
-                            : 'bg-white text-slate-800 border border-slate-200'
+                            : 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-600'
                         }`}
                       >
                         <div className="mb-2 text-xs opacity-80">
@@ -798,7 +798,7 @@ export function WebChatModule() {
                 )}
               </div>
 
-              <div className="border-t border-slate-200/80 bg-white p-5">
+              <div className="border-t border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 p-5">
                 <div className="mb-3 flex items-center gap-3">
                   <input
                     ref={fileInputRef}
@@ -810,12 +810,12 @@ export function WebChatModule() {
                   />
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 p-2 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={isConversationLocked || isClosed}
                   >
                     <Paperclip className="h-4 w-4" />
                   </button>
-                  <div className="text-xs text-slate-500">
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
                     {attachments.length > 0 ? `${attachments.length} adjunto(s)` : 'Sin adjuntos'}
                   </div>
                 </div>
@@ -833,7 +833,7 @@ export function WebChatModule() {
                     }}
                     rows={2}
                     placeholder="Escribe un mensaje..."
-                    className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-50"
+                    className="flex-1 rounded-2xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-4 py-3 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-50 dark:disabled:bg-slate-800"
                     disabled={isConversationLocked || isClosed}
                   />
                   <button
@@ -848,17 +848,17 @@ export function WebChatModule() {
               </div>
             </>
           ) : (
-            <div className="flex h-full items-center justify-center text-sm text-slate-500">
+            <div className="flex h-full items-center justify-center text-sm text-slate-500 dark:text-slate-400">
               Selecciona una conversación para empezar.
             </div>
           )}
         </div>
 
         {sidePanelMode && selectedConversation && (
-          <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50">
-            <div className="flex items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-5 py-4">
+          <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none">
+            <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/50 px-5 py-4">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
                   {sidePanelMode === 'client'
                     ? 'Crear Cliente'
                     : sidePanelMode === 'client_view'
@@ -867,7 +867,7 @@ export function WebChatModule() {
                       ? 'Ver Ticket'
                       : 'Crear Ticket'}
                 </h3>
-                <p className="text-xs text-slate-500 flex items-center gap-2">
+                <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
                   <span>
                     {sidePanelMode === 'ticket_view' && ticketViewTicket?.ticket_number
                       ? ticketViewTicket.ticket_number
@@ -891,7 +891,7 @@ export function WebChatModule() {
                   setTicketViewNewComment('');
                   setTicketViewIsInternal(false);
                 }}
-                className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 shadow-sm transition hover:-translate-y-0.5"
+                className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 p-2 text-slate-600 dark:text-slate-300 shadow-sm transition hover:-translate-y-0.5"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -900,13 +900,13 @@ export function WebChatModule() {
             <div className="flex-1 overflow-y-auto p-5">
               {sidePanelMode === 'client' ? (
                 <div className="space-y-4">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
-                    <label className="text-xs font-semibold text-slate-600">Buscar cliente existente</label>
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/40 p-3">
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Buscar cliente existente</label>
                     <div className="mt-2 flex items-center gap-2">
                       <input
                         value={clientSearch}
                         onChange={(e) => setClientSearch(e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                         placeholder="Nombre, email o teléfono"
                       />
                     </div>
@@ -923,58 +923,58 @@ export function WebChatModule() {
                             key={client.id}
                             type="button"
                             onClick={() => handleAssignExistingClient(client)}
-                            className="w-full rounded-xl border border-slate-200 bg-white p-3 text-left text-xs text-slate-600 transition hover:border-teal-200 hover:bg-teal-50"
+                            className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 p-3 text-left text-xs text-slate-600 dark:text-slate-300 transition hover:border-teal-200 dark:hover:border-teal-500/40 hover:bg-teal-50 dark:hover:bg-teal-500/10"
                           >
                             <div className="font-semibold text-slate-800">{client.contact_name || 'Sin nombre'}</div>
-                            <div className="text-slate-500">{client.email || client.phone || client.company_name || 'Sin contacto'}</div>
+                            <div className="text-slate-500 dark:text-slate-400">{client.email || client.phone || client.company_name || 'Sin contacto'}</div>
                           </button>
                         ))}
                       </div>
                     )}
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Nombre del contacto</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Nombre del contacto</label>
                     <input
                       value={clientDraft.contact_name}
                       onChange={(e) => setClientDraft({ ...clientDraft, contact_name: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="Nombre y apellido"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Email</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Email</label>
                     <input
                       value={clientDraft.email}
                       onChange={(e) => setClientDraft({ ...clientDraft, email: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="correo@dominio.com"
                       type="email"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Teléfono</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Teléfono</label>
                     <input
                       value={clientDraft.phone}
                       onChange={(e) => setClientDraft({ ...clientDraft, phone: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="+1 809 000 0000"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Empresa</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Empresa</label>
                     <input
                       value={clientDraft.company_name}
                       onChange={(e) => setClientDraft({ ...clientDraft, company_name: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="Nombre de la empresa"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Estado</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Estado</label>
                     <select
                       value={clientDraft.status}
                       onChange={(e) => setClientDraft({ ...clientDraft, status: e.target.value as ClientDraft['status'] })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                     >
                       <option value="prospect">Prospecto</option>
                       <option value="active">Activo</option>
@@ -985,16 +985,16 @@ export function WebChatModule() {
               ) : sidePanelMode === 'ticket_view' ? (
                 <div className="space-y-4">
                   {ticketViewLoading ? (
-                    <div className="text-sm text-slate-500">Cargando ticket...</div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400">Cargando ticket...</div>
                   ) : !ticketViewTicket ? (
-                    <div className="text-sm text-slate-500">No hay ticket para mostrar.</div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400">No hay ticket para mostrar.</div>
                   ) : (
                     <>
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                      <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <div className="text-xs text-slate-500">{ticketViewTicket.ticket_number}</div>
-                            <div className="mt-1 font-semibold text-slate-900 truncate">{ticketViewTicket.subject}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400">{ticketViewTicket.ticket_number}</div>
+                            <div className="mt-1 font-semibold text-slate-900 dark:text-white truncate">{ticketViewTicket.subject}</div>
                           </div>
                           <div className="flex flex-col items-end gap-2">
                             <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getTicketStatusClasses(ticketViewTicket.status)}`}>
@@ -1008,14 +1008,14 @@ export function WebChatModule() {
                       </div>
 
                       <div>
-                        <label className="text-xs font-semibold text-slate-600">Descripción</label>
-                        <div className="mt-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700 whitespace-pre-wrap">
+                        <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Descripción</label>
+                        <div className="mt-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-3 text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
                           {ticketViewTicket.description}
                         </div>
                       </div>
 
                       <div>
-                        <label className="text-xs font-semibold text-slate-600">Acciones rápidas</label>
+                        <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Acciones rápidas</label>
                         <div className="mt-2 flex flex-wrap gap-2">
                           {(ticketViewTicket.status === 'resolved' || ticketViewTicket.status === 'closed') && (
                             <button
@@ -1030,7 +1030,7 @@ export function WebChatModule() {
                             type="button"
                             onClick={() => handleTicketViewUpdateStatus('in_progress')}
                             disabled={true}
-                            className="rounded-xl bg-blue-100 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-200 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-xl bg-blue-100 dark:bg-blue-500/15 px-3 py-2 text-xs font-semibold text-blue-700 dark:text-blue-300 transition hover:bg-blue-200 dark:hover:bg-blue-500/25 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             En Progreso
                           </button>
@@ -1038,7 +1038,7 @@ export function WebChatModule() {
                             type="button"
                             onClick={() => handleTicketViewUpdateStatus('waiting')}
                             disabled={true}
-                            className="rounded-xl bg-yellow-100 px-3 py-2 text-xs font-semibold text-yellow-700 transition hover:bg-yellow-200 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-xl bg-amber-100 dark:bg-amber-500/15 px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-300 transition hover:bg-amber-200 dark:hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             En Espera
                           </button>
@@ -1046,7 +1046,7 @@ export function WebChatModule() {
                             type="button"
                             onClick={() => handleTicketViewUpdateStatus('resolved')}
                             disabled={true}
-                            className="rounded-xl bg-green-100 px-3 py-2 text-xs font-semibold text-green-700 transition hover:bg-green-200 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-xl bg-emerald-100 dark:bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300 transition hover:bg-emerald-200 dark:hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             Resolver
                           </button>
@@ -1054,7 +1054,7 @@ export function WebChatModule() {
                             type="button"
                             onClick={() => handleTicketViewUpdateStatus('closed')}
                             disabled={true}
-                            className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-xl bg-slate-100 dark:bg-slate-700 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             Cerrar
                           </button>
@@ -1062,14 +1062,14 @@ export function WebChatModule() {
                       </div>
 
                       <div className="mt-2">
-                        <div className="flex gap-2 border-b border-slate-200">
+                        <div className="flex gap-2 border-b border-slate-200 dark:border-slate-700">
                           <button
                             type="button"
                             onClick={() => setTicketViewTab('comments')}
                             className={`px-2 pb-2 text-xs font-semibold border-b-2 transition ${
                               ticketViewTab === 'comments'
-                                ? 'text-teal-700 border-teal-600'
-                                : 'text-slate-500 border-transparent hover:text-slate-700'
+                                ? 'text-teal-700 dark:text-teal-400 border-teal-600'
+                                : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-200'
                             }`}
                           >
                             Comentarios ({ticketViewComments.length})
@@ -1079,8 +1079,8 @@ export function WebChatModule() {
                             onClick={() => setTicketViewTab('activity')}
                             className={`px-2 pb-2 text-xs font-semibold border-b-2 transition ${
                               ticketViewTab === 'activity'
-                                ? 'text-teal-700 border-teal-600'
-                                : 'text-slate-500 border-transparent hover:text-slate-700'
+                                ? 'text-teal-700 dark:text-teal-400 border-teal-600'
+                                : 'text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-200'
                             }`}
                           >
                             Actividad ({ticketViewActivities.length})
@@ -1091,44 +1091,44 @@ export function WebChatModule() {
                           <>
                             <div className="mt-3 space-y-3 max-h-56 overflow-y-auto">
                               {ticketViewComments.length === 0 ? (
-                                <div className="text-xs text-slate-500">No hay comentarios.</div>
+                                <div className="text-xs text-slate-500 dark:text-slate-400">No hay comentarios.</div>
                               ) : (
                                 ticketViewComments.map((c) => (
                                   <div
                                     key={c.id}
                                     className={`rounded-2xl border p-3 text-sm ${
                                       c.is_internal
-                                        ? 'border-amber-200 bg-amber-50'
-                                        : 'border-slate-200 bg-white'
+                                        ? 'border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10'
+                                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800'
                                     }`}
                                   >
                                     <div className="flex items-center justify-between gap-3">
                                       <div className="min-w-0">
-                                        <div className="text-xs font-semibold text-slate-700 truncate">
+                                        <div className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">
                                           {c.user_name || 'Usuario'}
                                         </div>
-                                        {c.user_email && <div className="text-[11px] text-slate-400 truncate">{c.user_email}</div>}
+                                        {c.user_email && <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{c.user_email}</div>}
                                       </div>
-                                      <div className="text-[11px] text-slate-400">
+                                      <div className="text-[11px] text-slate-400 dark:text-slate-500">
                                         {new Date(c.created_at).toLocaleString()}
                                       </div>
                                     </div>
-                                    <div className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{c.comment}</div>
+                                    <div className="mt-2 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">{c.comment}</div>
                                     {c.is_internal && (
-                                      <div className="mt-2 text-[10px] font-semibold text-amber-700">Interno</div>
+                                      <div className="mt-2 text-[10px] font-semibold text-amber-700 dark:text-amber-400">Interno</div>
                                     )}
                                   </div>
                                 ))
                               )}
                             </div>
 
-                            <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3">
-                              <label className="flex items-center gap-2 text-xs text-slate-600">
+                            <div className="mt-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3">
+                              <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
                                 <input
                                   type="checkbox"
                                   checked={ticketViewIsInternal}
                                   onChange={(e) => setTicketViewIsInternal(e.target.checked)}
-                                  className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                                  className="rounded border-slate-300 dark:border-slate-600 text-teal-600 focus:ring-teal-500"
                                 />
                                 Comentario interno
                               </label>
@@ -1144,7 +1144,7 @@ export function WebChatModule() {
                                 disabled={ticketViewTicket.status === 'resolved' || ticketViewTicket.status === 'closed'}
                                 rows={3}
                                 placeholder="Escribe un comentario..."
-                                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-slate-50"
+                                className="mt-2 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-slate-50 dark:disabled:bg-slate-800"
                               />
                               <button
                                 type="button"
@@ -1159,17 +1159,17 @@ export function WebChatModule() {
                         ) : (
                           <div className="mt-3 space-y-3 max-h-72 overflow-y-auto">
                             {ticketViewActivities.length === 0 ? (
-                              <div className="text-xs text-slate-500">No hay actividad registrada.</div>
+                              <div className="text-xs text-slate-500 dark:text-slate-400">No hay actividad registrada.</div>
                             ) : (
                               ticketViewActivities.map((a) => (
-                                <div key={a.id} className="rounded-2xl border border-slate-200 bg-white p-3">
-                                  <div className="text-xs font-semibold text-slate-800">{a.action}</div>
+                                <div key={a.id} className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3">
+                                  <div className="text-xs font-semibold text-slate-800 dark:text-slate-100">{a.action}</div>
                                   {a.field_changed && (
-                                    <div className="mt-1 text-xs text-slate-600">
+                                    <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">
                                       {a.field_changed}: {a.old_value} → {a.new_value}
                                     </div>
                                   )}
-                                  {a.description && <div className="mt-1 text-xs text-slate-600">{a.description}</div>}
+                                  {a.description && <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">{a.description}</div>}
                                   <div className="mt-2 text-[11px] text-slate-400">{new Date(a.created_at).toLocaleString()}</div>
                                 </div>
                               ))
@@ -1188,30 +1188,30 @@ export function WebChatModule() {
                     </div>
                   )}
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Asunto</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Asunto</label>
                     <input
                       value={ticketDraft.subject}
                       onChange={(e) => setTicketDraft({ ...ticketDraft, subject: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="Asunto del ticket"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Descripción</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Descripción</label>
                     <textarea
                       value={ticketDraft.description}
                       onChange={(e) => setTicketDraft({ ...ticketDraft, description: e.target.value })}
                       rows={6}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="Detalle del caso"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Prioridad</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Prioridad</label>
                     <select
                       value={ticketDraft.priority}
                       onChange={(e) => setTicketDraft({ ...ticketDraft, priority: e.target.value as TicketDraft['priority'] })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                     >
                       <option value="low">Baja</option>
                       <option value="medium">Media</option>
@@ -1224,7 +1224,7 @@ export function WebChatModule() {
             </div>
 
             {(sidePanelMode === 'client' || sidePanelMode === 'ticket') && (
-              <div className="border-t border-slate-200/80 bg-white px-5 py-4">
+              <div className="border-t border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4">
                 <button
                   onClick={sidePanelMode === 'client' ? handleSaveClient : handleSaveTicket}
                   disabled={sidePanelSaving}
@@ -1484,9 +1484,9 @@ export function WebChatModule() {
       case 'resolved':
         return 'bg-green-100 text-green-700 border-green-200';
       case 'closed':
-        return 'bg-slate-100 text-slate-700 border-slate-200';
+        return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600';
       default:
-        return 'bg-slate-100 text-slate-700 border-slate-200';
+        return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600';
     }
   };
 
@@ -1501,7 +1501,7 @@ export function WebChatModule() {
       case 'urgent':
         return 'bg-red-100 text-red-700 border-red-200';
       default:
-        return 'bg-slate-100 text-slate-700 border-slate-200';
+        return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600';
     }
   };
 
@@ -1783,7 +1783,7 @@ export function WebChatModule() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-xl shadow-slate-200/60 backdrop-blur">
+      <div className="rounded-3xl border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 p-6 shadow-xl shadow-slate-200/60 dark:shadow-none backdrop-blur">
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-3">
@@ -1791,8 +1791,8 @@ export function WebChatModule() {
                 <MessageCircle className="h-6 w-6" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-slate-900">Chat Web</h2>
-                <p className="text-slate-500">Solicitudes de chat desde dogcatify.com</p>
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Chat Web</h2>
+                <p className="text-slate-500 dark:text-slate-400">Solicitudes de chat desde dogcatify.com</p>
               </div>
             </div>
             {conversationLoadError && (
@@ -1803,7 +1803,7 @@ export function WebChatModule() {
           </div>
           <button
             onClick={loadConversations}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2 text-slate-700 dark:text-slate-200 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
           >
             <RefreshCw className={`h-4 w-4 ${loadingConversations ? 'animate-spin' : ''}`} />
             <span>Actualizar</span>
@@ -1811,19 +1811,19 @@ export function WebChatModule() {
         </div>
 
         {sidePanelMode && selectedConversation && (
-          <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50">
-            <div className="flex items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-5 py-4">
+          <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none">
+            <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/50 px-5 py-4">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
                   {sidePanelMode === 'client' ? 'Crear Cliente' : 'Crear Ticket'}
                 </h3>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   {selectedConversation.visitor_name || selectedConversation.visitor_email || selectedConversation.visitor_phone || 'Visitante'}
                 </p>
               </div>
               <button
                 onClick={() => setSidePanelMode(null)}
-                className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 shadow-sm transition hover:-translate-y-0.5"
+                className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 p-2 text-slate-600 dark:text-slate-300 shadow-sm transition hover:-translate-y-0.5"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -1832,13 +1832,13 @@ export function WebChatModule() {
             <div className="flex-1 overflow-y-auto p-5">
               {sidePanelMode === 'client' ? (
                 <div className="space-y-4">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
-                    <label className="text-xs font-semibold text-slate-600">Buscar cliente existente</label>
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/40 p-3">
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Buscar cliente existente</label>
                     <div className="mt-2 flex items-center gap-2">
                       <input
                         value={clientSearch}
                         onChange={(e) => setClientSearch(e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                         placeholder="Nombre, email o teléfono"
                       />
                     </div>
@@ -1855,58 +1855,58 @@ export function WebChatModule() {
                             key={client.id}
                             type="button"
                             onClick={() => handleAssignExistingClient(client)}
-                            className="w-full rounded-xl border border-slate-200 bg-white p-3 text-left text-xs text-slate-600 transition hover:border-teal-200 hover:bg-teal-50"
+                            className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 p-3 text-left text-xs text-slate-600 dark:text-slate-300 transition hover:border-teal-200 dark:hover:border-teal-500/40 hover:bg-teal-50 dark:hover:bg-teal-500/10"
                           >
                             <div className="font-semibold text-slate-800">{client.contact_name || 'Sin nombre'}</div>
-                            <div className="text-slate-500">{client.email || client.phone || client.company_name || 'Sin contacto'}</div>
+                            <div className="text-slate-500 dark:text-slate-400">{client.email || client.phone || client.company_name || 'Sin contacto'}</div>
                           </button>
                         ))}
                       </div>
                     )}
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Nombre del contacto</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Nombre del contacto</label>
                     <input
                       value={clientDraft.contact_name}
                       onChange={(e) => setClientDraft({ ...clientDraft, contact_name: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="Nombre y apellido"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Email</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Email</label>
                     <input
                       value={clientDraft.email}
                       onChange={(e) => setClientDraft({ ...clientDraft, email: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="correo@dominio.com"
                       type="email"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Teléfono</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Teléfono</label>
                     <input
                       value={clientDraft.phone}
                       onChange={(e) => setClientDraft({ ...clientDraft, phone: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="+1 809 000 0000"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Empresa</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Empresa</label>
                     <input
                       value={clientDraft.company_name}
                       onChange={(e) => setClientDraft({ ...clientDraft, company_name: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="Nombre de la empresa"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Estado</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Estado</label>
                     <select
                       value={clientDraft.status}
                       onChange={(e) => setClientDraft({ ...clientDraft, status: e.target.value as ClientDraft['status'] })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                     >
                       <option value="prospect">Prospecto</option>
                       <option value="active">Activo</option>
@@ -1922,30 +1922,30 @@ export function WebChatModule() {
                     </div>
                   )}
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Asunto</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Asunto</label>
                     <input
                       value={ticketDraft.subject}
                       onChange={(e) => setTicketDraft({ ...ticketDraft, subject: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="Asunto del ticket"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Descripción</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Descripción</label>
                     <textarea
                       value={ticketDraft.description}
                       onChange={(e) => setTicketDraft({ ...ticketDraft, description: e.target.value })}
                       rows={6}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="Detalle del caso"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Prioridad</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Prioridad</label>
                     <select
                       value={ticketDraft.priority}
                       onChange={(e) => setTicketDraft({ ...ticketDraft, priority: e.target.value as TicketDraft['priority'] })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                     >
                       <option value="low">Baja</option>
                       <option value="medium">Media</option>
@@ -1957,7 +1957,7 @@ export function WebChatModule() {
               )}
             </div>
 
-            <div className="border-t border-slate-200/80 bg-white px-5 py-4">
+            <div className="border-t border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4">
               <button
                 onClick={sidePanelMode === 'client' ? handleSaveClient : handleSaveTicket}
                 disabled={sidePanelSaving}
@@ -1985,8 +1985,8 @@ export function WebChatModule() {
           sidePanelMode ? 'grid-cols-[360px_1fr_360px]' : 'grid-cols-[360px_1fr]'
         }`}
       >
-        <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50">
-          <div className="border-b border-slate-200/80 bg-slate-50/80 p-4 space-y-3">
+        <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none">
+          <div className="border-b border-slate-200/80 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/50 p-4 space-y-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
@@ -1994,29 +1994,29 @@ export function WebChatModule() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Buscar por nombre, correo, teléfono o fecha..."
-                className="w-full rounded-xl border border-slate-200 bg-white/80 py-2.5 pl-9 pr-3 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
-              <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50">
+                className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-900/80 text-slate-900 dark:text-white py-2.5 pl-9 pr-3 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+              <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none">
                         value={clientDraft.phone}
                         onChange={(e) => setClientDraft({ ...clientDraft, phone: e.target.value })}
-                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                         placeholder="+1 809 000 0000"
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-slate-600">Empresa</label>
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Empresa</label>
                       <input
                         value={clientDraft.company_name}
                         onChange={(e) => setClientDraft({ ...clientDraft, company_name: e.target.value })}
-                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                         placeholder="Nombre de la empresa"
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-slate-600">Estado</label>
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Estado</label>
                       <select
                         value={clientDraft.status}
                         onChange={(e) => setClientDraft({ ...clientDraft, status: e.target.value as ClientDraft['status'] })}
-                        className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                        className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       >
                         <option value="prospect">Prospecto</option>
                         <option value="active">Activo</option>
@@ -2032,30 +2032,30 @@ export function WebChatModule() {
                       </div>
                     )}
                     <div>
-                      <label className="text-xs font-semibold text-slate-600">Asunto</label>
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Asunto</label>
                       <input
                         value={ticketDraft.subject}
                         onChange={(e) => setTicketDraft({ ...ticketDraft, subject: e.target.value })}
-                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                         placeholder="Asunto del ticket"
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-slate-600">Descripción</label>
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Descripción</label>
                       <textarea
                         value={ticketDraft.description}
                         onChange={(e) => setTicketDraft({ ...ticketDraft, description: e.target.value })}
                         rows={4}
-                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                         placeholder="Detalle del caso"
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-slate-600">Prioridad</label>
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Prioridad</label>
                       <select
                         value={ticketDraft.priority}
                         onChange={(e) => setTicketDraft({ ...ticketDraft, priority: e.target.value as TicketDraft['priority'] })}
-                        className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                        className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       >
                         <option value="low">Baja</option>
                         <option value="medium">Media</option>
@@ -2067,7 +2067,7 @@ export function WebChatModule() {
                 )}
               </div>
 
-              <div className="border-t border-slate-200/80 bg-white px-5 py-4">
+              <div className="border-t border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4">
                 <button
                   onClick={sidePanelMode === 'client' ? handleSaveClient : handleSaveTicket}
                   disabled={sidePanelSaving}
@@ -2079,16 +2079,16 @@ export function WebChatModule() {
             </div>
           )}
 
-          <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50">
+          <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none">
             {selectedConversation ? (
               <>
-                <div className="border-b border-slate-200/80 bg-slate-50/80 px-5 py-4">
+                <div className="border-b border-slate-200/80 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/50 px-5 py-4">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <h3 className="text-lg font-semibold text-slate-900">
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
                         {selectedConversation.visitor_name || selectedConversation.visitor_email || selectedConversation.visitor_phone || 'Visitante anónimo'}
                       </h3>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
                         {selectedConversation.visitor_email || selectedConversation.visitor_phone || selectedConversation.source_domain || 'sin contacto'}
                       </p>
                       {(selectedConversation.cause || selectedConversation.cause_custom || selectedConversation.result) && (
@@ -2105,7 +2105,7 @@ export function WebChatModule() {
                     </div>
                     <div className="flex items-center gap-2">
                       {selectedConversation.assigned_user_id ? (
-                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                        <span className="rounded-full bg-slate-100 dark:bg-slate-700 px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-300">
                           Asignado a {selectedConversation.assigned_user_name || 'Agente'}
                         </span>
                       ) : (
@@ -2129,7 +2129,7 @@ export function WebChatModule() {
                       )}
                       <button
                         onClick={() => setShowTransfer(true)}
-                        className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2 text-slate-700 dark:text-slate-200 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                         disabled={isConversationLocked}
                       >
                         <Users className="h-4 w-4" />
@@ -2139,10 +2139,10 @@ export function WebChatModule() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 border-b border-slate-200/80 bg-white px-5 py-4">
+                <div className="flex items-center gap-3 border-b border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4">
                   <button
                     onClick={openEmailComposer}
-                    className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-700 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={isConversationLocked || isClosed}
                   >
                     <Mail className="h-4 w-4" />
@@ -2150,7 +2150,7 @@ export function WebChatModule() {
                   </button>
                   <button
                     onClick={openDialer}
-                    className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-700 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={isConversationLocked || isClosed}
                   >
                     <Phone className="h-4 w-4" />
@@ -2158,7 +2158,7 @@ export function WebChatModule() {
                   </button>
                   <button
                     onClick={openTicketPanel}
-                    className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-700 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={isConversationLocked || isClosed}
                   >
                     <Ticket className="h-4 w-4" />
@@ -2166,7 +2166,7 @@ export function WebChatModule() {
                   </button>
                   <button
                     onClick={openClientPanel}
-                    className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-700 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={isConversationLocked || isClosed}
                   >
                     <UserPlus className="h-4 w-4" />
@@ -2204,13 +2204,13 @@ export function WebChatModule() {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto bg-slate-50/80 p-6">
+                <div className="flex-1 overflow-y-auto bg-slate-50/80 dark:bg-slate-900/40 p-6">
                   {isConversationLocked || isClosed ? (
-                    <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                    <div className="flex h-full items-center justify-center text-sm text-slate-500 dark:text-slate-400">
                       {isClosed ? 'Conversación cerrada. Reabre para ver mensajes.' : 'No tienes acceso a los mensajes de esta conversación.'}
                     </div>
                   ) : loadingMessages ? (
-                    <div className="text-center text-slate-500">Cargando mensajes...</div>
+                    <div className="text-center text-slate-500 dark:text-slate-400">Cargando mensajes...</div>
                   ) : (
                     <div className="space-y-4">
                       {messages.map((msg) => (
@@ -2219,7 +2219,7 @@ export function WebChatModule() {
                           className={`max-w-2xl rounded-2xl px-4 py-3 shadow-sm ${
                             (msg.sender_type === 'agent' || msg.sender_type === 'bot')
                               ? 'ml-auto bg-gradient-to-r from-blue-600 to-indigo-600 text-white'
-                              : 'bg-white text-slate-800 border border-slate-200'
+                              : 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-600'
                           }`}
                         >
                           <div className="mb-2 text-xs opacity-80">
@@ -2250,7 +2250,7 @@ export function WebChatModule() {
                   )}
                 </div>
 
-                <div className="border-t border-slate-200/80 bg-white p-5">
+                <div className="border-t border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 p-5">
                   <div className="mb-3 flex items-center gap-3">
                     <input
                       ref={fileInputRef}
@@ -2262,12 +2262,12 @@ export function WebChatModule() {
                     />
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 p-2 shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                       disabled={isConversationLocked || isClosed}
                     >
                       <Paperclip className="h-4 w-4" />
                     </button>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
                       {attachments.length > 0 ? `${attachments.length} adjunto(s)` : 'Sin adjuntos'}
                     </div>
                   </div>
@@ -2285,7 +2285,7 @@ export function WebChatModule() {
                       }}
                       rows={2}
                       placeholder="Escribe un mensaje..."
-                      className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-50"
+                      className="flex-1 rounded-2xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-4 py-3 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-50 dark:disabled:bg-slate-800"
                       disabled={isConversationLocked || isClosed}
                     />
                     <button
@@ -2300,7 +2300,7 @@ export function WebChatModule() {
                 </div>
               </>
             ) : (
-              <div className="flex h-full items-center justify-center text-sm text-slate-500">
+              <div className="flex h-full items-center justify-center text-sm text-slate-500 dark:text-slate-400">
                 Selecciona una conversación para empezar.
               </div>
             )}
@@ -2308,19 +2308,19 @@ export function WebChatModule() {
         </div>
 
         {sidePanelMode && selectedConversation && (
-          <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50">
-            <div className="flex items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-5 py-4">
+          <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none">
+            <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/50 px-5 py-4">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
                   {sidePanelMode === 'client' ? 'Crear Cliente' : 'Crear Ticket'}
                 </h3>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   {selectedConversation.visitor_name || selectedConversation.visitor_email || selectedConversation.visitor_phone || 'Visitante'}
                 </p>
               </div>
               <button
                 onClick={() => setSidePanelMode(null)}
-                className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 shadow-sm transition hover:-translate-y-0.5"
+                className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 p-2 text-slate-600 dark:text-slate-300 shadow-sm transition hover:-translate-y-0.5"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -2329,19 +2329,19 @@ export function WebChatModule() {
             <div className="flex-1 overflow-y-auto p-5">
               {sidePanelMode === 'client' ? (
                 <div className="space-y-4">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 space-y-2">
-                    <label className="text-xs font-semibold text-slate-600">Buscar cliente existente</label>
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 p-3 space-y-2">
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Buscar cliente existente</label>
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                       <input
                         value={clientSearch}
                         onChange={(e) => setClientSearch(e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 bg-white/80 py-2 pl-9 pr-3 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-900/80 text-slate-900 dark:text-white py-2 pl-9 pr-3 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
                         placeholder="Nombre, email, teléfono o empresa"
                       />
                     </div>
                     {clientSearchLoading ? (
-                      <p className="text-xs text-slate-500">Buscando...</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Buscando...</p>
                     ) : clientSearch.trim().length >= 2 ? (
                       clientResults.length > 0 ? (
                         <div className="space-y-2">
@@ -2349,71 +2349,71 @@ export function WebChatModule() {
                             <button
                               key={client.id}
                               onClick={() => handleAssignExistingClient(client)}
-                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm shadow-sm transition hover:-translate-y-0.5 hover:border-teal-300"
+                              className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 py-2 text-left text-sm shadow-sm transition hover:-translate-y-0.5 hover:border-teal-300 dark:hover:border-teal-500/50"
                             >
                               <div className="flex items-center justify-between">
                                 <div>
                                   <p className="font-semibold text-slate-800">{client.contact_name || client.company_name || 'Cliente'}</p>
-                                  <p className="text-xs text-slate-500">{client.email || client.phone || 'Sin contacto'}</p>
+                                  <p className="text-xs text-slate-500 dark:text-slate-400">{client.email || client.phone || 'Sin contacto'}</p>
                                 </div>
                                 <span className="text-[10px] uppercase text-slate-400">{client.status}</span>
                               </div>
                               {client.company_name && (
-                                <p className="text-xs text-slate-500 mt-1">{client.company_name}</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{client.company_name}</p>
                               )}
                             </button>
                           ))}
                         </div>
                       ) : (
-                        <p className="text-xs text-slate-500">Sin resultados</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Sin resultados</p>
                       )
                     ) : (
                       <p className="text-xs text-slate-400">Escribe al menos 2 caracteres.</p>
                     )}
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Nombre del contacto</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Nombre del contacto</label>
                     <input
                       value={clientDraft.contact_name}
                       onChange={(e) => setClientDraft({ ...clientDraft, contact_name: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="Nombre y apellido"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Email</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Email</label>
                     <input
                       value={clientDraft.email}
                       onChange={(e) => setClientDraft({ ...clientDraft, email: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="correo@dominio.com"
                       type="email"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Teléfono</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Teléfono</label>
                     <input
                       value={clientDraft.phone}
                       onChange={(e) => setClientDraft({ ...clientDraft, phone: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="+1 809 000 0000"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Empresa</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Empresa</label>
                     <input
                       value={clientDraft.company_name}
                       onChange={(e) => setClientDraft({ ...clientDraft, company_name: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="Nombre de la empresa"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Estado</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Estado</label>
                     <select
                       value={clientDraft.status}
                       onChange={(e) => setClientDraft({ ...clientDraft, status: e.target.value as ClientDraft['status'] })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                     >
                       <option value="prospect">Prospecto</option>
                       <option value="active">Activo</option>
@@ -2429,30 +2429,30 @@ export function WebChatModule() {
                     </div>
                   )}
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Asunto</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Asunto</label>
                     <input
                       value={ticketDraft.subject}
                       onChange={(e) => setTicketDraft({ ...ticketDraft, subject: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="Asunto del ticket"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Descripción</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Descripción</label>
                     <textarea
                       value={ticketDraft.description}
                       onChange={(e) => setTicketDraft({ ...ticketDraft, description: e.target.value })}
                       rows={6}
-                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                       placeholder="Detalle del caso"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600">Prioridad</label>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Prioridad</label>
                     <select
                       value={ticketDraft.priority}
                       onChange={(e) => setTicketDraft({ ...ticketDraft, priority: e.target.value as TicketDraft['priority'] })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm"
                     >
                       <option value="low">Baja</option>
                       <option value="medium">Media</option>
@@ -2464,7 +2464,7 @@ export function WebChatModule() {
               )}
             </div>
 
-            <div className="border-t border-slate-200/80 bg-white px-5 py-4">
+            <div className="border-t border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4">
               <button
                 onClick={sidePanelMode === 'client' ? handleSaveClient : handleSaveTicket}
                 disabled={sidePanelSaving}
@@ -2479,7 +2479,7 @@ export function WebChatModule() {
 
       {showTransfer && selectedConversation && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">Transferir conversación</h3>
               <button onClick={() => setShowTransfer(false)}>
@@ -2493,21 +2493,21 @@ export function WebChatModule() {
                 value={transferQuery}
                 onChange={(e) => handleTransferSearch(e.target.value)}
                 placeholder="Buscar usuario..."
-                className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg"
+                className="w-full pl-9 pr-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
               />
             </div>
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {transferResults.length === 0 ? (
-                <p className="text-sm text-slate-500">Sin resultados</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Sin resultados</p>
               ) : (
                 transferResults.map((u) => (
                   <button
                     key={u.id}
                     onClick={() => handleTransferTo(u)}
-                    className="w-full text-left p-3 border border-slate-200 rounded-lg hover:bg-slate-50"
+                    className="w-full text-left p-3 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-900 dark:text-white"
                   >
                     <p className="font-medium text-slate-800">{u.name}</p>
-                    <p className="text-xs text-slate-500">{u.email}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{u.email}</p>
                   </button>
                 ))
               )}
@@ -2518,11 +2518,11 @@ export function WebChatModule() {
 
       {showCloseModal && selectedConversation && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-xl font-semibold text-slate-900">Cerrar conversación</h3>
-                <p className="text-sm text-slate-500">Completa la causa y el resultado para cerrar el chat.</p>
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-white">Cerrar conversación</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Completa la causa y el resultado para cerrar el chat.</p>
               </div>
               <button onClick={() => setShowCloseModal(false)}>
                 <X className="h-5 w-5" />
@@ -2531,11 +2531,11 @@ export function WebChatModule() {
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label className="text-sm font-semibold text-slate-700">Causa</label>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Causa</label>
                 <select
                   value={causeSelection}
                   onChange={(e) => setCauseSelection(e.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                  className="mt-2 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
                 >
                   <option value="">Selecciona una causa</option>
                   {causeOptions.map((cause) => (
@@ -2548,17 +2548,17 @@ export function WebChatModule() {
                     value={causeCustom}
                     onChange={(e) => setCauseCustom(e.target.value)}
                     placeholder="Describe la causa"
-                    className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                    className="mt-2 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
                   />
                 )}
               </div>
 
               <div>
-                <label className="text-sm font-semibold text-slate-700">Resultado</label>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Resultado</label>
                 <select
                   value={resultSelection}
                   onChange={(e) => setResultSelection(e.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                  className="mt-2 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
                 >
                   <option value="">Selecciona un resultado</option>
                   {resultOptions.map((result) => (
@@ -2569,19 +2569,19 @@ export function WebChatModule() {
             </div>
 
             <div className="mt-4">
-              <label className="text-sm font-semibold text-slate-700">Notas del resultado (opcional)</label>
+              <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Notas del resultado (opcional)</label>
               <textarea
                 value={resultNotes}
                 onChange={(e) => setResultNotes(e.target.value)}
                 rows={3}
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                className="mt-2 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
               />
             </div>
 
             <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={() => setShowCloseModal(false)}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-slate-200 dark:border-slate-600 px-4 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
               >
                 Cancelar
               </button>
@@ -2610,11 +2610,11 @@ function KpiCard({ label, value, tone }: { label: string; value: number; tone: '
   };
 
   return (
-    <div className="min-w-[180px] rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="min-w-[180px] rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 shadow-sm">
       <div className={`inline-flex rounded-xl bg-gradient-to-r ${toneClasses[tone]} px-3 py-1 text-xs font-semibold text-white`}>
         {label}
       </div>
-      <div className="mt-3 text-2xl font-bold text-slate-900">{value}</div>
+      <div className="mt-3 text-2xl font-bold text-slate-900 dark:text-white">{value}</div>
     </div>
   );
 }
@@ -2624,13 +2624,13 @@ function CauseBadge({ cause, custom }: { cause?: string | null; custom?: string 
   if (!label) return null;
 
   const meta: Record<string, { icon: ComponentType<{ className?: string }>; className: string }> = {
-    'Consulta general': { icon: MessageCircle, className: 'bg-slate-100 text-slate-600' },
+    'Consulta general': { icon: MessageCircle, className: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300' },
     'Cotización': { icon: Mail, className: 'bg-blue-100 text-blue-700' },
     'Soporte': { icon: Ticket, className: 'bg-amber-100 text-amber-700' },
     'Reclamo': { icon: X, className: 'bg-red-100 text-red-700' },
     'Reservas': { icon: Phone, className: 'bg-teal-100 text-teal-700' },
     'Facturación': { icon: FileText, className: 'bg-purple-100 text-purple-700' },
-    'Otro': { icon: Tag, className: 'bg-slate-100 text-slate-600' },
+    'Otro': { icon: Tag, className: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300' },
   };
 
   const config = meta[cause || 'Otro'] || meta['Otro'];
@@ -2652,10 +2652,10 @@ function ResultBadge({ result }: { result?: string | null }) {
     'Derivado a ticket': { icon: Ticket, className: 'bg-blue-100 text-blue-700' },
     'Llamada programada': { icon: Phone, className: 'bg-teal-100 text-teal-700' },
     'Sin respuesta': { icon: Clock, className: 'bg-amber-100 text-amber-700' },
-    'No procede': { icon: X, className: 'bg-slate-100 text-slate-600' },
+    'No procede': { icon: X, className: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300' },
   };
 
-  const config = meta[result] || { icon: Tag, className: 'bg-slate-100 text-slate-600' };
+  const config = meta[result] || { icon: Tag, className: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300' };
   const Icon = config.icon;
 
   return (
@@ -2690,6 +2690,7 @@ import {
   Globe,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { MessageCirclePlus } from 'lucide-react';
 import { getEnvVar } from '../../lib/envLoader';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -2894,6 +2895,13 @@ export function WebChatModule() {
   const [savingConversationMeta, setSavingConversationMeta] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [mobileTab, setMobileTab] = useState<'list' | 'chat' | 'details'>('list');
+  const [newChatModalOpen, setNewChatModalOpen] = useState(false);
+  const [newChatClientSearch, setNewChatClientSearch] = useState('');
+  const [newChatClientResults, setNewChatClientResults] = useState<ClientLookup[]>([]);
+  const [newChatClientSearchLoading, setNewChatClientSearchLoading] = useState(false);
+  const [newChatSelectedClient, setNewChatSelectedClient] = useState<ClientLookup | null>(null);
+  const [newChatMessage, setNewChatMessage] = useState('');
+  const [newChatSending, setNewChatSending] = useState(false);
 
   const selectedConversation = useMemo(
     () => conversations.find(c => c.id === selectedConversationId) || null,
@@ -3291,6 +3299,189 @@ export function WebChatModule() {
     }, 250);
     return () => clearTimeout(timer);
   }, [clientSearch, searchClients]);
+
+  const searchNewChatClients = useCallback(async (term: string) => {
+    if (term.trim().length < 2) {
+      setNewChatClientResults([]);
+      return;
+    }
+    setNewChatClientSearchLoading(true);
+    const { data, error } = await supabase
+      .from('clients')
+      .select('id, company_name, contact_name, email, phone, status')
+      .or(
+        `contact_name.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%,company_name.ilike.%${term}%`
+      )
+      .limit(6);
+
+    setNewChatClientSearchLoading(false);
+    if (error) {
+      console.warn('[WEBCHAT] Error buscando clientes para nuevo chat', error);
+      setNewChatClientResults([]);
+      return;
+    }
+    setNewChatClientResults((data || []) as ClientLookup[]);
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchNewChatClients(newChatClientSearch);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [newChatClientSearch, searchNewChatClients]);
+
+  const resetNewChatModal = () => {
+    setNewChatModalOpen(false);
+    setNewChatClientSearch('');
+    setNewChatClientResults([]);
+    setNewChatSelectedClient(null);
+    setNewChatMessage('');
+  };
+
+  const handleCreateAgentConversation = async () => {
+    if (!user?.id) return;
+    if (!newChatSelectedClient) {
+      toast.error('Selecciona un cliente');
+      return;
+    }
+    if (!newChatMessage.trim()) {
+      toast.error('Escribe un mensaje inicial');
+      return;
+    }
+
+    setNewChatSending(true);
+    const now = new Date().toISOString();
+    const client = newChatSelectedClient;
+    const sessionId = `agent-${crypto.randomUUID()}`;
+
+    const { data: newConversation, error: conversationError } = await supabase
+      .from('webchat_conversations')
+      .insert({
+        session_id: sessionId,
+        source_channel: 'agent',
+        source_detail: 'Iniciado desde el CRM',
+        client_id: client.id,
+        visitor_name: client.contact_name || client.company_name || 'Cliente',
+        visitor_email: client.email || null,
+        visitor_phone: client.phone || null,
+        status: 'taken',
+        assigned_user_id: user.id,
+        assigned_user_name: user.name,
+        assigned_at: now,
+        last_message_at: now,
+      })
+      .select('id')
+      .single();
+
+    if (conversationError || !newConversation) {
+      toast.error('No se pudo crear la conversación');
+      setNewChatSending(false);
+      return;
+    }
+
+    const conversationId = newConversation.id;
+
+    const { error: messageError } = await supabase
+      .from('webchat_messages')
+      .insert({
+        conversation_id: conversationId,
+        sender_type: 'agent',
+        sender_id: user.id,
+        sender_name: user.name,
+        message: newChatMessage.trim(),
+      });
+
+    if (messageError) {
+      toast.error('La conversación se creó, pero no se pudo guardar el mensaje inicial');
+    }
+
+    void recordClientInteractionSafely({
+      client_id: client.id,
+      type: 'chat_opened',
+      description: `Chat iniciado por ${user.name} con ${client.contact_name || client.company_name}`,
+      metadata: {
+        conversation_id: conversationId,
+        initial_message: newChatMessage.trim(),
+      },
+      created_by: user.id,
+      created_at: now,
+    });
+
+    setNewChatSending(false);
+    resetNewChatModal();
+    toast.success('Chat creado');
+    await loadConversations();
+    setSelectedConversationId(conversationId);
+    setMobileTab('chat');
+
+    if (!client.email) {
+      toast.info('El cliente no tiene email cargado, avisale por otro medio.');
+      return;
+    }
+
+    void sendChatInviteEmail({
+      conversationId,
+      client,
+      agentName: user.name,
+      message: newChatMessage.trim(),
+    });
+  };
+
+  const sendChatInviteEmail = async (options: {
+    conversationId: string;
+    client: ClientLookup;
+    agentName: string;
+    message: string;
+  }) => {
+    const { conversationId, client, agentName, message } = options;
+    try {
+      const [{ data: webchatSettingsRow }, { data: generalSettingsRow }] = await Promise.all([
+        supabase.from('system_settings').select('setting_value').eq('setting_key', 'webchat_settings').maybeSingle(),
+        supabase.from('system_settings').select('setting_value').eq('setting_key', 'general_settings').maybeSingle(),
+      ]);
+
+      const templateName = (webchatSettingsRow?.setting_value as any)?.chat_invite_sendcraft_template_name?.trim();
+      const companyName = (generalSettingsRow?.setting_value as any)?.company_name?.trim() || 'nuestro equipo';
+
+      if (!templateName) {
+        toast.warning('Falta configurar el template de SendCraft en Configuración → Chat Web para poder avisar por email.');
+        return;
+      }
+
+      const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
+      const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
+      const chatLink = `${window.location.origin}/chat/${conversationId}`;
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/send-chat-invite`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          recipient_email: client.email,
+          template_name: templateName,
+          data: {
+            client_name: client.contact_name || client.company_name || 'Cliente',
+            agent_name: agentName,
+            message,
+            chat_link: chatLink,
+            company_name: companyName,
+          },
+        }),
+      });
+      const result = await response.json();
+
+      if (response.ok && result?.success) {
+        toast.success('Aviso enviado por email');
+      } else {
+        toast.warning('No se pudo enviar el email de aviso');
+      }
+    } catch (error) {
+      console.warn('[WEBCHAT] Error enviando email de invitación al chat', error);
+      toast.warning('No se pudo enviar el email de aviso');
+    }
+  };
 
   useEffect(() => {
     loadConversations();
@@ -4315,6 +4506,7 @@ export function WebChatModule() {
     { value: 'whatsapp', label: 'WhatsApp' },
     { value: 'instagram', label: 'Instagram' },
     { value: 'facebook', label: 'Facebook' },
+    { value: 'agent', label: 'Iniciado por agente' },
   ];
   const getChannelLabel = (value: string) => channelOptions.find((c) => c.value === value)?.label || value;
   const channelCounts = channelOptions.reduce<Record<string, number>>((acc, option) => {
@@ -4329,13 +4521,22 @@ export function WebChatModule() {
         title="Chat Web"
         subtitle="Solicitudes de chat desde dogcatify.com"
         action={
-          <Button
-            variant="secondary"
-            onClick={loadConversations}
-            icon={<RefreshCw className={`h-4 w-4 ${loadingConversations ? 'animate-spin' : ''}`} />}
-          >
-            Actualizar
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="primary"
+              onClick={() => setNewChatModalOpen(true)}
+              icon={<MessageCirclePlus className="h-4 w-4" />}
+            >
+              Nueva conversación
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={loadConversations}
+              icon={<RefreshCw className={`h-4 w-4 ${loadingConversations ? 'animate-spin' : ''}`} />}
+            >
+              Actualizar
+            </Button>
+          </div>
         }
       />
       {conversationLoadError && (
@@ -4919,7 +5120,7 @@ export function WebChatModule() {
           <Card className={`${mobileTab === 'details' ? 'flex' : 'hidden'} md:flex h-full flex-col overflow-hidden`}>
             <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 px-5 py-4">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
                   {sidePanelMode === 'client'
                     ? 'Crear Cliente'
                     : sidePanelMode === 'client_view'
@@ -5358,7 +5559,7 @@ export function WebChatModule() {
 
       {showTransfer && selectedConversation && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">Transferir conversación</h3>
               <button onClick={() => setShowTransfer(false)}>
@@ -5372,21 +5573,21 @@ export function WebChatModule() {
                 value={transferQuery}
                 onChange={(e) => handleTransferSearch(e.target.value)}
                 placeholder="Buscar usuario..."
-                className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg"
+                className="w-full pl-9 pr-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
               />
             </div>
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {transferResults.length === 0 ? (
-                <p className="text-sm text-slate-500">Sin resultados</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Sin resultados</p>
               ) : (
                 transferResults.map((u) => (
                   <button
                     key={u.id}
                     onClick={() => handleTransferTo(u)}
-                    className="w-full text-left p-3 border border-slate-200 rounded-lg hover:bg-slate-50"
+                    className="w-full text-left p-3 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-900 dark:text-white"
                   >
                     <p className="font-medium text-slate-800">{u.name}</p>
-                    <p className="text-xs text-slate-500">{u.email}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{u.email}</p>
                   </button>
                 ))
               )}
@@ -5397,11 +5598,11 @@ export function WebChatModule() {
 
       {showCloseModal && selectedConversation && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-xl font-semibold text-slate-900">Cerrar conversación</h3>
-                <p className="text-sm text-slate-500">Completa la causa y el resultado para cerrar el chat.</p>
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-white">Cerrar conversación</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Completa la causa y el resultado para cerrar el chat.</p>
               </div>
               <button onClick={() => setShowCloseModal(false)}>
                 <X className="h-5 w-5" />
@@ -5410,11 +5611,11 @@ export function WebChatModule() {
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label className="text-sm font-semibold text-slate-700">Causa</label>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Causa</label>
                 <select
                   value={causeSelection}
                   onChange={(e) => setCauseSelection(e.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                  className="mt-2 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
                 >
                   <option value="">Selecciona una causa</option>
                   {causeOptions.map((cause) => (
@@ -5427,17 +5628,17 @@ export function WebChatModule() {
                     value={causeCustom}
                     onChange={(e) => setCauseCustom(e.target.value)}
                     placeholder="Describe la causa"
-                    className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                    className="mt-2 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
                   />
                 )}
               </div>
 
               <div>
-                <label className="text-sm font-semibold text-slate-700">Resultado</label>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Resultado</label>
                 <select
                   value={resultSelection}
                   onChange={(e) => setResultSelection(e.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                  className="mt-2 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
                 >
                   <option value="">Selecciona un resultado</option>
                   {resultOptions.map((result) => (
@@ -5448,19 +5649,19 @@ export function WebChatModule() {
             </div>
 
             <div className="mt-4">
-              <label className="text-sm font-semibold text-slate-700">Notas del resultado (opcional)</label>
+              <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Notas del resultado (opcional)</label>
               <textarea
                 value={resultNotes}
                 onChange={(e) => setResultNotes(e.target.value)}
                 rows={3}
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                className="mt-2 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
               />
             </div>
 
             <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={() => setShowCloseModal(false)}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-slate-200 dark:border-slate-600 px-4 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
               >
                 Cancelar
               </button>
@@ -5472,6 +5673,119 @@ export function WebChatModule() {
                 {savingConversationMeta ? 'Guardando...' : 'Cerrar conversación'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {newChatModalOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-white">Nueva conversación</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Elegí un cliente y escribile el primer mensaje. Si tiene email cargado, le avisamos con un link para responder.
+                </p>
+              </div>
+              <button onClick={resetNewChatModal}>
+                <X className="h-5 w-5 text-slate-400" />
+              </button>
+            </div>
+
+            {!newChatSelectedClient ? (
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <input
+                    autoFocus
+                    value={newChatClientSearch}
+                    onChange={(e) => setNewChatClientSearch(e.target.value)}
+                    placeholder="Nombre, email, teléfono o empresa"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white py-2.5 pl-9 pr-3 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                  />
+                </div>
+                {newChatClientSearchLoading ? (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Buscando...</p>
+                ) : newChatClientSearch.trim().length >= 2 ? (
+                  newChatClientResults.length > 0 ? (
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {newChatClientResults.map((client) => (
+                        <button
+                          key={client.id}
+                          onClick={() => setNewChatSelectedClient(client)}
+                          className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 py-2 text-left text-sm shadow-sm transition hover:-translate-y-0.5 hover:border-teal-300 dark:hover:border-teal-500/50"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-semibold">{client.contact_name || client.company_name || 'Cliente'}</p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">{client.email || client.phone || 'Sin contacto'}</p>
+                            </div>
+                            <span className="text-[10px] uppercase text-slate-400">{client.status}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Sin resultados</p>
+                  )
+                ) : (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Escribí al menos 2 caracteres para buscar.</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                        {newChatSelectedClient.contact_name || newChatSelectedClient.company_name}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {newChatSelectedClient.email || 'Sin email'} · {newChatSelectedClient.phone || 'Sin teléfono'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setNewChatSelectedClient(null)}
+                      className="text-xs font-semibold text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300"
+                    >
+                      Cambiar
+                    </button>
+                  </div>
+                  {!newChatSelectedClient.email && (
+                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                      Este cliente no tiene email cargado: el chat se va a crear igual, pero no se le va a poder avisar automáticamente.
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Mensaje inicial</label>
+                  <textarea
+                    value={newChatMessage}
+                    onChange={(e) => setNewChatMessage(e.target.value)}
+                    rows={4}
+                    placeholder="Escribí el primer mensaje para el cliente..."
+                    className="mt-2 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={resetNewChatModal}
+                    className="rounded-xl border border-slate-200 dark:border-slate-600 px-4 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleCreateAgentConversation}
+                    disabled={newChatSending}
+                    className="rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 px-5 py-2 text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {newChatSending ? 'Creando...' : 'Iniciar chat'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -5524,17 +5838,17 @@ function CauseBadge({ cause, custom }: { cause?: string | null; custom?: string 
   if (!cause && !custom) return null;
   const label = cause === 'Otro' ? custom || 'Otro' : cause || custom || '';
   const styles: Record<string, string> = {
-    'Consulta general': 'bg-slate-100 text-slate-700',
-    'Cotización': 'bg-blue-100 text-blue-700',
-    'Soporte': 'bg-amber-100 text-amber-700',
-    'Reclamo': 'bg-rose-100 text-rose-700',
-    'Reservas': 'bg-purple-100 text-purple-700',
-    'Facturación': 'bg-teal-100 text-teal-700',
-    'Otro': 'bg-slate-100 text-slate-600'
+    'Consulta general': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
+    'Cotización': 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
+    'Soporte': 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+    'Reclamo': 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300',
+    'Reservas': 'bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300',
+    'Facturación': 'bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300',
+    'Otro': 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
   };
 
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium ${styles[cause || 'Otro'] || 'bg-slate-100 text-slate-700'}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium ${styles[cause || 'Otro'] || 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300'}`}>
       <Tag className="h-3 w-3" />
       {label}
     </span>
@@ -5547,12 +5861,12 @@ function ResultBadge({ result }: { result?: string | null }) {
     'Resuelto': 'bg-emerald-100 text-emerald-700',
     'Derivado a ticket': 'bg-blue-100 text-blue-700',
     'Llamada programada': 'bg-amber-100 text-amber-700',
-    'Sin respuesta': 'bg-slate-100 text-slate-600',
+    'Sin respuesta': 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
     'No procede': 'bg-rose-100 text-rose-700'
   };
 
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium ${styles[result] || 'bg-slate-100 text-slate-600'}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium ${styles[result] || 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>
       <Clock className="h-3 w-3" />
       {result}
     </span>
