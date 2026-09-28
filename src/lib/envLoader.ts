@@ -18,6 +18,7 @@ interface EnvConfig {
   updated_at: string;
 }
 
+
 class EnvironmentLoader {
   private static instance: EnvironmentLoader;
   private config: EnvConfig['variables'] | null = null;
